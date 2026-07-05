@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:config:1.0.0",
+  "title": "OEBConfig",
+  "description": "Repo-level asset resolution config (oeb.config.json). asset_root is a directory (repo-relative or absolute); the OEB_ASSET_ROOT environment variable, when set, OVERRIDES asset_root (used when the library lives on an external drive). assets maps logical asset IDs to files (and optionally a node inside the file) relative to the effective root. Resolvers/exporters MUST fail loudly when the effective root or a mapped file is missing — never bake dead absolute paths into scene files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "asset_root", "assets"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "asset_root": { "type": "string", "minLength": 1 },
+    "assets": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Path relative to the effective asset root. Never absolute.",
+            "pattern": "^[^/].*"
+          },
+          "node": {
+            "type": "string",
+            "description": "Object/prim name inside the file, for multi-asset containers.",
+            "minLength": 1
+          },
+          "kind": { "enum": ["set", "character", "prop", "audio", "hdri", "texture"] }
+        }
+      }
+    }
+  }
+}

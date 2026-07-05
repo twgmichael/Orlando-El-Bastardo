@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "scene_id": "sc_bar_intro_001",
+  "units": { "length": "meters", "time": "seconds" },
+  "set": {
+    "set_id": "set_bar_small_A",
+    "variant": "variant_night",
+    "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A"],
+    "props": [
+      { "prop_id": "counter_main", "asset_id": "prop_bar_counter_A" },
+      { "prop_id": "stool_hero", "asset_id": "prop_stool_A", "at_mark": "hero_barstool_A" },
+      { "prop_id": "glass_hero", "asset_id": "prop_glass_tumbler_A" },
+      { "prop_id": "bottle_shelf", "asset_id": "prop_bottle_generic_A" }
+    ]
+  },
+  "actors": [
+    {
+      "actor_id": "hero",
+      "character_id": "char_hero_v1",
+      "spawn_mark": "hero_barstool_A",
+      "target_bindings": {
+        "usd_path": "/Chars/Hero",
+        "godot_node": "Actors/Hero",
+        "blender_object": "char_hero_v1"
+      }
+    },
+    {
+      "actor_id": "bartender",
+      "character_id": "char_bartender_v1",
+      "spawn_mark": "bartender_idle_A",
+      "target_bindings": {
+        "usd_path": "/Chars/Bartender",
+        "godot_node": "Actors/Bartender",
+        "blender_object": "char_bartender_v1"
+      }
+    }
+  ],
+  "shots": [
+    {
+      "shot_id": "shot_010_establishing",
+      "order": 0,
+      "start_time": 0.0,
+      "end_time": 8.0,
+      "camera_setup": "cam_establishing_wide",
+      "cues": [
+        { "type": "animation", "cue_id": "hero_idle_010", "start_time": 0.0, "actor_id": "hero", "clip_id": "idle_seated_relaxed", "loop": true },
+        { "type": "animation", "cue_id": "bt_wipe_010", "start_time": 0.0, "actor_id": "bartender", "clip_id": "wipe_glass_loop", "loop": true },
+        { "type": "dialogue", "cue_id": "line_010", "start_time": 1.5, "duration": 2.0, "actor_id": "hero", "text": "Quiet night." },
+        { "type": "dialogue", "cue_id": "line_020", "start_time": 4.5, "duration": 3.0, "actor_id": "bartender", "text": "Always is. Right up until it isn't." }
+      ]
+    },
+    {
+      "shot_id": "shot_020_close_bartender",
+      "order": 1,
+      "start_time": 8.0,
+      "end_time": 16.0,
+      "camera_setup": "cam_close_bartender",
+      "cues": [
+        { "type": "animation", "cue_id": "bt_talk_020", "start_time": 0.0, "actor_id": "bartender", "clip_id": "talk_friendly_standing" },
+        { "type": "animation", "cue_id": "bt_pour_020", "start_time": 4.0, "actor_id": "bartender", "clip_id": "pour_drink_short" },
+        { "type": "dialogue", "cue_id": "line_030", "start_time": 0.5, "duration": 3.0, "actor_id": "bartender", "text": "You look like a man who came here to not talk about it." },
+        { "type": "dialogue", "cue_id": "line_040", "start_time": 4.5, "duration": 2.5, "actor_id": "bartender", "text": "First one's on the house, then." }
+      ]
+    },
+    {
+      "shot_id": "shot_030_two_shot",
+      "order": 2,
+      "start_time": 16.0,
+      "end_time": 26.0,
+      "camera_setup": "cam_two_shot_bar",
+      "cues": [
+        { "type": "animation", "cue_id": "hero_talk_030", "start_time": 0.0, "actor_id": "hero", "clip_id": "talk_neutral_seated" },
+        { "type": "animation", "cue_id": "bt_lean_030", "start_time": 0.0, "actor_id": "bartender", "clip_id": "lean_forward_counter" },
+        { "type": "dialogue", "cue_id": "line_050", "start_time": 1.0, "duration": 3.5, "actor_id": "hero", "text": "That obvious, huh." },
+        { "type": "animation", "cue_id": "hero_nod_030", "start_time": 5.0, "actor_id": "hero", "clip_id": "nod_small" },
+        { "type": "dialogue", "cue_id": "line_060", "start_time": 6.0, "duration": 3.0, "actor_id": "bartender", "text": "Only to bartenders and dogs, friend." }
+      ]
+    }
+  ],
+  "render": {
+    "fps": 24,
+    "resolution": { "width": 1920, "height": 1080 },
+    "engine": "eevee"
+  },
+  "export": {
+    "targets": ["blender", "godot", "usd"],
+    "output_dir": "sc_bar_intro_001"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:validationreport:1.0.0",
+  "title": "ValidationReport",
+  "description": "Output of the validation CLI (Phase 3). passed=true requires zero errors; warnings are allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scene_id", "passed", "errors", "warnings"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "scene_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "passed": { "type": "boolean" },
+    "errors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "unknown_actor",
+            "unknown_clip",
+            "unknown_camera",
+            "unknown_mark",
+            "unknown_asset",
+            "unknown_audio",
+            "duplicate_id",
+            "cue_out_of_bounds",
+            "shot_overlap",
+            "binding_unresolved",
+            "dialogue_too_long_for_shot",
+            "missing_prop_asset",
+            "unsupported_camera_grammar",
+            "schema_invalid"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "path": {
+          "type": "string",
+          "description": "JSON-pointer-ish locator into the SceneSpec (e.g. /shots/1/cues/3)."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:scenespec:1.0.0",
+  "title": "SceneSpec",
+  "description": "Canonical, fully-resolved scene description. Produced by the resolver from a SceneIntent (or hand-authored); consumed by the validator and the Blender/Godot/USD exporters. All times are seconds. Cue start_time is relative to its shot's start_time.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scene_id", "units", "set", "actors", "shots", "render"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/semver" },
+    "scene_id": { "$ref": "#/$defs/logical_id" },
+    "units": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["length", "time"],
+      "properties": {
+        "length": { "const": "meters" },
+        "time": { "const": "seconds" }
+      }
+    },
+    "set": { "$ref": "#/$defs/SetSpec" },
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ActorSpec" }
+    },
+    "shots": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/ShotSpec" }
+    },
+    "render": { "$ref": "#/$defs/RenderSpec" },
+    "export": { "$ref": "#/$defs/ExportSpec" }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "logical_id": {
+      "type": "string",
+      "description": "Logical identifier (lowercase start; uppercase variant suffixes like _A allowed) — never a file path.",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$"
+    },
+    "seconds": { "type": "number", "minimum": 0 },
+    "target_bindings": {
+      "type": "object",
+      "description": "Optional per-target addresses. Logical IDs stay the source of truth; exporters fill or consume these.",
+      "additionalProperties": false,
+      "properties": {
+        "usd_path": { "type": "string", "pattern": "^/" },
+        "godot_node": { "type": "string", "minLength": 1 },
+        "blender_object": { "type": "string", "minLength": 1 }
+      }
+    },
+    "SetSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["set_id"],
+      "properties": {
+        "set_id": { "$ref": "#/$defs/logical_id" },
+        "variant": { "$ref": "#/$defs/logical_id" },
+        "props": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/PropSpec" }
+        },
+        "marks": {
+          "type": "array",
+          "description": "Mark/spawn-point IDs this scene relies on; validator checks they exist in the set asset.",
+          "items": { "$ref": "#/$defs/logical_id" }
+        },
+        "target_bindings": { "$ref": "#/$defs/target_bindings" }
+      }
+    },
+    "PropSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prop_id", "asset_id"],
+      "properties": {
+        "prop_id": {
+          "$ref": "#/$defs/logical_id",
+          "description": "Instance ID, unique within the scene."
+        },
+        "asset_id": {
+          "$ref": "#/$defs/logical_id",
+          "description": "Library asset ID resolved via oeb.config.json / OEB_ASSET_ROOT."
+        },
+        "at_mark": { "$ref": "#/$defs/logical_id" },
+        "target_bindings": { "$ref": "#/$defs/target_bindings" }
+      }
+    },
+    "ActorSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "character_id", "spawn_mark"],
+      "properties": {
+        "actor_id": {
+          "$ref": "#/$defs/logical_id",
+          "description": "Scene-role ID (e.g. hero, bartender) — stable across recasts."
+        },
+        "character_id": {
+          "$ref": "#/$defs/logical_id",
+          "description": "Character asset ID (e.g. char_hero_v1)."
+        },
+        "spawn_mark": { "$ref": "#/$defs/logical_id" },
+        "target_bindings": { "$ref": "#/$defs/target_bindings" }
+      }
+    },
+    "ShotSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shot_id", "order", "start_time", "end_time", "camera_setup", "cues"],
+      "properties": {
+        "shot_id": { "$ref": "#/$defs/logical_id" },
+        "order": { "type": "integer", "minimum": 0 },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "end_time": { "$ref": "#/$defs/seconds" },
+        "camera_setup": {
+          "$ref": "#/$defs/logical_id",
+          "description": "Camera-grammar ID defined in data/camera_grammar.json."
+        },
+        "cues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Cue" }
+        }
+      }
+    },
+    "Cue": {
+      "oneOf": [
+        { "$ref": "#/$defs/AnimationCue" },
+        { "$ref": "#/$defs/DialogueCue" },
+        { "$ref": "#/$defs/CameraCue" },
+        { "$ref": "#/$defs/LightingCue" },
+        { "$ref": "#/$defs/AudioCue" },
+        { "$ref": "#/$defs/FXCue" }
+      ]
+    },
+    "AnimationCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "actor_id", "clip_id"],
+      "properties": {
+        "type": { "const": "animation" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "actor_id": { "$ref": "#/$defs/logical_id" },
+        "clip_id": { "$ref": "#/$defs/logical_id" },
+        "loop": { "type": "boolean", "default": false }
+      }
+    },
+    "DialogueCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "duration", "actor_id", "text"],
+      "properties": {
+        "type": { "const": "dialogue" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "REQUIRED by decision 2026-07-04 (explicit dialogue timing). An estimator may fill it upstream, but a SceneSpec without it is invalid."
+        },
+        "actor_id": { "$ref": "#/$defs/logical_id" },
+        "text": { "type": "string", "minLength": 1 },
+        "audio_asset": { "$ref": "#/$defs/logical_id" }
+      }
+    },
+    "CameraCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "camera_setup"],
+      "properties": {
+        "type": { "const": "camera" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "camera_setup": { "$ref": "#/$defs/logical_id" },
+        "transition": { "enum": ["cut"], "default": "cut" }
+      }
+    },
+    "LightingCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "preset_id"],
+      "properties": {
+        "type": { "const": "lighting" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "preset_id": { "$ref": "#/$defs/logical_id" }
+      }
+    },
+    "AudioCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "asset_id"],
+      "properties": {
+        "type": { "const": "audio" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "asset_id": { "$ref": "#/$defs/logical_id" },
+        "channel": { "enum": ["music", "sfx", "ambience"], "default": "sfx" },
+        "gain_db": { "type": "number", "default": 0 }
+      }
+    },
+    "FXCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "fx_id"],
+      "properties": {
+        "type": { "const": "fx" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "fx_id": { "$ref": "#/$defs/logical_id" },
+        "params": { "type": "object" }
+      }
+    },
+    "RenderSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fps", "resolution", "engine"],
+      "properties": {
+        "fps": { "type": "integer", "enum": [24, 25, 30, 60] },
+        "resolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height"],
+          "properties": {
+            "width": { "type": "integer", "minimum": 16 },
+            "height": { "type": "integer", "minimum": 16 }
+          }
+        },
+        "engine": { "enum": ["eevee", "cycles", "godot"] }
+      }
+    },
+    "ExportSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targets"],
+      "properties": {
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["blender", "godot", "usd"] }
+        },
+        "output_dir": {
+          "type": "string",
+          "description": "Relative to the renders root — never an absolute path."
+        }
+      }
+    }
+  }
+}

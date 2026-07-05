@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "locations": {
+    "small_bar_interior": {
+      "set_id": "set_bar_small_A",
+      "variants": { "night": "variant_night" },
+      "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A"],
+      "default_props": [
+        { "prop_id": "counter_main", "asset_id": "prop_bar_counter_A" },
+        { "prop_id": "stool_hero", "asset_id": "prop_stool_A", "at_mark": "hero_barstool_A" },
+        { "prop_id": "glass_hero", "asset_id": "prop_glass_tumbler_A" },
+        { "prop_id": "bottle_shelf", "asset_id": "prop_bottle_generic_A" }
+      ]
+    }
+  },
+  "roles": {
+    "protagonist": {
+      "character_id": "char_hero_v1",
+      "spawn_mark": "hero_barstool_A",
+      "idle_clip": "idle_seated_relaxed",
+      "talk_clip": "talk_neutral_seated"
+    },
+    "bartender": {
+      "character_id": "char_bartender_v1",
+      "spawn_mark": "bartender_idle_A",
+      "idle_clip": "idle_standing_relaxed",
+      "talk_clip": "talk_friendly_standing"
+    }
+  },
+  "defaults": {
+    "render": { "fps": 24, "resolution": { "width": 1920, "height": 1080 }, "engine": "eevee" },
+    "export_targets": ["blender", "godot", "usd"]
+  }
+}
