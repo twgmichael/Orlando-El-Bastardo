@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:sceneintent:1.0.0",
+  "title": "SceneIntent",
+  "description": "The LLM output boundary (decision 2026-07-04: SceneIntent only). High-level intent with NO asset, clip, mark, or camera IDs — the deterministic resolver maps intent to approved assets and emits a SceneSpec. Free-text fields are intent vocabulary, not identifiers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scene_id", "location_tag", "time_of_day", "actors", "beats", "shot_intents"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "scene_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "location_tag": {
+      "type": "string",
+      "description": "Semantic location (e.g. 'small_bar_interior'); the resolver maps it to a set asset.",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "time_of_day": { "enum": ["morning", "day", "evening", "night"] },
+    "actors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actor_id", "role_tag"],
+        "properties": {
+          "actor_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "role_tag": {
+            "type": "string",
+            "description": "Semantic role (e.g. 'protagonist', 'bartender'); resolver maps to a character asset.",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          }
+        }
+      }
+    },
+    "beats": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "description"],
+        "properties": {
+          "order": { "type": "integer", "minimum": 0 },
+          "description": { "type": "string", "minLength": 1 },
+          "actor_ids": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+          },
+          "dialogue": {
+            "type": "array",
+            "description": "Approved source lines for this beat, verbatim — the LLM transcribes, it does not write.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["actor_id", "text"],
+              "properties": {
+                "actor_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                "text": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shot_intents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "framing"],
+        "properties": {
+          "order": { "type": "integer", "minimum": 0 },
+          "framing": {
+            "enum": ["establishing", "two_shot", "close_on"],
+            "description": "Grammar-level framing intent; resolver maps to a camera_setup ID."
+          },
+          "subject_actor_id": {
+            "type": "string",
+            "description": "Required by the resolver when framing is close_on.",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "beat_orders": {
+            "type": "array",
+            "description": "Which beats this shot covers.",
+            "items": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "scene_id": "sc_bar_intro_001",
+  "location_tag": "small_bar_interior",
+  "time_of_day": "night",
+  "actors": [
+    { "actor_id": "hero", "role_tag": "protagonist" },
+    { "actor_id": "bartender", "role_tag": "bartender" }
+  ],
+  "beats": [
+    {
+      "order": 0,
+      "description": "Hero sits at the counter nursing silence; bartender polishes a glass. Sparse opening exchange.",
+      "actor_ids": ["hero", "bartender"],
+      "dialogue": [
+        { "actor_id": "hero", "text": "Quiet night." },
+        { "actor_id": "bartender", "text": "Always is. Right up until it isn't." }
+      ]
+    },
+    {
+      "order": 1,
+      "description": "Bartender reads the hero, pours a drink unasked.",
+      "actor_ids": ["bartender"],
+      "dialogue": [
+        { "actor_id": "bartender", "text": "You look like a man who came here to not talk about it." },
+        { "actor_id": "bartender", "text": "First one's on the house, then." }
+      ]
+    },
+    {
+      "order": 2,
+      "description": "Hero concedes with dry humor; bartender leans in, the ice broken.",
+      "actor_ids": ["hero", "bartender"],
+      "dialogue": [
+        { "actor_id": "hero", "text": "That obvious, huh." },
+        { "actor_id": "bartender", "text": "Only to bartenders and dogs, friend." }
+      ]
+    }
+  ],
+  "shot_intents": [
+    { "order": 0, "framing": "establishing", "beat_orders": [0] },
+    { "order": 1, "framing": "close_on", "subject_actor_id": "bartender", "beat_orders": [1] },
+    { "order": 2, "framing": "two_shot", "beat_orders": [2] }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0.0",
+  "cameras": [
+    {
+      "camera_id": "cam_establishing_wide",
+      "framing": "establishing",
+      "description": "Wide shot of the whole bar interior; both actors and the counter visible.",
+      "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_establishing_wide"
+    },
+    {
+      "camera_id": "cam_two_shot_bar",
+      "framing": "two_shot",
+      "description": "Medium two-shot across the counter, hero and bartender in frame.",
+      "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_two_shot_bar"
+    },
+    {
+      "camera_id": "cam_close_hero",
+      "framing": "close_on",
+      "description": "Close-up on the hero seated at the counter.",
+      "subject_marks": ["hero_barstool_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_close_hero"
+    },
+    {
+      "camera_id": "cam_close_bartender",
+      "framing": "close_on",
+      "description": "Close-up on the bartender behind the counter.",
+      "subject_marks": ["bartender_idle_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_close_bartender"
+    }
+  ]
+}

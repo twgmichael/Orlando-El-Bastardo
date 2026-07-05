@@ -1,0 +1,9 @@
+.venv/
+models/
+assets/
+__pycache__/
+renders/
+out/
+.DS_Store
+.claude/settings.local.json
+docs/local/
