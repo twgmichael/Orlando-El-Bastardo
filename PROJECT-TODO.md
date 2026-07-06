@@ -3,11 +3,11 @@
 3D animation orchestration pipeline. Deterministic, asset/rig-based. LLM is a
 translator/constraint layer, not a writer. No generative video.
 
-Status: Phases 0, 1, 2A, and 3 complete — the intent → resolver → validator
-chain runs end-to-end against the placeholder scene. Next code work: Phase 4
-(exporters; worker profiles need authoring first). Phase 2 (real assets) is
-gated on human asset selection and can run in parallel. See `docs/` and
-PROJECT-DONE.md for detail.
+Status: Phases 0, 1, 2A, 3, and 4 complete — the full pipeline runs: intent
+→ resolver → validator → Blender (.blend) / Godot (importable project) / USD
+(.usda stage), all on the placeholder scene. Next: Phase 5 (integration test
++ local-LLM wiring) and Phase 2 (real assets, gated on human selection). See
+`docs/` and PROJECT-DONE.md for detail.
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -81,7 +81,7 @@ outranks the task" rule.
 
 - [ ] Gitignore `out/` (human git action) before more resolver output lands
 
-## Phase 4 — Exporters
+## Phase 4 — Exporters — DONE 2026-07-06 (see PROJECT-DONE.md)
 
 Design input carried over from the animated-preview test (2026-07-05): a
 `(frame, location, heading)` waypoint list worked as the motion
@@ -93,10 +93,26 @@ Worker profiles for the exporters need author-tier authoring first
 (AGENT-WORKFLOW-PLAN §6 suggests one `exporter-dev` profile parameterized by
 target).
 
-- [ ] Author + qualify exporter worker profile(s) (author tier)
-- [ ] Blender exporter (scene name, linked collections, cameras, timeline markers, action assignments by frame, audio strips, render settings)
-- [ ] Godot exporter (.tscn, actor nodes, set instance, camera rig nodes, SceneDirector controller, event timeline resource)
-- [ ] USD exporter (root layer, set/character/prop references, camera prims, timeline sidecar JSON)
+Blender exporter DONE 2026-07-05 (`tools/export_blender.py` — see
+PROJECT-DONE.md): scene name, cameras via marker binding, shot + dialogue
+timeline markers, action assignments as per-cue NLA strips, render settings,
+actor/prop placement at marks, validate-before-export gate, deterministic
+introspection manifest. v0 boundaries: audio/lighting/fx/camera cues fail
+fast (audio strips land with Phase 5 audio work); assets imported, not
+linked. Profile `blender-exporter-builder` QUALIFIED 2026-07-05.
+
+Godot exporter DONE 2026-07-06 (`tools/export_godot.py` — see
+PROJECT-DONE.md): self-contained importable project (.tscn with set
+instance, actor + camera-rig nodes, SceneDirector node), SceneDirector.gd
+stub, timeline.json event resource, GLB copied in; headless import verified
+clean. USD exporter DONE 2026-07-06 (`tools/export_usd.py`): .usda root
+layer referencing the set .usdc, camera prims from the grammar, actor prims
+at binding usd_paths, timeline sidecar; composed stage verified. Profiles
+`godot-exporter-builder` and `usd-exporter-builder` QUALIFIED 2026-07-06.
+All three exporters share the validate-before-export gate and byte-
+deterministic verification artifacts. Phase 4 v0 boundaries: audio/lighting/
+fx/camera cues fail fast everywhere; typed Godot .tres resource and USD
+camera transforms deferred.
 
 ## Phase 5 — First integration test
 
