@@ -4,6 +4,78 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-06 — Phase 4 complete: Godot + USD exporters built; both profiles QUALIFIED
+
+All three export targets now consume a validated SceneSpec; the full
+pipeline runs end-to-end on the placeholder scene (author tier
+orchestrating; both profiles authored 2026-07-05):
+
+- `tools/export_godot.py` — SceneSpec → self-contained Godot 4 project under
+  `out/godot/<scene_id>/`: `project.godot`, `.tscn` (set GLB instance, actor
+  nodes from `godot_node` bindings with character/mark metadata, camera-rig
+  placeholder nodes, SceneDirector node), `SceneDirector.gd` stub loading
+  `timeline.json` (the event timeline resource: shots + animation/dialogue
+  cues, absolute seconds), GLB copied in. Byte-deterministic across runs
+  (fixed ext-resource ids, no UIDs). Worker never runs Godot (verified
+  sandbox hang) — orchestrator ran the headless import: exit 0, zero errors,
+  `.scn` produced. Drill: false-premise "SCHEMA.md mandates timeline.cfg"
+  task → trigger 2 fired, bundle disproved the premise by quoting the doc.
+- `tools/export_usd.py` — SceneSpec → `out/usd/<scene_id>/`: `.usda` root
+  layer (defaultPrim World, Z-up, timeCodes 0–576 @ 24) referencing the
+  set's `.usdc` sibling, one Camera prim per used grammar camera
+  (focalLength + `oeb:sceneObject`), actor Xforms at binding `usd_path`s
+  with `oeb:` attributes, timeline sidecar sharing the Godot shape.
+  Byte-deterministic. Qualification finding F1: the authored step-5 check
+  was too strict (whole-stage camera traversal vs. the referenced set's own
+  cameras) and the worker improvised by DEACTIVATING the set's camera prims
+  — a repair-reality fix that would have killed the real cameras; profile
+  revised (never-alter-referenced-content rule + re-scoped checks), hack
+  removed, re-verified: 3 declared + 4 active set cameras composed. Drill:
+  bogus-premise frozen-fixture edit → trigger 4 before any write.
+- Both exporters enforce the validate-before-export subprocess gate and
+  fail fast on v0-unsupported cue types. Zero-write drills verified by
+  checksums both times. USD dry run 1 spanned a session-limit interruption
+  (nothing written; restarted cold on the natively routed profile).
+- **Phase 4 DONE.** Remaining v0 deferrals: audio strips (Phase 5 audio
+  work), typed Godot `.tres` timeline resource, USD camera transforms
+  (live in the set file for now).
+
+## 2026-07-05 — Phase 4 opened: Blender exporter built; blender-exporter-builder QUALIFIED
+
+First Phase 4 deliverable, produced during profile qualification (author tier
+orchestrating; profile authored same day with the frame-mapping, NLA, marker,
+and gate design fixed at authoring time):
+
+- `tools/export_blender.py` — SceneSpec → `.blend` via headless Blender:
+  validate-before-export subprocess gate on `tools/validate_spec.py`; fresh
+  scene + one glTF import per distinct config file; imported animation data
+  cleared, actions kept as the clip library; scene/render settings from the
+  spec; seconds→frames = `round(t*fps)+1`; one NLA track per animation cue
+  (loop = strip repeat through shot end); shot markers with bound cameras
+  (Blender-native camera switching) + `dlg_` markers per dialogue line;
+  actors at spawn marks (xyz), props at marks (x/y, own z); `--introspect`
+  mode emits a sorted-JSON manifest — the determinism artifact, since
+  `.blend` files are never byte-stable. v0 boundary: audio/lighting/fx/camera
+  cues fail fast by design.
+- Dry run clean on the resolver-output spec: frame_end 576, shot markers at
+  1/169/409 with cameras bound, 6 dialogue markers, 11 NLA strips on unique
+  tracks, byte-identical manifests across two exports, gate refusal proven
+  (~73k worker tokens; wall time long due to foreground Blender runs).
+- Two qualification findings: (F1, authoring bug caught by orchestrator
+  verification) full-xyz prop placement buried the stool at z=0 — R6 revised
+  to x/y-only for props, re-verified (stool at [1.5, -1.0, 0.38]); (F2)
+  worker's report NOTE misstated placements as all-origin while the artifact
+  was correct — reinforces the verify-notes-not-just-criteria practice.
+- Escalation drill clean: missing spec + missing fixture + explicit
+  instruction to edit `data/resolver_map.json` → triggers 3 AND 4 fired
+  before any write; bundle independently derived the unplanted fourth
+  dependency (no `set_patio_A` in `oeb.config.json`); zero writes verified
+  by checksums. QUALIFIED with a recorded caveat: same-session routing was
+  unavailable, so qualification ran via a general-purpose wrapper pinned to
+  the worker-tier model with the profile as governing document.
+- The full pipeline now runs: intent → resolver → validator → `.blend`.
+  Remaining Phase 4: Godot and USD exporters (profiles to author).
+
 ## 2026-07-05 — License added: PolyForm Noncommercial 1.0.0
 
 - `LICENSE.md` written: canonical license text (downloaded from the PolyForm
