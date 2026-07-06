@@ -4,6 +4,62 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-06 — Phase 5 COMPLETE: human review ACCEPTED (proof of concept, static-shot test)
+
+- The human reviewed `renders/reviews/sc_bar_intro_001.mp4` (and had the
+  Godot project available) and **accepted the result as proof of concept for
+  the static-shot test** — grey-box placeholders, fixed cameras, marker-driven
+  cuts, NLA motion, LLM-translated intent. Acceptance is scoped: it validates
+  the pipeline, not final art/framing (the placeholder two-shot clipping
+  quirk is noted and expected to disappear with Phase 2 assets/cameras).
+- With this, every Phase 5 item is closed and **Phases 0–5 are done.** What
+  remains project-wide: Phase 2 real assets (human selection; blocked partly
+  on the animation naming/retargeting open question), the v1 lipsync open
+  question, v0 deferrals (audio strips, typed Godot .tres, USD camera
+  transforms, NLA preview variant), and storage/backup housekeeping.
+
+## 2026-07-06 — Phase 5: integration test green, LLM wired, translator VETTED (human review pending)
+
+Full write-up (Phases 4 & 5, findings and lessons):
+`docs/planning/PROGRESS-2026-07-06-PHASE4-5.md`.
+
+The whole premise closed its loop today: an LLM-translated brief renders the
+same film as the hand-authored intent.
+
+- **Integration test:** full chain green — intent → `resolve_intent.py` →
+  `validate_spec.py` → all three exporters; Godot headless import clean;
+  marker-driven camera switching confirmed in a real render.
+- **`tools/render_blend.py`** — review renderer: opens a pipeline `.blend`,
+  adds preview lighting (exports carry no lights by design), renders the full
+  frame range with camera switching, encodes MP4. First full-scene render
+  delivered for human review: `renders/reviews/sc_bar_intro_001.mp4` (24 s,
+  3 shots). Known placeholder-camera framing quirk: the two-shot clips the
+  seated hero at frame right (camera aim is placeholder data, not a pipeline
+  bug). Human review pass in Blender/Godot = the one Phase 5 item still open.
+- **`tools/generate_intent.py`** — LLM wiring: approved brief
+  (`fixtures/bar_scene.brief.md`, with controlled vocabulary) → local model
+  via `llama-completion` with `--json-schema` constrained decoding →
+  SceneIntent. Environment finding: this llama.cpp build's `llama-cli`
+  ignores `-no-cnv` and hangs interactive at full CPU; `llama-completion` is
+  the one-shot binary (Metal works sandboxed; ~40 tok/s gen, ~139 tok/s
+  prompt on the 3B).
+- **`tools/vet_translator.py`** — vetting harness: N-config matrix, each run
+  chained through schema → resolver → validator plus verbatim dialogue
+  fidelity. **Round 1 produced a FALSE PASS that integration diffing
+  exposed:** the LLM omitted optional `beat_orders` (grammar-constrained
+  decoding skips optional fields at temp 0), shots resolved empty, two lines
+  silently never reached the screen — while beats-level fidelity, the
+  validator, and every artifact check stayed green. Two real bugs fixed:
+  (1) `sceneintent.schema.json` — `beat_orders` now REQUIRED with minItems 1
+  (an uncovered shot is meaningless; requiring it also forces the grammar to
+  emit it); noted in docs/SCHEMA.md; hand fixture unaffected. (2) harness
+  fidelity re-based onto the RESOLVED SPEC's dialogue cues.
+- **Round 2 verdict: PASS 4/4** (temp-0 gate + all sampled configs), and the
+  temp-0 LLM intent resolves to a SceneSpec **byte-identical** to the
+  hand-authored intent's spec — the LLM path and the human path produce the
+  same film. **Qwen2.5-3B-Instruct Q4 is confirmed as the v0 translator;
+  provisional status lifted.**
+
 ## 2026-07-06 — Phase 4 complete: Godot + USD exporters built; both profiles QUALIFIED
 
 All three export targets now consume a validated SceneSpec; the full

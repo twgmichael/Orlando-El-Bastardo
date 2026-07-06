@@ -68,7 +68,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["order", "framing"],
+        "required": ["order", "framing", "beat_orders"],
         "properties": {
           "order": { "type": "integer", "minimum": 0 },
           "framing": {
@@ -82,7 +82,8 @@
           },
           "beat_orders": {
             "type": "array",
-            "description": "Which beats this shot covers.",
+            "description": "Which beats this shot covers. REQUIRED (2026-07-06): an uncovered shot resolves empty and silently drops its beats' dialogue; requiring it also forces grammar-constrained LLM decoding to emit it.",
+            "minItems": 1,
             "items": { "type": "integer", "minimum": 0 }
           }
         }
