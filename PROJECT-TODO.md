@@ -3,11 +3,13 @@
 3D animation orchestration pipeline. Deterministic, asset/rig-based. LLM is a
 translator/constraint layer, not a writer. No generative video.
 
-Status: Phases 0, 1, 2A, 3, and 4 complete — the full pipeline runs: intent
-→ resolver → validator → Blender (.blend) / Godot (importable project) / USD
-(.usda stage), all on the placeholder scene. Next: Phase 5 (integration test
-+ local-LLM wiring) and Phase 2 (real assets, gated on human selection). See
-`docs/` and PROJECT-DONE.md for detail.
+Status: **Phases 0–5 COMPLETE** (human review accepted 2026-07-06 as proof
+of concept for the static-shot test). The pipeline runs end-to-end from an
+approved brief: local LLM (vetted) → SceneIntent → resolver → validator →
+Blender/Godot/USD, byte-identical to the hand-authored path. Next: Phase 2
+(real assets, gated on human selection + the animation naming/retargeting
+open question). See docs/planning/PROGRESS-2026-07-06-PHASE4-5.md and
+PROJECT-DONE.md for detail.
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -16,14 +18,17 @@ them to `PROJECT-DONE.md` with a date.
 
 ## Carryover notes (updated 2026-07-05)
 
-- **Local LLM (Qwen2.5-3B-Instruct Q4) is provisional.** Installed and inference-
-  verified, but not yet vetted for the SceneIntent→SceneSpec task. Treat as a
-  placeholder pick; re-evaluate at Phase 5.
+- **Local LLM (Qwen2.5-3B-Instruct Q4) is CONFIRMED** (2026-07-06): passed
+  Phase 5 translator vetting 4/4 configs (schema, pipeline, verbatim
+  spec-level dialogue); temp-0 output resolves byte-identical to the
+  hand-authored intent's spec. No replacement needed for v0.
 - **Assistant model / workflow** (decided 2026-07-04, see AGENT-WORKFLOW-PLAN +
-  DECISIONS): the reviewer tier orchestrates day-to-day with qualified worker-tier agents;
-  the author tier is recalled only to author or revise agent profiles. No Phase 3
-  worker profile exists yet — under this workflow, authoring one is the first
-  step of Phase 3.
+  DECISIONS): the reviewer tier orchestrates day-to-day with qualified
+  worker-tier agents; the author tier is recalled only to author or revise
+  profiles. Roster as of 2026-07-06: 8 qualified profiles (placeholder,
+  verifier, reviewer, resolver, validator, and the three exporter builders —
+  see `.claude/agents/`). Phase 2 asset work is human-driven and needs no new
+  profiles; any Phase 6+ code work starts with author-tier profile authoring.
 - Placeholder-asset track (2026-07-03 note) is complete — see Phase 2A in
   PROJECT-DONE.md. Real CC0 assets remain a later drop-in (Phase 2).
 
@@ -114,12 +119,13 @@ deterministic verification artifacts. Phase 4 v0 boundaries: audio/lighting/
 fx/camera cues fail fast everywhere; typed Godot .tres resource and USD
 camera transforms deferred.
 
-## Phase 5 — First integration test
+## Phase 5 — First integration test — DONE 2026-07-06 (see PROJECT-DONE.md)
 
-- [ ] Run full pipeline on the bar scene end-to-end
-- [ ] Human review pass in Blender and Godot
-- [ ] Wire local LLM to emit SceneIntent for the bar scene and run it through the pipeline
-- [ ] Vet the local translator LLM against the SceneIntent→SceneSpec task; replace provisional Qwen2.5-3B if it underperforms
+Pipeline run, LLM wiring, and translator vetting DONE 2026-07-06: full chain
+green on all three targets; Qwen2.5-3B PASSED vetting 4/4 configs and is the
+v0 translator. Human review ACCEPTED 2026-07-06 — scoped as proof of concept
+for the static-shot test (grey-box placeholders, fixed cameras); production
+sign-off waits on Phase 2 real assets. Phase 5 closed.
 
 ---
 

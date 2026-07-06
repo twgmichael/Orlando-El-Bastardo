@@ -12,6 +12,10 @@
 > Conventions: all times in seconds; cue `start_time` is relative to its
 > shot's `start_time`; `DialogueCue.duration` is required (explicit-timing
 > decision); logical IDs match `^[a-z][a-zA-Z0-9_]*$` and are never paths.
+> SceneIntent `shot_intents[].beat_orders` is REQUIRED (2026-07-06, Phase 5
+> integration fix: an uncovered shot resolves empty and silently drops its
+> beats' dialogue; requiring it also forces grammar-constrained LLM decoding
+> to emit it).
 
 ## Canonical objects
 
