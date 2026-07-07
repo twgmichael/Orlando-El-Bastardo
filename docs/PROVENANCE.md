@@ -17,6 +17,8 @@ register is the committed record.
 
 | `sets/bar_scene_scifi.glb` (+`.usdc`) | Built 2026-07-06 by `tools/build_scifi_bar.py` from Ultimate Modular Sci-Fi pieces (CC0, above) + project layout data; carries over grey-box props/marks/cameras | CC0 components; assembly is project original | 1 | 8×8 m room: 4×4 floor grid, 2-module walls (front open for cameras), corner columns, backbar shelves + dressing; canonical node `set_bar_small_A`; kit-material alpha bug fixed at build time (forced opaque) |
 
+| `characters/oeb_ubc_characters.glb` (+`.usdc`) | Built 2026-07-06 by `tools/build_characters_v2.py` from UBC (Superhero Male→hero, Female→bartender) + UAL clips (both CC0, above) | CC0 components; assembly is project original | 1 | First `oeb_humanoid_v1` asset. 12 canonical clips remapped from UAL source names at build time per RIGGING.md §4 (v0 doubles: nod/shrug/wipe use nearest pose-correct sources). Base characters ship bald + underwear — hairstyles/outfits are a later dressing pass |
+
 Standing rules: CC0 preferred (Tier 1); anything else needs explicit records
 here BEFORE use (Tier 2); attribution-heavy/share-alike/unclear = blocked
 pending review (Tier 3). Downloads require human approval per the workflow

@@ -1,10 +1,10 @@
 .venv/
-models/
-llm/
-assets/
+models
+llm
+assets
 __pycache__/
-renders/
-out/
+renders
+out
 .DS_Store
 .claude/settings.local.json
 docs/local/
