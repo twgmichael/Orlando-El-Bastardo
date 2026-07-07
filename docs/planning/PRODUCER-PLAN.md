@@ -86,12 +86,27 @@ or assets, the scene halts with e.g.:
 Plus cheap render QA gates (non-black frame sampling, duration vs. spec,
 cut count vs. shots) so "rendered" is machine-verified, not assumed.
 
-### P2 — The script desk (~1 day)
+### P2 — The script desk (~1 day) — BUILT 2026-07-07
 
-Scripts today are single-scene briefs. Needed: script → scene-brief
-chunking (the producer's first LLM decision point — extraction with
-constrained decoding, never writing), per-scene runs, episode assembly
-(concat + slate), and a config/world snapshot per episode for continuity.
+Shipped: `tools/script_desk.py` + the approved-script format
+(`# EPISODE:` / `## VOCABULARY` / `## SCENE: <id>` blocks — see
+`fixtures/ep_001.script.md`). **Plan amendment: chunking is DETERMINISTIC**
+(the format has explicit delimiters), eliminating the planned LLM decision
+point — the clerk's only job remains per-scene translation.
+
+**Finding (the improvisation the charter forbids, caught in test run 1):**
+given a scene whose location was declared only in prose, the translator
+silently normalized the unknown `rooftop_garden` into the vocabulary's
+known location — 3 delivered, 0 tickets, gap swallowed. **Fix: structural
+scene facts (`- location:` / `- time:` metadata lines) are parsed by the
+desk and STAMPED over the LLM's intent deterministically** — the translator
+gets no vote on where/when a scene happens. Run 2: 2 delivered (including
+a never-before-seen scene, dialogue verbatim, correct camera choices),
+1 BLOCKED with the exact NEEDED ticket, per-scene isolation held.
+
+Also shipped: per-episode world snapshot (config + resolver map + camera
+grammar), production_summary.json, episode concat assembly. Slate cards
+deferred (drawtext font availability). Remaining: none for P2 core.
 
 ### P3 — The producer driver (~2 days)
 
