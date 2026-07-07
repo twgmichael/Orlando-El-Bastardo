@@ -8,12 +8,12 @@
       "kind": "set"
     },
     "char_hero_v1": {
-      "file": "characters/oeb_guy_characters.glb",
+      "file": "characters/oeb_ubc_characters.glb",
       "node": "char_hero_v1",
       "kind": "character"
     },
     "char_bartender_v1": {
-      "file": "characters/oeb_guy_characters.glb",
+      "file": "characters/oeb_ubc_characters.glb",
       "node": "char_bartender_v1",
       "kind": "character"
     },

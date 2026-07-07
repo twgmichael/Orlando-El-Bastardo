@@ -32,40 +32,19 @@ PLACEHOLDERS = "assets/placeholders/bar_scene_placeholders.glb"
 # (kit piece, (x, y, z), z-rotation degrees)
 LAYOUT = []
 
-# Floor: 4x4 grid of 2m tiles, mixed for visual variety
-for i, x in enumerate((-3, -1, 1, 3)):
-    for j, y in enumerate((-3, -1, 1, 3)):
-        piece = "FloorTile_Basic" if (i + j) % 2 == 0 else "FloorTile_Basic2"
-        LAYOUT.append((piece, (x, y, -0.09), 0))
+# Floor: 4x4 grid of the PLAIN tile (simplified 2026-07-06 — the detailed
+# Basic/Basic2 checker read too busy under the characters)
+for x in (-3, -1, 1, 3):
+    for y in (-3, -1, 1, 3):
+        LAYOUT.append(("FloorTile_Empty", (x, y, -0.09), 0))
 
-# Back wall (y=+4): two 4m modules, one plain + one window band
+# Simplified set (2026-07-06): TWO walls only — back + left — no columns,
+# no dressing. Head-on-friendly composition.
 LAYOUT += [
-    ("Wall_2",                (-2, 4, 0), 0),
-    ("LongWindow_Wall_SideA", (2, 4, 0), 0),
-]
-# Side walls (x=±4): two 4m modules each, rotated to run along y
-LAYOUT += [
-    ("Wall_1", (-4, -2, 0),  90),
-    ("Wall_3", (-4,  2, 0),  90),
-    ("Wall_1", (4, -2, 0),  -90),
-    ("Wall_4", (4,  2, 0),  -90),
-]
-# Corner columns
-LAYOUT += [
-    ("Column_1", (-3.7, 3.7, 0), 0),
-    ("Column_1", (3.7, 3.7, 0), 0),
-    ("Column_2", (-3.7, -3.7, 0), 0),
-    ("Column_2", (3.7, -3.7, 0), 0),
-]
-# Backbar dressing: shelves behind the counter, tech + clutter
-LAYOUT += [
-    ("Props_Shelf_Tall", (-2.2, 3.55, 0), 0),
-    ("Props_Shelf",      (0.2, 3.55, 0), 0),
-    ("Props_Computer",   (3.1, 3.4, 0), 180),
-    ("Props_Vessel_Tall", (-3.4, 3.1, 0), 0),
-    ("Props_Crate",      (-3.35, -2.6, 0), 15),
-    ("Props_CrateLong",  (-3.3, -1.6, 0), 90),
-    ("Props_Teleporter_1", (3.2, 2.6, 0), -90),
+    ("Wall_2",                (-2, 4, 0), 0),   # back wall, plain half
+    ("LongWindow_Wall_SideA", (2, 4, 0), 0),    # back wall, window half
+    ("Wall_1", (-4, -2, 0), 90),                # left wall
+    ("Wall_3", (-4,  2, 0), 90),
 ]
 
 
@@ -86,14 +65,91 @@ def main():
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
 
-    # 1. Carry over props/marks/cameras; drop the grey-box set
+    # 1. Carry over props/marks/cameras; drop the grey-box set AND the old
+    # single-slab counter (rebuilt from boxes below)
     bpy.ops.import_scene.gltf(filepath=os.path.join(os.getcwd(), PLACEHOLDERS))
-    old = bpy.data.objects.get("set_bar_small_A")
-    if old:
-        bpy.data.objects.remove(old, do_unlink=True)
+    for name in ("set_bar_small_A", "prop_bar_counter_A"):
+        old = bpy.data.objects.get(name)
+        if old:
+            bpy.data.objects.remove(old, do_unlink=True)
     for obj in bpy.data.objects:
         if obj.animation_data:
             obj.animation_data_clear()
+
+    # Barstool + raised sit (2026-07-06, per reference photos): the UAL sit
+    # is a chair pose (pelvis 0.44 above its origin), so a bar-height perch
+    # means raising the WHOLE pose — done via the spawn mark's z (the
+    # exporter places the actor at the mark's full xyz, and the stool
+    # follows the mark xy via at_mark). Seat 0.75 m; hero origin at
+    # 0.75 − 0.44 = 0.31; his clip-floor feet then hover at 0.31 — exactly
+    # where the footrest ring sits. Mark pulled back to y = −1.13 so knees
+    # clear the counter body and tuck under the top's overhang.
+    SEAT_TOP = 0.75
+    CLIP_PELVIS = 0.44
+    mark = bpy.data.objects.get("hero_barstool_A")
+    if mark:
+        mark.location.y = -1.13
+        mark.location.z = SEAT_TOP - CLIP_PELVIS
+    old_stool = bpy.data.objects.get("prop_stool_A")
+    if old_stool:
+        bpy.data.objects.remove(old_stool, do_unlink=True)
+    import bmesh as _bm
+    stool_mesh = bpy.data.meshes.new("prop_stool_A_mesh")
+    sbm = _bm.new()
+    for radius, height, z_center in (
+        (0.22, 0.04, 0.02),                    # base disc
+        (0.06, 0.72, 0.36),                    # post
+        (0.16, 0.04, 0.30),                    # footrest ring
+        (0.20, 0.06, SEAT_TOP - 0.03),         # seat (top = SEAT_TOP)
+    ):
+        res = _bm.ops.create_cone(sbm, cap_ends=True, segments=16,
+                                  radius1=radius, radius2=radius, depth=height)
+        for v in res["verts"]:
+            v.co.z += z_center
+    sbm.to_mesh(stool_mesh)
+    sbm.free()
+    stool_mesh.update()
+    stool = bpy.data.objects.new("prop_stool_A", stool_mesh)
+    stool.location = (1.5, -1.13, 0.0)         # exporter re-snaps xy to mark
+    bpy.context.scene.collection.objects.link(stool)
+    stool_mat = bpy.data.materials.new("mat_stool")
+    stool_mat.use_nodes = True
+    sb = stool_mat.node_tree.nodes.get("Principled BSDF")
+    if sb:
+        sb.inputs["Base Color"].default_value = (0.30, 0.31, 0.35, 1.0)
+        sb.inputs["Roughness"].default_value = 0.5
+    stool.data.materials.append(stool_mat)
+
+    # 1b. Box-built bar counter (canonical node name preserved): plinth +
+    # body + overhanging top. Stool/glass/bottle stay primitive, carried over.
+    import bmesh
+    bar_mesh = bpy.data.meshes.new("prop_bar_counter_A_mesh")
+    bm = bmesh.new()
+    BAR_H = 0.97   # 2026-07-06: bar lowered 3% (top surface 1.12 → ~1.086 m)
+    for size, center in (
+        ((5.8, 1.30, 0.15 * BAR_H), (0, 0, 0.075 * BAR_H)),   # plinth
+        ((5.6, 1.10, 0.85 * BAR_H), (0, 0, 0.575 * BAR_H)),   # body
+        ((6.0, 1.40, 0.12 * BAR_H), (0, 0, 1.06 * BAR_H)),    # top slab
+    ):
+        res = bmesh.ops.create_cube(bm, size=1.0)
+        verts = res["verts"]
+        for v in verts:
+            v.co = (v.co.x * size[0] + center[0],
+                    v.co.y * size[1] + center[1],
+                    v.co.z * size[2] + center[2])
+    bm.to_mesh(bar_mesh)
+    bm.free()
+    bar_mesh.update()
+    bar_obj = bpy.data.objects.new("prop_bar_counter_A", bar_mesh)
+    bar_obj.location = (0.0, 0.0, 0.0)
+    bpy.context.scene.collection.objects.link(bar_obj)
+    bar_mat = bpy.data.materials.new("mat_bar_counter")
+    bar_mat.use_nodes = True
+    bsdf = bar_mat.node_tree.nodes.get("Principled BSDF")
+    if bsdf:
+        bsdf.inputs["Base Color"].default_value = (0.28, 0.29, 0.33, 1.0)
+        bsdf.inputs["Roughness"].default_value = 0.6
+    bar_obj.data.materials.append(bar_mat)
 
     # 2. Import each distinct kit piece once as a template. Imports arrive as
     # small hierarchies with axis-conversion transforms — bake every mesh's

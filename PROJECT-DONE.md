@@ -4,6 +4,31 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-06 — GOAL EARNED: script → render, one command, zero prompts (SEAMLESS-RUN-PLAN executed)
+
+- `tools/run_pipeline.py` — the pipeline's single front door: `--brief` (LLM
+  path) or `--intent`, `--targets blender|godot|usd|all`, stage-tagged
+  failure reporting with the pipeline's exit-code discipline; every stage a
+  child subprocess of the one allowed command.
+- Permission surface fixed per the plan: 8 prefix rules added, 34 dead
+  exact-match entries pruned (87 → 61 rules in the local settings).
+- **Proof run passed unattended:** `run_pipeline.py --brief
+  fixtures/bar_scene.brief.md --targets all` — LLM translation → resolver →
+  validator → all three exports → 576-frame render → MP4, exit 0, ZERO
+  prompts, run in the background with nobody watching
+  (`renders/reviews/pipeline_proof.mp4`).
+- Also this session: hero facing baked into character asset (−90°, faces
+  the bar), bar lowered 3% (`BAR_H`), plain floor tiles; character v2 (UBC
+  + UAL remap) and the simplified 2-wall set — see prior entries.
+- Local-LLM competency assessment (recorded in session): run-time loop is
+  ~100% local (deterministic scripts + clerk-grade translation inside
+  rails); build-time authoring remains human + frontier-tier by design —
+  one-time per world. Follow-up for unattended briefs: wire the vetting
+  fidelity gate into `run_pipeline.py`'s brief path (reject → one retry →
+  halt).
+- Remaining for fully unattended operation: a scheduled trigger + written
+  failure policy (GOAL-REVIEW recommendation 4).
+
 ## 2026-07-06 — Sci-fi bar set built programmatically; third asset generation through an unchanged pipeline
 
 - `tools/build_scifi_bar.py` — data-driven set assembly from the Modular

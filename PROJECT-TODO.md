@@ -136,6 +136,24 @@ deterministic verification artifacts. Phase 4 v0 boundaries: audio/lighting/
 fx/camera cues fail fast everywhere; typed Godot .tres resource and USD
 camera transforms deferred.
 
+## Phase 6 — The Producer (script → rendered scenes, provided assets only)
+
+Plan: docs/planning/PRODUCER-PLAN.md (recorded 2026-07-07). The local LLM is
+now "the producer" — it oversees script → render using ONLY the provided
+asset library, and emits an obvious structured NEEDED report when a script
+names anything the library lacks. Building assets stays human + crew work.
+
+- [ ] P1 Production reports — ticketing DONE 2026-07-07 (`tools/tickets.py`
+  + `run_pipeline.py --episode`, exit 4 = BLOCKED, NEEDED .json/.md +
+  report.json index; all paths tested). Remaining: render QA gates,
+  run-time translation fidelity gate, validator name-extraction polish
+- [ ] P2 Script desk: script → scene-brief chunking (constrained LLM
+  extraction), per-scene runs, episode assembly + config snapshot
+- [ ] P3 Producer driver (`tools/producer.py`): the deterministic loop,
+  halt-and-report policy, final production report
+- [ ] P4 Producer qualification: dry run (in-library script → all scenes
+  rendered) + missing-asset drill (clean NEEDED report, no improvisation)
+
 ## Phase 5 — First integration test — DONE 2026-07-06 (see PROJECT-DONE.md)
 
 Pipeline run, LLM wiring, and translator vetting DONE 2026-07-06: full chain
