@@ -38,6 +38,12 @@ def parse_args():
         default="assets/placeholders",
         help="Output directory for exported files (relative to CWD or absolute).",
     )
+    parser.add_argument(
+        "--no-characters",
+        action="store_true",
+        help="Omit character armatures/actions (used once real character "
+             "assets exist in their own file, so imported names don't collide).",
+    )
     return parser.parse_args(argv)
 
 
@@ -510,8 +516,11 @@ def main():
     print("[make_placeholders] Building props...")
     make_props(prop_coll)
 
-    print("[make_placeholders] Building characters...")
-    make_characters(char_coll)
+    if args.no_characters:
+        print("[make_placeholders] Skipping characters (--no-characters)")
+    else:
+        print("[make_placeholders] Building characters...")
+        make_characters(char_coll)
 
     print("[make_placeholders] Building marks...")
     make_marks(mark_coll)

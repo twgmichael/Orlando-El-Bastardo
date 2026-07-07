@@ -3,13 +3,13 @@
 3D animation orchestration pipeline. Deterministic, asset/rig-based. LLM is a
 translator/constraint layer, not a writer. No generative video.
 
-Status: **Phases 0–5 COMPLETE** (human review accepted 2026-07-06 as proof
-of concept for the static-shot test). The pipeline runs end-to-end from an
-approved brief: local LLM (vetted) → SceneIntent → resolver → validator →
-Blender/Godot/USD, byte-identical to the hand-authored path. Next: Phase 2
-(real assets, gated on human selection + the animation naming/retargeting
-open question). See docs/planning/PROGRESS-2026-07-06-PHASE4-5.md and
-PROJECT-DONE.md for detail.
+Status: **Phases 0–5 COMPLETE**; Phase 2 well underway — characters (1999
+salvage) and the set (CC0 kit build) are real, the CC0 asset stack is
+converted and registered, and the skeleton standard is locked
+(docs/RIGGING.md). Three asset generations have rendered through the
+unchanged pipeline. Remaining Phase 2: bar furniture, character v2 on
+`oeb_humanoid_v1` + UAL clip remap, night lighting variant. See
+docs/planning/PROGRESS-2026-07-06-PHASE4-5.md and PROJECT-DONE.md.
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -58,12 +58,29 @@ Already covered elsewhere: camera grammar vocabulary was defined in Phase 1
 IDs exist from Phase 2A — the real set only needs them re-placed in its
 geometry.
 
-- [ ] Acquire bar interior set (`set_bar_small_A`, night variant) — CC0 first
-- [ ] Acquire/build 2 characters (`char_hero_v1`, `char_bartender_v1`) via MakeHuman/MPFB
-- [ ] Acquire props (counter, stool, glass tumbler, bottle) — Quaternius/Kenney/CC0
-- [ ] Re-place set marks/spawn points in the real set (hero_entry_A, hero_barstool_A, bartender_idle_A, bartender_backbar_A)
-- [ ] Build/acquire 6–10 reusable animation clips per the hero/bartender lists (blocked on the animation naming/retargeting open question)
-- [ ] Record asset provenance + license for every item (acquisition policy in docs/RESOURCES.md)
+Characters DONE 2026-07-06 — not via MakeHuman/MPFB but by salvaging the
+original 1999/2000 Infini-D assets (see PROJECT-DONE.md): `guy.dxf` →
+`assets/characters/oeb_guy_characters.glb` (both `char_hero_v1` blue and
+`char_bartender_v1` green from the same geometry, 5-bone armatures, all 12
+clips, GLB+USDC); config swapped; test scene rendered. MPFB remains an
+option for future distinct characters. Provenance: original works by the
+project owner (1996–2003) — no external license needed.
+
+Set DONE 2026-07-06 — built programmatically from the CC0 Modular Sci-Fi kit
+(`tools/build_scifi_bar.py` → `assets/sets/bar_scene_scifi.glb`, canonical
+node + marks/cameras carried over; see PROJECT-DONE.md). Night-variant
+lighting pass still pending. Marks re-placement: not needed — positions
+carried verbatim. Provenance register DONE (docs/PROVENANCE.md, all items
+recorded). Clip acquisition UNBLOCKED: skeleton decided (docs/RIGGING.md) and
+the CC0 Universal Animation Library (43 clips, same skeleton) is on disk.
+
+- [ ] Acquire/kitbash real bar furniture (counter, stool, glass, bottle) —
+  grey-box props now visibly out-place against the detailed set
+- [ ] Character v2: build hero/bartender from Universal Base Characters on
+  `oeb_humanoid_v1` + remap UAL clips to the canonical clip IDs
+  (docs/RIGGING.md §4–5; needs `data/bone_maps/` starters + asset-build tool)
+- [ ] Night-mood lighting variant for the sci-fi bar (variant_night is still
+  a tag only; current review lighting is bright/clinical)
 
 ## Optional — Animated preview (nice-to-have, any time after 2A)
 
@@ -136,7 +153,9 @@ PROJECT-DONE.md: seated-only v0; explicit dialogue durations
 (`DialogueCue.duration` required); camera grammar as JSON data; LLM emits
 SceneIntent only.
 
-- [ ] First animation naming convention + retargeting standard? (blocks the Phase 2 clip-acquisition item)
+- [x] First animation naming convention + retargeting standard? — DECIDED
+  2026-07-06: `oeb_humanoid_v1` (UE-mannequin/Quaternius; docs/RIGGING.md).
+  Unblocks the Phase 2 clip work.
 - [ ] v1 lipsync: none, coarse mouth states, or phoneme/viseme?
 
 ---

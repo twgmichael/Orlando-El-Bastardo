@@ -2,12 +2,40 @@
   "schema_version": "1.0.0",
   "asset_root": "assets",
   "assets": {
-    "set_bar_small_A": { "file": "placeholders/bar_scene_placeholders.glb", "node": "set_bar_small_A", "kind": "set" },
-    "char_hero_v1": { "file": "placeholders/bar_scene_placeholders.glb", "node": "char_hero_v1", "kind": "character" },
-    "char_bartender_v1": { "file": "placeholders/bar_scene_placeholders.glb", "node": "char_bartender_v1", "kind": "character" },
-    "prop_bar_counter_A": { "file": "placeholders/bar_scene_placeholders.glb", "node": "prop_bar_counter_A", "kind": "prop" },
-    "prop_stool_A": { "file": "placeholders/bar_scene_placeholders.glb", "node": "prop_stool_A", "kind": "prop" },
-    "prop_glass_tumbler_A": { "file": "placeholders/bar_scene_placeholders.glb", "node": "prop_glass_tumbler_A", "kind": "prop" },
-    "prop_bottle_generic_A": { "file": "placeholders/bar_scene_placeholders.glb", "node": "prop_bottle_generic_A", "kind": "prop" }
+    "set_bar_small_A": {
+      "file": "sets/bar_scene_scifi.glb",
+      "node": "set_bar_small_A",
+      "kind": "set"
+    },
+    "char_hero_v1": {
+      "file": "characters/oeb_guy_characters.glb",
+      "node": "char_hero_v1",
+      "kind": "character"
+    },
+    "char_bartender_v1": {
+      "file": "characters/oeb_guy_characters.glb",
+      "node": "char_bartender_v1",
+      "kind": "character"
+    },
+    "prop_bar_counter_A": {
+      "file": "sets/bar_scene_scifi.glb",
+      "node": "prop_bar_counter_A",
+      "kind": "prop"
+    },
+    "prop_stool_A": {
+      "file": "sets/bar_scene_scifi.glb",
+      "node": "prop_stool_A",
+      "kind": "prop"
+    },
+    "prop_glass_tumbler_A": {
+      "file": "sets/bar_scene_scifi.glb",
+      "node": "prop_glass_tumbler_A",
+      "kind": "prop"
+    },
+    "prop_bottle_generic_A": {
+      "file": "sets/bar_scene_scifi.glb",
+      "node": "prop_bottle_generic_A",
+      "kind": "prop"
+    }
   }
 }
