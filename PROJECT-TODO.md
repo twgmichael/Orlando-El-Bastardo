@@ -147,8 +147,11 @@ names anything the library lacks. Building assets stays human + crew work.
   + `run_pipeline.py --episode`, exit 4 = BLOCKED, NEEDED .json/.md +
   report.json index; all paths tested). Remaining: render QA gates,
   run-time translation fidelity gate, validator name-extraction polish
-- [ ] P2 Script desk: script → scene-brief chunking (constrained LLM
-  extraction), per-scene runs, episode assembly + config snapshot
+- [x] P2 Script desk DONE 2026-07-07 (`tools/script_desk.py` + script
+  format; chunking made DETERMINISTIC — no LLM; structural scene facts
+  stamped over the translator after it silently swallowed an unknown
+  location in test 1; ep_001: 2 delivered incl. a brand-new scene verbatim,
+  1 blocked with correct ticket)
 - [ ] P3 Producer driver (`tools/producer.py`): the deterministic loop,
   halt-and-report policy, final production report
 - [ ] P4 Producer qualification: dry run (in-library script → all scenes
