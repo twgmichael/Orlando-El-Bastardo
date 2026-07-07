@@ -23,7 +23,7 @@ import sys
 # llama-completion is the one-shot binary; llama-cli (even with -no-cnv on
 # this build) drops into interactive conversation mode and never exits.
 LLAMA_CLI = "llama-completion"
-DEFAULT_MODEL = "models/qwen2.5-3b-instruct-q4_k_m.gguf"
+DEFAULT_MODEL = "llm/qwen2.5-3b-instruct-q4_k_m.gguf"
 SCHEMA_PATH = "schemas/sceneintent.schema.json"
 
 SYSTEM = """You are a scene-intent translator for a deterministic 3D \

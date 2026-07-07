@@ -12,9 +12,12 @@ work; record the answer here and reflect it in SCHEMA.md / BAR-SCENE.md.
 3. ~~Camera grammar storage?~~ **ANSWERED 2026-07-04: JSON data.**
    `data/camera_grammar.json`, validated by `schemas/camera-grammar.schema.json`;
    code interprets, data defines.
-4. What is the first exact animation naming convention and retargeting standard?
-   (Clip *names* are de-facto set by BAR-SCENE.md; the retargeting standard is
-   still open — bites at Phase 2 real assets.)
+4. ~~Animation naming convention and retargeting standard?~~ **ANSWERED
+   2026-07-06: `oeb_humanoid_v1`.** UE-mannequin skeleton exactly as shipped
+   by the Quaternius UBC/UAL CC0 stack (65 joints, `A_TPose` rest);
+   canonical clip IDs stay per BAR-SCENE.md with source-name remaps at
+   asset-build time; clips are in-place (root motion = waypoint IR); foreign
+   skeletons adapt via `data/bone_maps/*.json`. Full spec: docs/RIGGING.md.
 5. ~~LLM output boundary?~~ **ANSWERED 2026-07-04: SceneIntent only.** The LLM
    never emits asset/clip IDs; the deterministic resolver maps intent to
    approved assets.

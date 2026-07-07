@@ -62,6 +62,21 @@ def setup_lighting():
     fill.rotation_euler = (math.radians(-20), 0.0, 0.0)
     bpy.context.scene.collection.objects.link(fill)
 
+    # Overhead key — enclosed sets (real walls) block the sun; without this
+    # interiors review too dark (added 2026-07-06 with the sci-fi set).
+    key_data = bpy.data.lights.new("review_key", type='AREA')
+    key_data.energy = 700.0
+    key_data.size = 6.0
+    key = bpy.data.objects.new("review_key", key_data)
+    key.location = (0.0, 0.5, 4.1)
+    bpy.context.scene.collection.objects.link(key)
+
+    bar_data = bpy.data.lights.new("review_bar", type='POINT')
+    bar_data.energy = 200.0
+    bar = bpy.data.objects.new("review_bar", bar_data)
+    bar.location = (0.0, 2.6, 2.8)
+    bpy.context.scene.collection.objects.link(bar)
+
 
 def find_ffmpeg():
     found = shutil.which("ffmpeg")

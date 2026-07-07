@@ -61,24 +61,34 @@ PASS: both exit 0, (a) reports counts, (b) prints the object list.
 
 **CHECK-3 — canonical-ID manifest.** Input: `.glb` path.
 Extract node and animation names via pygltflib (as in CHECK-2a, printing the
-sorted name sets) and compare against this exact expected set (derived from
-`docs/BAR-SCENE.md`; note `variant_night` there is a set-variant TAG, not a
-scene object — it is deliberately NOT expected as a node):
+sorted name sets) and compare against the expected set for THAT file
+(2026-07-06 split: characters live in their own asset file; the scene
+placeholder file carries no characters and no animations). Select the
+manifest by target filename. Note `variant_night` in `docs/BAR-SCENE.md` is
+a set-variant TAG, not a scene object — deliberately NOT expected as a node.
 
-Expected nodes (15): `set_bar_small_A`, `prop_bar_counter_A`, `prop_stool_A`,
-`prop_glass_tumbler_A`, `prop_bottle_generic_A`, `char_hero_v1`,
-`char_bartender_v1`, `hero_entry_A`, `hero_barstool_A`, `bartender_idle_A`,
-`bartender_backbar_A`, `cam_establishing_wide`, `cam_two_shot_bar`,
-`cam_close_hero`, `cam_close_bartender`
+For `bar_scene_placeholders.glb` — expected nodes (13), expected animations
+NONE (zero): `set_bar_small_A`, `prop_bar_counter_A`, `prop_stool_A`,
+`prop_glass_tumbler_A`, `prop_bottle_generic_A`, `hero_entry_A`,
+`hero_barstool_A`, `bartender_idle_A`, `bartender_backbar_A`,
+`cam_establishing_wide`, `cam_two_shot_bar`, `cam_close_hero`,
+`cam_close_bartender`
 
-Expected animations (12): `walk_to_stool`, `sit_barstool`,
+For the character asset file (currently
+`assets/characters/oeb_guy_characters.glb`) — expected nodes:
+`char_hero_v1` and `char_bartender_v1` (armature bone nodes alongside them
+are fine); expected animations (12): `walk_to_stool`, `sit_barstool`,
 `idle_seated_relaxed`, `talk_neutral_seated`, `nod_small`,
 `look_down_then_up`, `idle_standing_relaxed`, `wipe_glass_loop`,
 `talk_friendly_standing`, `pour_drink_short`, `lean_forward_counter`,
 `shrug_small`
 
+For any OTHER `.glb`, the task must supply the expected lists inline; if it
+doesn't, that is escalation trigger 5 (ambiguity).
+
 PASS: every expected name present (base-name match; ignore `.001`-style
-suffixes; extra nodes are fine). FAIL: list every missing name.
+suffixes; extra nodes are fine) AND, for the placeholder file, zero
+animations. FAIL: list every missing name (or unexpected animations).
 
 **CHECK-4 — USD load.** Input: `.usd`/`.usdc`/`.usda` path.
 ```
@@ -153,3 +163,4 @@ the per-check PASS/FAIL lines under "Done-criteria results".
 - 2026-07-04 — revised after dry run (author tier). Finding: CHECK-3's "compare against BAR-SCENE.md" was ambiguous — a literal read counts `variant_night` (a set-variant tag, not an object) as a required node, producing a spurious FAIL. Replaced with an explicit expected-name list. The verifier itself behaved correctly (reported, didn't judge)
 - 2026-07-04 — **QUALIFIED** (author tier): lint pass; dry run clean (4 checks, read-only, evidence quoted); escalation drill clean (unknown CHECK-8 → trigger-5 bundle after completing the runnable check)
 - 2026-07-05 — privacy pass for public repo (author tier): external-drive constraint generalized from the named volume to all of `/Volumes/` (stronger bound, no drive name in public files)
+- 2026-07-06 — revised (author tier): CHECK-3 split per file after the Phase 2 character salvage — `bar_scene_placeholders.glb` now expects 13 nodes and ZERO animations (characters removed via `--no-characters`); character nodes + the 12 animations moved to `assets/characters/oeb_guy_characters.glb`; unknown GLBs without inline expected lists are trigger 5

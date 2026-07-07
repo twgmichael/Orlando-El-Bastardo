@@ -4,6 +4,103 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-06 — Sci-fi bar set built programmatically; third asset generation through an unchanged pipeline
+
+- `tools/build_scifi_bar.py` — data-driven set assembly from the Modular
+  Sci-Fi kit (CC0): 8×8 m room sized to kit modules (4×4 floor grid of 2 m
+  tiles, surface at exactly z=0 so every mark/prop position stays valid),
+  two 4 m wall modules per side + window band (front open for the cameras),
+  corner columns, backbar shelves/computer/crates/teleporter dressing — all
+  joined into ONE canonical `set_bar_small_A` mesh; grey-box props, marks,
+  and cameras carried over verbatim into the new scene bundle
+  `assets/sets/bar_scene_scifi.glb` (+`.usdc`).
+- Two real bugs found and fixed during the build: (1) kit pieces import as
+  hierarchies with axis-conversion transforms — world transforms are now
+  baked into vertex data before placement; (2) ALL kit materials imported
+  alpha-HASHED with alpha ≈ 0 — 23k polys rendering invisible while the
+  bbox said they existed; builder forces set materials opaque.
+  `render_blend.py` gained an overhead key + bar light (enclosed sets block
+  the old sun-only rig).
+- Config swap only (`set_bar_small_A` + 4 props → the new bundle); resolver,
+  validator, exporter, renderer unchanged. **The original placeholder GLB is
+  now fully retired from the pipeline.** Full 24 s scene rendered with the
+  1999 characters and delivered: `renders/reviews/sc_bar_intro_001_scifi.mp4`.
+- Known weak spot: grey-box counter/stool now visibly out-place against the
+  detailed set — furniture (kitbash or CC0 acquisition) is the next dressing
+  gap. Night-mood lighting pass also pending.
+
+## 2026-07-06 — Skeleton standard signed off: `oeb_humanoid_v1` (docs/RIGGING.md)
+
+- Human sign-off; closes OPEN-QUESTIONS #4 (five of six now resolved — only
+  v1 lipsync remains). Locked-decision row added to docs/DECISIONS.md.
+- The standard: the 65-joint UE-mannequin skeleton exactly as shipped by the
+  Quaternius UBC/UAL CC0 stack (joint list extracted from the actual
+  `A_TPose` in UAL, quirks and all — `Head` capitalized); meters, +Y facing,
+  feet at z=0, T-pose bind; canonical clip IDs per BAR-SCENE.md with
+  source-name remaps at asset-build time; clips in-place (root motion =
+  waypoint IR); foreign skeletons adapt via `data/bone_maps/*.json` data
+  files; assets declare `"skeleton"` in config; changes bump v2, never
+  mutate v1.
+- Unblocks: Phase 2 clip work, UBC-based character v2, and (behind its own
+  locked-decision gate) walking for v1 — `Walk_Loop` + waypoints are ready.
+
+## 2026-07-06 — CC0 asset stack acquired, reviewed, converted (185 GLBs); housekeeping
+
+- Four Quaternius packs reviewed into gitignored `assets/`, all **CC0 1.0**,
+  recorded in the new committed register `docs/PROVENANCE.md` (which also
+  covers the legacy salvage provenance): Universal Base Characters
+  (2 skinned characters, UE-mannequin skeleton, 1.73 m), Universal Animation
+  Library (43 clips × in-place/root-motion variants on the SAME skeleton —
+  near 1:1 coverage of our canonical clip vocabulary), Ultimate Modular
+  Sci-Fi (91 interior pieces), Ultimate Space Kit (92 pieces incl. 4
+  spaceships — JB5K kitbash donors). License diligence note: Space Kit's
+  License.txt header is a vendor copy-paste from another pack; license block
+  itself is CC0.
+- `tools/batch_convert_glb.py` — batch converter to packed GLB; 185
+  converted, zero failures. Real catch: the first Space Kit pass converted
+  from FBX twins (walk order) and lost the texture atlas — re-converted from
+  glTF sources and the tool now dedupes by stem PREFERRING glTF over FBX
+  (the vendor's own README warning, encoded).
+- Housekeeping: LLM weights moved `models/` → `llm/` (ends the
+  3D-model/ML-model name clash; `generate_intent.py` + gitignore updated,
+  generation smoke-tested); `/Volumes/OEB-PROJECT/OEB-LIBRARY` +
+  `OEB-RENDERS` now accessible from the session shell (TCC unblocked,
+  verified; storage-plan moves actionable; still no backup drive).
+
+## 2026-07-06 — Phase 2 opened by archaeology: 1999 Orlando salvaged, in the scene
+
+Sidequest turned milestone: the original Infini-D assets (1996–2003, classic
+Mac) were reviewed and the hero pulled forward into the modern pipeline.
+
+- **Salvage review** (`models/mƒ jb5k/`, `models/mƒ Orlando El Bastardo/`):
+  `guy.dxf` (2000) = complete segmented hero, 1,290 faces / 27 body-part
+  layers; `Bman700.dxf` (1996) = leaner 743-face variant; two Infini-D scene
+  files (`elmo`/`SI·D` chunked container — locked, but material names and
+  texture links recoverable via strings); all PICT/PSD/TIFF textures
+  convertible (sips-verified); `oeb map` is a PDF; `JB5K texture` is a
+  720×875 PSD (the ship's atlas). The JB5K ship itself: reconstruction plan
+  documented in-session (chunk mining + silhouette tracing from renders).
+- **`tools/convert_legacy_dxf.py`** — headless-Blender converter: parses the
+  CR-terminated 3DFACE DXF, recenters/scales to 1.7 m, infers facing from
+  shoe layers, MIRRORS the right hand to rebuild the missing left (219
+  faces), and emits BOTH characters from the same geometry — `char_hero_v1`
+  (blue) and `char_bartender_v1` (green), each with the standard 5-bone
+  armature and its 6 canonical clips — to
+  `assets/characters/oeb_guy_characters.glb` + `.usdc`.
+- **`make_placeholders.py --no-characters`** — placeholder scene regenerated
+  without character armatures/actions (no import name collisions; characters
+  are now their own self-contained asset file, the Phase 2 shape).
+- **The drop-in promise held:** only `oeb.config.json` changed (two character
+  entries). Resolver, validator (two-file asset union), Blender exporter,
+  and renderer ran unmodified. Test scene rendered and delivered:
+  `renders/reviews/sc_bar_intro_001_legacy_guy.mp4` — the hero's original
+  seated pose (likely the JB5K cockpit) lands perfectly on the barstool.
+- Provenance: original works by the project owner (1996–2003); no external
+  licensing. `pipeline-verifier` CHECK-3 revised same day for the two-file
+  split (see its changelog).
+- Remaining known quirk: placeholder two-shot camera still clips the seated
+  hero at frame right (camera aim, Phase 2 set/camera work).
+
 ## 2026-07-06 — Phase 5 COMPLETE: human review ACCEPTED (proof of concept, static-shot test)
 
 - The human reviewed `renders/reviews/sc_bar_intro_001.mp4` (and had the

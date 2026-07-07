@@ -13,6 +13,7 @@
 | Dialogue timing (2026-07-04) | Explicitly authored: `DialogueCue.duration` is schema-required |
 | Camera grammar storage (2026-07-04) | JSON data (`data/camera_grammar.json` + schema); code interprets, data defines |
 | LLM output boundary (2026-07-04) | SceneIntent only — LLM never emits asset/clip IDs; resolver maps to approved assets |
+| Skeleton & retargeting standard (2026-07-06) | `oeb_humanoid_v1` = UE-mannequin naming as shipped by Quaternius UBC/UAL (65 joints, T-pose, in-place clips, bone maps as data) — full spec in docs/RIGGING.md |
 
 ## Framing context (from handoff)
 
