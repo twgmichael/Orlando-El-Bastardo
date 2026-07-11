@@ -25,7 +25,7 @@ range — plus a timeline sidecar JSON.
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. Never hardcode `/Users/...` or `/Volumes/...` absolutes; asset files
    resolve as `<asset_root>/<file>` (config `asset_root`, overridden by
    `OEB_ASSET_ROOT` env var). References inside the layer use paths relative
@@ -233,3 +233,4 @@ Use the `## REPORT` / `## ESCALATION` templates from
   pointer (transforms stay in the set file in v0); actor prims authored at
   their binding `usd_path` with `oeb:` custom attributes; timeline sidecar
   shares the Godot timeline shape (target-agnostic).
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

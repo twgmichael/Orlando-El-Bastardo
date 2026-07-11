@@ -162,7 +162,107 @@ def resolve_intent(intent, rmap, grammar, config):
                 f"E_UNMAPPED_ASSET: character_id '{char_id}' not found in oeb.config.json assets"
             )
 
+    # ------------------------------------------------------------------
+    # R13: entrances — actor arrives on foot at scene start
+    # ------------------------------------------------------------------
+    entrances = {}   # actor_id -> entrance dict from the role map
+    for actor in intent["actors"]:
+        if not actor.get("arrives"):
+            continue
+        aid = actor["actor_id"]
+        role_entry = resolved_roles.get(aid)
+        if role_entry is None:
+            continue   # unmapped role already recorded above
+        ent = role_entry.get("entrance")
+        if ent is None:
+            errors.append(
+                f"E_NO_ENTRANCE: actor '{aid}' has arrives=true but role "
+                f"'{actor['role_tag']}' has no entrance mapping in resolver map"
+            )
+        else:
+            entrances[aid] = ent
+
+    # ------------------------------------------------------------------
+    # R14: departures — actor exits on foot (reverse of the entrance)
+    # ------------------------------------------------------------------
+    departures = {}
+    for actor in intent["actors"]:
+        if not actor.get("departs"):
+            continue
+        aid = actor["actor_id"]
+        role_entry = resolved_roles.get(aid)
+        if role_entry is None:
+            continue
+        ent = role_entry.get("entrance")
+        if ent is None or "rise_clip" not in ent:
+            errors.append(
+                f"E_NO_DEPARTURE: actor '{aid}' has departs=true but role "
+                f"'{actor['role_tag']}' has no entrance/rise mapping in "
+                f"resolver map"
+            )
+        else:
+            departures[aid] = ent
+
     # Early exit — cannot safely proceed to camera/shot resolution
+    if errors:
+        return None, errors
+
+    def entrance_times(ent):
+        """R13 timeline for one entrance. The stand clip exists only as a
+        blend source: the walk starts after a 0.3 s standing beat and fades
+        in over it; the settle overlaps the walk's end by 0.3 s and the
+        idle overlaps the settle's end by 0.2 s (NLA crossfades)."""
+        lead = 0.3 if ent.get("stand_clip") else 0.0
+        walk_end = round(lead + ent["walk_duration"], 4)
+        settle_start = round(max(lead, walk_end - 0.3), 4)
+        settle_end = round(settle_start + ent["settle_duration"], 4)
+        return {
+            "lead": lead,
+            "walk_end": walk_end,
+            "settle_start": settle_start,
+            "settle_end": settle_end,
+            "idle_start": round(max(0.0, settle_end - 0.2), 4),
+        }
+
+    def present_for(si):
+        """R9 presence rule for one shot_intent (shared with R13 check)."""
+        beat_orders = sorted(si.get("beat_orders", []))
+        if not beat_orders:
+            return set(intent_actor_ids)
+        ps = set()
+        for bo in beat_orders:
+            beat = beat_order_map[bo]
+            if beat.get("actor_ids"):
+                ps.update(beat["actor_ids"])
+            elif beat.get("dialogue"):
+                ps.update(d["actor_id"] for d in beat["dialogue"])
+            else:
+                ps.update(intent_actor_ids)
+        return ps
+
+    # R13: arriving actors must be present in the opening shot
+    sorted_shots_pre = sorted(intent["shot_intents"], key=lambda si: si["order"])
+    if entrances and sorted_shots_pre:
+        present0 = present_for(sorted_shots_pre[0])
+        for aid in sorted(entrances):
+            if aid not in present0:
+                errors.append(
+                    f"E_ENTRANCE_NOT_IN_OPENING: actor '{aid}' arrives but is "
+                    f"not present in the first shot"
+                )
+
+    # R14: a departing actor leaves in the LAST shot they appear in
+    dep_shot_idx = {}
+    for aid in sorted(departures):
+        idxs = [i for i, si in enumerate(sorted_shots_pre)
+                if aid in present_for(si)]
+        if not idxs:
+            errors.append(
+                f"E_DEPARTURE_NOT_PRESENT: actor '{aid}' departs but is "
+                f"present in no shot"
+            )
+        else:
+            dep_shot_idx[aid] = idxs[-1]
     if errors:
         return None, errors
 
@@ -185,10 +285,10 @@ def resolve_intent(intent, rmap, grammar, config):
                 shot_camera_map.append(None)
             else:
                 shot_camera_map.append(matches[0])
-        elif framing == "close_on":
+        elif framing in ("close_on", "medium_on"):
             if "subject_actor_id" not in si:
                 errors.append(
-                    f"E_MISSING_SUBJECT: framing 'close_on' in shot order {si['order']} "
+                    f"E_MISSING_SUBJECT: framing '{framing}' in shot order {si['order']} "
                     f"requires subject_actor_id"
                 )
                 shot_camera_map.append(None)
@@ -197,11 +297,11 @@ def resolve_intent(intent, rmap, grammar, config):
                 spawn_mark = resolved_roles[subj_id]["spawn_mark"]
                 matches = [
                     c for c in cameras
-                    if c["framing"] == "close_on" and c.get("subject_marks") == [spawn_mark]
+                    if c["framing"] == framing and c.get("subject_marks") == [spawn_mark]
                 ]
                 if len(matches) != 1:
                     errors.append(
-                        f"E_NO_CAMERA: close_on for actor '{subj_id}' (spawn_mark "
+                        f"E_NO_CAMERA: {framing} for actor '{subj_id}' (spawn_mark "
                         f"'{spawn_mark}') matched {len(matches)} cameras, expected exactly 1"
                     )
                     shot_camera_map.append(None)
@@ -228,14 +328,22 @@ def resolve_intent(intent, rmap, grammar, config):
             suffix = "establishing"
         elif framing == "two_shot":
             suffix = "two_shot"
+        elif framing == "medium_on":
+            suffix = f"medium_{si['subject_actor_id']}"
         else:
             suffix = f"close_{si['subject_actor_id']}"
         shot_id = f"shot_{shot_num:03d}_{suffix}"
 
-        # R7: Dialogue scheduling
+        # R13: entrance total for the opening shot (0.0 elsewhere)
+        ent_end = 0.0
+        if i == 0 and entrances:
+            ent_end = max(entrance_times(e)["settle_end"]
+                          for e in entrances.values())
+
+        # R7: Dialogue scheduling (pushed past any entrance)
         beat_orders_for_shot = sorted(si.get("beat_orders", []))
         lines = []   # list of {actor_id, text, start_time, duration}
-        cur_start = 1.0
+        cur_start = 1.0 if ent_end == 0.0 else round(ent_end + 0.5, 1)
         for bo in beat_orders_for_shot:
             beat = beat_order_map[bo]
             for dlg in beat.get("dialogue", []):
@@ -248,49 +356,147 @@ def resolve_intent(intent, rmap, grammar, config):
                 })
                 cur_start = round(cur_start + dur + 0.5, 1)
 
+        # R14: departures scheduled after this shot's dialogue
+        dep_here = [aid for aid in sorted(departures)
+                    if dep_shot_idx.get(aid) == i]
+        dep_times = {}
+        if dep_here:
+            base = 0.5
+            if lines:
+                base = round(lines[-1]["start_time"]
+                             + lines[-1]["duration"] + 0.5, 1)
+            if ent_end > 0.0:
+                base = max(base, round(ent_end + 0.5, 1))
+            for aid in dep_here:
+                dep = departures[aid]
+                rise_end = round(base + dep["rise_duration"], 4)
+                walk_start = round(rise_end - 0.3, 4)
+                walk_end = round(walk_start + dep["walk_duration"], 4)
+                dep_times[aid] = {
+                    "rise_start": base,
+                    "walk_start": walk_start,
+                    "walk_end": walk_end,
+                    "idle_start": round(walk_end - 0.2, 4),
+                }
+
         # R8: Shot timing
         if lines:
             last = lines[-1]
             raw = last["start_time"] + last["duration"] + 1.0
             shot_length = max(4.0, math.ceil(raw * 2) / 2)
         else:
-            shot_length = 4.0
+            shot_length = max(4.0, math.ceil((ent_end + 1.0) * 2) / 2)
+        if dep_times:
+            latest = max(t["walk_end"] for t in dep_times.values())
+            shot_length = max(shot_length,
+                              math.ceil((latest + 1.0) * 2) / 2)
 
         start_time = scene_time
         end_time = start_time + shot_length
         scene_time = end_time
 
         # R9: Present actors
-        present_set = set()
-        if not beat_orders_for_shot:
-            present_set = set(intent_actor_ids)
-        else:
-            for bo in beat_orders_for_shot:
-                beat = beat_order_map[bo]
-                if beat.get("actor_ids"):
-                    for aid in beat["actor_ids"]:
-                        present_set.add(aid)
-                elif beat.get("dialogue"):
-                    for dlg in beat["dialogue"]:
-                        present_set.add(dlg["actor_id"])
-                else:
-                    present_set.update(intent_actor_ids)
-
+        present_set = present_for(si)
         present_ordered = [aid for aid in intent_actor_ids if aid in present_set]
 
         # R10: Cues
         cues = []
 
-        # Idle AnimationCue per present actor (intent order)
+        # Per present actor (intent order): entrance moves (R13, opening
+        # shot only) then idle; or just the idle from time 0.
         for aid in present_ordered:
-            cues.append({
+            ent = entrances.get(aid) if i == 0 else None
+            idle_start = 0.0
+            idle_blend = None
+            if ent:
+                t = entrance_times(ent)
+                idle_start = t["idle_start"]
+                idle_blend = 0.2
+                if ent.get("stand_clip"):
+                    cues.append({
+                        "type": "animation",
+                        "cue_id": f"{aid}_stand_{shot_num:03d}",
+                        "start_time": 0.0,
+                        "actor_id": aid,
+                        "clip_id": ent["stand_clip"],
+                    })
+                walk = {
+                    "type": "move",
+                    "cue_id": f"{aid}_enter_{shot_num:03d}",
+                    "start_time": t["lead"],
+                    "duration": ent["walk_duration"],
+                    "actor_id": aid,
+                    "from_mark": ent["from_mark"],
+                    "to_mark": ent["approach_mark"],
+                    "clip_id": ent["walk_clip"],
+                    "loop": True,
+                }
+                if ent.get("stand_clip"):
+                    walk["blend_in"] = 0.3
+                cues.append(walk)
+                cues.append({
+                    "type": "move",
+                    "cue_id": f"{aid}_settle_{shot_num:03d}",
+                    "start_time": t["settle_start"],
+                    "duration": ent["settle_duration"],
+                    "actor_id": aid,
+                    "from_mark": ent["approach_mark"],
+                    "to_mark": resolved_roles[aid]["spawn_mark"],
+                    "clip_id": ent["settle_clip"],
+                    "facing": "hold",
+                    "blend_in": 0.3,
+                })
+            idle = {
                 "type": "animation",
                 "cue_id": f"{aid}_idle_{shot_num:03d}",
-                "start_time": 0.0,
+                "start_time": idle_start,
                 "actor_id": aid,
                 "clip_id": resolved_roles[aid]["idle_clip"],
                 "loop": True,
-            })
+            }
+            if idle_blend:
+                idle["blend_in"] = idle_blend
+            cues.append(idle)
+
+            # R14: rise from the mark, walk out, hold a standing idle
+            t = dep_times.get(aid)
+            if t:
+                dep = departures[aid]
+                cues.append({
+                    "type": "move",
+                    "cue_id": f"{aid}_rise_{shot_num:03d}",
+                    "start_time": t["rise_start"],
+                    "duration": dep["rise_duration"],
+                    "actor_id": aid,
+                    "from_mark": resolved_roles[aid]["spawn_mark"],
+                    "to_mark": dep["approach_mark"],
+                    "clip_id": dep["rise_clip"],
+                    "facing": "hold",
+                    "blend_in": 0.2,
+                })
+                cues.append({
+                    "type": "move",
+                    "cue_id": f"{aid}_exit_{shot_num:03d}",
+                    "start_time": t["walk_start"],
+                    "duration": dep["walk_duration"],
+                    "actor_id": aid,
+                    "from_mark": dep["approach_mark"],
+                    "to_mark": dep["from_mark"],
+                    "clip_id": dep["walk_clip"],
+                    "loop": True,
+                    "facing": "travel_hold",
+                    "blend_in": 0.3,
+                })
+                if dep.get("stand_clip"):
+                    cues.append({
+                        "type": "animation",
+                        "cue_id": f"{aid}_idle_out_{shot_num:03d}",
+                        "start_time": t["idle_start"],
+                        "actor_id": aid,
+                        "clip_id": dep["stand_clip"],
+                        "loop": True,
+                        "blend_in": 0.2,
+                    })
 
         # Per dialogue line: talk AnimationCue immediately followed by DialogueCue
         for k, line in enumerate(lines, start=1):

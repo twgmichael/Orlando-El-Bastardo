@@ -162,24 +162,40 @@ def main():
             print(f"[script_desk]    FAILED (exit {run.returncode}); "
                   f"continuing\n      " + "\n      ".join(tail))
 
-    # Episode assembly: concat delivered renders (same encoder settings
-    # throughout the pipeline, so the concat demuxer is safe). Slate cards:
-    # deferred (drawtext font availability varies; tracked in the plan).
+    # Episode assembly: slate card before each delivered scene, then a
+    # re-encoded concat (re-encode because slates and renders come from
+    # different encoder invocations).
     episode_cut = None
     delivered = [(sid, r) for sid, (st, r) in outcomes.items()
                  if st == "DELIVERED" and r]
     if delivered and not args.no_render:
         ffmpeg = find_ffmpeg()
         if ffmpeg:
+            font = "/System/Library/Fonts/Helvetica.ttc"
+            parts = []
+            for sid, r in delivered:
+                slate = os.path.join(edir, "scenes", sid, "slate.mp4")
+                text = f"{episode}\\n{sid}".replace(":", r"\:")
+                subprocess.run(
+                    [ffmpeg, "-y", "-f", "lavfi",
+                     "-i", "color=c=0x101018:s=960x540:r=24:d=1.5",
+                     "-vf", (f"drawtext=fontfile={font}:text='{text}':"
+                             "fontcolor=0xD8D8E0:fontsize=42:"
+                             "x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=18"),
+                     "-c:v", "libx264", "-pix_fmt", "yuv420p", slate],
+                    check=True, capture_output=True)
+                parts += [slate, r]
             lst = os.path.join(edir, "concat.txt")
             with open(lst, "w") as f:
-                for _sid, r in delivered:
-                    f.write(f"file '{os.path.abspath(r)}'\n")
+                for p in parts:
+                    f.write(f"file '{os.path.abspath(p)}'\n")
             episode_cut = f"renders/reviews/{episode}_episode.mp4"
             subprocess.run([ffmpeg, "-y", "-f", "concat", "-safe", "0",
-                            "-i", lst, "-c", "copy", episode_cut],
+                            "-i", lst, "-c:v", "libx264",
+                            "-pix_fmt", "yuv420p", "-crf", "23",
+                            episode_cut],
                            check=True, capture_output=True)
-            print(f"[script_desk] episode cut → {episode_cut}")
+            print(f"[script_desk] episode cut (with slates) → {episode_cut}")
 
     # Production summary
     n = {"DELIVERED": 0, "NEEDS_ASSETS": 0, "FAILED": 0}

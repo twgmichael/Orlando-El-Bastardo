@@ -29,7 +29,7 @@ the resolution rules below, plus its mapping data file `data/resolver_map.json`.
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. Never hardcode `/Users/...` or `/Volumes/...` absolutes in the script or
    its outputs; all inputs arrive as CLI arguments with repo-relative defaults.
 5. Never modify any file under `schemas/`, `fixtures/`, or `oeb.config.json`.
@@ -325,3 +325,4 @@ Use the `## REPORT` / `## ESCALATION` templates from
   descriptions; output directory `out/` (not yet gitignored — orchestrator to
   decide).
 - 2026-07-05 — privacy pass for public repo (author tier): external-drive constraint generalized from the named volume to all of `/Volumes/` (stronger bound, no drive name in public files)
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

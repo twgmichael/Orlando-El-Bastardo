@@ -28,7 +28,7 @@ emit a deterministic introspection manifest for verification.
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. Never hardcode `/Users/...` or `/Volumes/...` absolutes in the script or
    its outputs; asset files resolve as `<asset_root>/<file>` where
    `asset_root` comes from `oeb.config.json`, overridden by the
@@ -306,3 +306,4 @@ Use the `## REPORT` / `## ESCALATION` templates from
   repeat through shot end; `.blend` treated as non-deterministic — the
   sorted-JSON introspection manifest is the determinism artifact; camera
   switching via timeline-marker camera binding.
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

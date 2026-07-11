@@ -4,7 +4,7 @@
     "small_bar_interior": {
       "set_id": "set_bar_small_A",
       "variants": { "night": "variant_night" },
-      "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A"],
+      "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A", "hero_entry_A", "hero_stool_front_A"],
       "default_props": [
         { "prop_id": "counter_main", "asset_id": "prop_bar_counter_A" },
         { "prop_id": "stool_hero", "asset_id": "prop_stool_A", "at_mark": "hero_barstool_A" },
@@ -18,7 +18,18 @@
       "character_id": "char_hero_v1",
       "spawn_mark": "hero_barstool_A",
       "idle_clip": "idle_seated_relaxed",
-      "talk_clip": "talk_neutral_seated"
+      "talk_clip": "talk_neutral_seated",
+      "entrance": {
+        "from_mark": "hero_entry_A",
+        "approach_mark": "hero_stool_front_A",
+        "stand_clip": "idle_standing_relaxed",
+        "walk_clip": "walk_to_stool",
+        "walk_duration": 2.6667,
+        "settle_clip": "sit_barstool",
+        "settle_duration": 1.3,
+        "rise_clip": "stand_from_stool",
+        "rise_duration": 1.3
+      }
     },
     "bartender": {
       "character_id": "char_bartender_v1",

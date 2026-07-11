@@ -47,6 +47,16 @@ def convert(src_path, out_path):
         bpy.ops.import_scene.gltf(filepath=src_path)
     if not bpy.data.objects:
         raise RuntimeError("import produced no objects")
+    # Quaternius Blender-export materials often arrive alpha-MASK/HASHED
+    # with alpha 0 — invisible downstream (found on the sci-fi kit, again on
+    # the modular garments). Normalize to opaque unless the material really
+    # uses an alpha TEXTURE link.
+    for mat in bpy.data.materials:
+        if hasattr(mat, "blend_method") and mat.use_nodes:
+            bsdf = mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf and "Alpha" in bsdf.inputs and not bsdf.inputs["Alpha"].links:
+                mat.blend_method = 'OPAQUE'
+                bsdf.inputs["Alpha"].default_value = 1.0
     bpy.ops.export_scene.gltf(
         filepath=out_path, export_format='GLB', use_selection=False,
         export_animations=True, export_cameras=False,

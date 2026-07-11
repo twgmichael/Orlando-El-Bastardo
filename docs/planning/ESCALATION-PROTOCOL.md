@@ -110,8 +110,11 @@ summary. Independent workstreams may continue.
    or run any state-changing git command. Read-only git (`status`, `log`,
    `diff`) is fine.
 2. **No downloads or network installs** without human approval.
-3. **No writes under `/Volumes/` (any external drive)** unless the task
-   explicitly grants it.
+3. **No literal `/Volumes/...` paths in any write** unless the task
+   explicitly grants it. Repo-relative paths (`out/`, `renders/`,
+   `assets/...`) are always fine — they may RESOLVE onto an external volume
+   via symlinks (storage tiering, 2026-07-07); that is infrastructure, not
+   the worker's concern.
 4. **Resolve asset paths only via `OEB_ASSET_ROOT` / `oeb.config.json`** —
    never hardcode `/Users/...` or `/Volumes/...` absolutes into generated
    `.blend`/`.tscn`/USD/glTF content.

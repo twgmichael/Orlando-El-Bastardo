@@ -19,6 +19,14 @@ register is the committed record.
 
 | `characters/oeb_ubc_characters.glb` (+`.usdc`) | Built 2026-07-06 by `tools/build_characters_v2.py` from UBC (Superhero Male→hero, Female→bartender) + UAL clips (both CC0, above) | CC0 components; assembly is project original | 1 | First `oeb_humanoid_v1` asset. 12 canonical clips remapped from UAL source names at build time per RIGGING.md §4 (v0 doubles: nod/shrug/wipe use nearest pose-correct sources). Base characters ship bald + underwear — hairstyles/outfits are a later dressing pass |
 
+| `Animated Mech Pack - March 2021/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. 4 unique mechs (flat/textured twins), ANIMATED. **Converted to GLB 2026-07-07** |
+| `Cyberpunk Game Kit - Quaternius/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. 71 glTF pieces: character, enemies, platforms, pickups/objects + textures. City/neon dressing donor. **Converted to GLB 2026-07-07 (71 pieces)** |
+| `Modular SciFi MegaKit[Standard]/` | Quaternius (Standard/free edition) | **CC0 1.0** (`License_Standard.txt`) | 1 | Added 2026-07-07. **Converted to GLB 2026-07-07: 189 of 190** — `Decal_Line_90` has a vendor packaging bug (missing `.bin`). Pack shipped read-only; perms fixed. Convert from the `glTF/` subdir (a pack-root walk crashed Blender in the `FBX (Unity)` tree) |
+| `Ultimate House Interior Pack - June 2020/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. 123 pieces, **FBX/OBJ/Blends only — no glTF** (converter's prefer-glTF dedupe falls back to FBX correctly). FURNITURE: the standing bar-furniture gap's likely donor. **Converted to GLB 2026-07-07 (123 pieces from FBX)** |
+| `Ultimate Modular Men- Feb 2022/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. Rigged modular male characters — Humanoid Rig + separate skeletal meshes/animations + modular parts ("All together"/"Individual"). **Converted to GLB 2026-07-07 (63 pieces; skins + 24 bundled clips intact). SKELETON FINDING: 62 joints, Blender-style names (`Hips`, `Chest`, `LowerArm.L`) — NOT `oeb_humanoid_v1`;** usable self-contained with its own clips, or via a `data/bone_maps/` map per RIGGING.md §3 |
+
+| `Ultimate Modular Women - April 2022/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. Rigged modular female characters, same structure as the Men pack. **Converted to GLB 2026-07-07 (56 pieces, 0 failed; skins + 24 bundled clips intact). Same legacy skeleton as the Men pack** (62 joints, `Hips`/`Chest`/`LowerArm.L` style — NOT `oeb_humanoid_v1`); the two packs pair with each other and share one future bone map |
+
 Standing rules: CC0 preferred (Tier 1); anything else needs explicit records
 here BEFORE use (Tier 2); attribution-heavy/share-alike/unclear = blocked
 pending review (Tier 3). Downloads require human approval per the workflow

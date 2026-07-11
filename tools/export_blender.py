@@ -106,6 +106,89 @@ def _find_action(clip_id):
         return candidates[0]
     _die(f"clip '{clip_id}' resolved to {len(candidates)} actions", 2)
 
+# ─── R12: move-cue keyframing ─────────────────────────────────────────────────
+
+def _apply_move(obj, cue, start_frame, end_frame, fps):
+    """
+    R12: keyframe *obj* location from from_mark to to_mark across the cue.
+
+    Facing convention: OEB character assets face -Y at object rotation 0
+    (UAL clip baseline), so the absolute heading that faces travel
+    direction (dx, dy) is atan2(dx, -dy). facing='travel' keys that
+    heading for the journey and turns back to the asset's resting rotation
+    over the final ~0.4 s; facing='hold' leaves rotation alone.
+    """
+    import bpy  # noqa
+
+    from_obj = bpy.data.objects.get(cue['from_mark'])
+    to_obj = bpy.data.objects.get(cue['to_mark'])
+    cue_id = cue.get('cue_id', '<no-id>')
+    if from_obj is None:
+        _die(f"move cue '{cue_id}' from_mark '{cue['from_mark']}' "
+             f"not found in scene", 2)
+    if to_obj is None:
+        _die(f"move cue '{cue_id}' to_mark '{cue['to_mark']}' "
+             f"not found in scene", 2)
+
+    src = from_obj.location.copy()
+    dst = to_obj.location.copy()
+
+    # glTF-imported objects arrive in QUATERNION rotation mode; convert so
+    # z-euler keyframes apply.
+    if obj.rotation_mode != 'XYZ':
+        eul = obj.rotation_quaternion.to_euler('XYZ') \
+            if obj.rotation_mode == 'QUATERNION' \
+            else obj.rotation_euler.to_quaternion().to_euler('XYZ')
+        obj.rotation_mode = 'XYZ'
+        obj.rotation_euler = eul
+    base_rz = obj.rotation_euler.z
+
+    obj.location = src
+    obj.keyframe_insert('location', frame=start_frame)
+    obj.location = dst
+    obj.keyframe_insert('location', frame=end_frame)
+
+    facing = cue.get('facing', 'travel')
+    if facing in ('travel', 'travel_hold'):
+        dx, dy = dst.x - src.x, dst.y - src.y
+        if (dx * dx + dy * dy) > 1e-8:
+            heading = math.atan2(dx, -dy)
+            turn_frames = max(2, int(round(0.4 * fps)))
+            if facing == 'travel':
+                # Arrive: enter already facing travel, turn back to the
+                # resting facing (expressed nearest the heading — no
+                # long-way spins) over the final ~0.4 s.
+                delta = (base_rz - heading + math.pi) % (2 * math.pi) \
+                    - math.pi
+                rest_rz = heading + delta
+                obj.rotation_euler.z = heading
+                obj.keyframe_insert('rotation_euler', index=2,
+                                    frame=start_frame)
+                obj.keyframe_insert(
+                    'rotation_euler', index=2,
+                    frame=max(start_frame + 1, end_frame - turn_frames),
+                )
+                obj.rotation_euler.z = rest_rz
+                obj.keyframe_insert('rotation_euler', index=2,
+                                    frame=end_frame)
+            else:
+                # Exit: anchor the CURRENT resting facing at move start
+                # (numerically base_rz, matching any earlier rest keys —
+                # a different 2π representation would slow-spin the actor
+                # across the gap between keys), turn INTO travel over
+                # ~0.4 s, and keep facing it (constant extrapolation).
+                heading_n = base_rz + ((heading - base_rz + math.pi)
+                                       % (2 * math.pi) - math.pi)
+                obj.rotation_euler.z = base_rz
+                obj.keyframe_insert('rotation_euler', index=2,
+                                    frame=start_frame)
+                obj.rotation_euler.z = heading_n
+                obj.keyframe_insert(
+                    'rotation_euler', index=2,
+                    frame=min(end_frame, start_frame + turn_frames),
+                )
+            obj.rotation_euler.z = base_rz
+
 # ─── R1: validation gate ──────────────────────────────────────────────────────
 
 def _run_gate(spec_path, out_dir, scene_id):
@@ -169,7 +252,7 @@ def _export(args):
     for shot in shots:
         for cue in shot.get('cues', []):
             ctype = cue.get('type', '')
-            if ctype not in ('animation', 'dialogue'):
+            if ctype not in ('animation', 'dialogue', 'move'):
                 cue_id = cue.get('cue_id', '<no-id>')
                 _die(
                     f"unsupported cue type '{ctype}' in v0 "
@@ -290,18 +373,19 @@ def _export(args):
         sorted(set(placement_obj_names))
     )
 
-    # ── R7 + R8: NLA strips for animation cues ───────────────────────────────
+    # ── R7 + R8: NLA strips for animation/move cues, keyframes for moves ─────
     for shot in shots:
         shot_start = shot['start_time']
         shot_end = shot['end_time']
 
         for cue in shot.get('cues', []):
-            if cue.get('type') != 'animation':
+            ctype = cue.get('type')
+            if ctype not in ('animation', 'move'):
                 continue
 
             cue_id = cue.get('cue_id', '')
             actor_id = cue['actor_id']
-            clip_id = cue['clip_id']
+            clip_id = cue.get('clip_id')
             cue_start = cue.get('start_time', 0.0)
             loop = cue.get('loop', False)
 
@@ -319,11 +403,19 @@ def _export(args):
                     2,
                 )
 
-            # R7: resolve clip to exactly one action
-            action = _find_action(clip_id)
-
             abs_time = shot_start + cue_start
             frame_num = to_frame(abs_time, fps)
+
+            # R12 (move cues, 2026-07-11): keyframe the object transform
+            # from from_mark to to_mark across the cue duration.
+            if ctype == 'move':
+                move_end_frame = to_frame(abs_time + cue['duration'], fps)
+                _apply_move(obj, cue, frame_num, move_end_frame, fps)
+                if not clip_id:
+                    continue   # transform-only move
+
+            # R7: resolve clip to exactly one action
+            action = _find_action(clip_id)
 
             if obj.animation_data is None:
                 obj.animation_data_create()
@@ -334,15 +426,31 @@ def _export(args):
 
             strip = track.strips.new(cue_id, frame_num, action)
 
+            # R8 (2026-07-11): HOLD_FORWARD, not the default HOLD — HOLD
+            # projects a lone strip's first frame BACKWARD over the whole
+            # timeline at REPLACE priority (a later shot's seated-talk
+            # strip froze the entire walk-in). Forward hold is still
+            # needed so actors keep their last pose across later shots.
+            strip.extrapolation = 'HOLD_FORWARD'
+
+            # R8 (2026-07-11): crossfade — the strip fades in over the pose
+            # held by the previous (lower) track's strip, per spec blend_in.
+            blend_in = cue.get('blend_in', 0.0)
+            if blend_in:
+                strip.blend_in = blend_in * fps
+
             if loop:
-                # R8: repeat = max(1, ceil(shot_frames / action_frames))
-                # shot_frames = frame(shot.end_time) - frame(abs_time)
+                # R8: repeat = max(1, ceil(available / action_frames));
+                # a looped move clip fills the MOVE duration, a looped
+                # animation cue fills the rest of the shot.
                 action_frames = max(
                     1.0,
                     action.frame_range[1] - action.frame_range[0],
                 )
-                shot_frame_end = to_frame(shot_end, fps)
-                available_frames = shot_frame_end - frame_num
+                if ctype == 'move':
+                    available_frames = move_end_frame - frame_num
+                else:
+                    available_frames = to_frame(shot_end, fps) - frame_num
                 repeat = max(1, math.ceil(available_frames / action_frames))
                 strip.repeat = repeat
 

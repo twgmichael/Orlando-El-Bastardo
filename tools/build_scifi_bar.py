@@ -90,6 +90,49 @@ def main():
     if mark:
         mark.location.y = -1.13
         mark.location.z = SEAT_TOP - CLIP_PELVIS
+    # Medium-shot cameras (2026-07-11, screenplay vocabulary): positioned
+    # from the marks so they track any future mark moves. Both aim with
+    # -Z forward / Y up (Blender camera convention).
+    from mathutils import Vector as _V
+    bar_mark = bpy.data.objects.get("bartender_idle_A")
+    hero_mark = bpy.data.objects.get("hero_barstool_A")
+    if bar_mark and hero_mark:
+        bm, hm = bar_mark.location, hero_mark.location
+
+        def add_cam(name, pos, aim):
+            if bpy.data.objects.get(name):
+                return
+            cd = bpy.data.cameras.new(name)
+            cd.lens = 35
+            cam = bpy.data.objects.new(name, cd)
+            cam.location = pos
+            direction = _V(aim) - _V(pos)
+            cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+            bpy.context.scene.collection.objects.link(cam)
+
+        # Waist-up on the bartender, shot from the patron side of the bar
+        add_cam("cam_medium_bartender",
+                (bm.x, bm.y - 2.3, 1.45), (bm.x, bm.y, 1.3))
+        # Seated hero from behind: camera on the bartender→hero axis
+        # extended 1.6 m past the hero, so the hero's back fills the
+        # foreground and the bartender stays centered beyond.
+        away = (_V((hm.x, hm.y, 0.0)) - _V((bm.x, bm.y, 0.0))).normalized()
+        add_cam("cam_medium_hero_back",
+                (hm.x + 1.6 * away.x, hm.y + 1.6 * away.y, 1.55),
+                (bm.x, bm.y, 1.25))
+
+    # Entrance marks (2026-07-11, walk-in support): hero_entry_A near the
+    # left wall and hero_stool_front_A just left of the stool — the walk
+    # lane is y = -1.13 (clears the counter-top overhang at y = -0.7).
+    # Both floor-level; the raised barstool z is reached by the settle move.
+    for mname, mloc in (("hero_entry_A", (-3.2, -1.13, 0.0)),
+                        ("hero_stool_front_A", (1.05, -1.13, 0.0))):
+        if bpy.data.objects.get(mname) is None:
+            e = bpy.data.objects.new(mname, None)
+            e.empty_display_size = 0.2
+            e.location = mloc
+            bpy.context.scene.collection.objects.link(e)
+
     old_stool = bpy.data.objects.get("prop_stool_A")
     if old_stool:
         bpy.data.objects.remove(old_stool, do_unlink=True)

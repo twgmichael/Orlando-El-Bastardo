@@ -21,7 +21,7 @@ contexts.
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. **No writes anywhere.** This profile has no Write/Edit tools by design. If a
    check needs a temp file, escalate instead of improvising.
 
@@ -164,3 +164,4 @@ the per-check PASS/FAIL lines under "Done-criteria results".
 - 2026-07-04 — **QUALIFIED** (author tier): lint pass; dry run clean (4 checks, read-only, evidence quoted); escalation drill clean (unknown CHECK-8 → trigger-5 bundle after completing the runnable check)
 - 2026-07-05 — privacy pass for public repo (author tier): external-drive constraint generalized from the named volume to all of `/Volumes/` (stronger bound, no drive name in public files)
 - 2026-07-06 — revised (author tier): CHECK-3 split per file after the Phase 2 character salvage — `bar_scene_placeholders.glb` now expects 13 nodes and ZERO animations (characters removed via `--no-characters`); character nodes + the 12 animations moved to `assets/characters/oeb_guy_characters.glb`; unknown GLBs without inline expected lists are trigger 5
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

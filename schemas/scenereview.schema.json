@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:scenereview:1.0.0",
+  "title": "SceneReview",
+  "description": "The producer LLM's constrained per-scene review output: one beat description per numbered script section (prose condensation only — structure is deterministic), plus an inventory of physical items / set dressing / background characters the script text mentions (diffed against the library to generate NEEDED tickets; flagging, never improvising).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["beats", "mentioned_items"],
+  "properties": {
+    "beats": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "description"],
+        "properties": {
+          "order": { "type": "integer", "minimum": 0 },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "mentioned_items": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

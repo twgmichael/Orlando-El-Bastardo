@@ -21,6 +21,7 @@ work; record the answer here and reflect it in SCHEMA.md / BAR-SCENE.md.
 5. ~~LLM output boundary?~~ **ANSWERED 2026-07-04: SceneIntent only.** The LLM
    never emits asset/clip IDs; the deterministic resolver maps intent to
    approved assets.
-6. Preferred lipsync strategy for v1: none, coarse mouth states, or
-   phoneme/viseme mapping? (Does not block v1 schemas — `DialogueCue` carries
-   no viseme fields; adding them later is a minor-version schema bump.)
+6. ~~Preferred lipsync strategy for v1?~~ **ANSWERED 2026-07-07: none for
+   now.** Dialogue is timing + markers only; adding viseme fields later is a
+   minor-version schema bump. — With this, ALL original open questions are
+   resolved.
