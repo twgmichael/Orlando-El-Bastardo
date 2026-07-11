@@ -4,6 +4,32 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-11 — Wiki sync automated: GitHub Action live and verified
+
+The manual re-sync habit is retired — the docs → wiki mirror is now a
+server-side consequence of pushing to main (plan + git-policy scope:
+docs/planning/WIKI-SYNC-PLAN.md, checklist closed).
+
+- `.github/workflows/wiki-sync.yml`: fires on pushes touching `docs/**`,
+  the two tracker files, the sync script, or the workflow itself; checks
+  out the pushed commit, clones the wiki with the built-in
+  `GITHUB_TOKEN` (`contents: write` — no personal tokens/secrets), runs
+  `tools/sync_wiki.py`, and commits/pushes the wiki only when pages
+  changed. Stdlib-only script → no runner setup.
+- The sanctioned automation exception to the git-is-human rule, scoped
+  as recorded: deterministic script, writes ONLY to the wiki repo (a
+  generated artifact), triggered only by a human push; main-repo history
+  untouched.
+- `PAGES` table grew to 22: Publishing-Plan and Wiki-Sync-Plan now
+  mirrored under Planning.
+- Verified on the first triggering push: run success in 9 s, wiki
+  updated by the bot, live banner hashes matched the pushed commit
+  exactly — the stale-hash drift the manual flow allowed is structurally
+  gone. Local wiki clone demoted to inspection-only (`git pull` first).
+- Bot identity set to "OEB Wiki Sync [bot]" with the project's usual
+  GitHub-noreply email — revisions read as the project's automation,
+  attributed to the owner's account.
+
 ## 2026-07-11 — Public front door: privacy audit, wiki mirror, README, publishing plan
 
 - **Privacy/PII audit for the public repo** (second audit; first was

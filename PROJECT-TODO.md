@@ -188,9 +188,11 @@ iteration renders never upload).
 - [ ] `tools/upload_render.py` (metadata from production report,
   playlist per episode, `--dry-run`) + `producer.py` `--publish` hook
   (off by default) + `.gitignore` entries
-- [ ] Add PUBLISHING-PLAN to the wiki mirror (`tools/sync_wiki.py`
-  PAGES table) and re-sync; standing habit — run `sync_wiki.py` + push
-  the wiki after any docs/TODO/DONE commit
+- [x] Wiki sync AUTOMATED 2026-07-11 (`.github/workflows/wiki-sync.yml`):
+  pushes to main touching docs/trackers regenerate and push the wiki
+  server-side; verified live (run success, banner hash = pushed commit).
+  Manual re-sync habit retired; local wiki clone is now inspection-only
+  (`git pull` before use). Both plan docs mirrored.
 
 ## Pilot backlog (tickets from out/production/pilot/)
 
