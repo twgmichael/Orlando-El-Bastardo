@@ -38,7 +38,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import screenplay  # noqa: E402
 import tickets     # noqa: E402
-from script_desk import find_ffmpeg  # noqa: E402
+from script_desk import find_ffmpeg, find_slate_font, slate_drawtext  # noqa: E402
 
 VENV_PY = ".venv/bin/python"
 LLAMA = "llama-completion"
@@ -67,6 +67,10 @@ def parse_args():
     p.add_argument("--no-render", action="store_true")
     p.add_argument("--temp", default="0.0")
     p.add_argument("--seed", default="1")
+    p.add_argument("--publish", action="store_true",
+                   help="Upload the episode cut to YouTube (unlisted) per "
+                        "docs/planning/PUBLISHING-PLAN.md. Off by default; "
+                        "a publish failure never fails the run.")
     return p.parse_args()
 
 
@@ -191,7 +195,7 @@ def episode_cut(episode, delivered, edir):
     ffmpeg = find_ffmpeg()
     if not ffmpeg or not delivered:
         return None
-    font = "/System/Library/Fonts/Helvetica.ttc"
+    font = find_slate_font()
     parts = []
     for sid, render in delivered:
         slate = os.path.join(edir, "scenes", sid, "slate.mp4")
@@ -200,9 +204,7 @@ def episode_cut(episode, delivered, edir):
         subprocess.run(
             [ffmpeg, "-y", "-f", "lavfi",
              "-i", "color=c=0x101018:s=960x540:r=24:d=1.5",
-             "-vf", (f"drawtext=fontfile={font}:text='{text}':"
-                     "fontcolor=0xD8D8E0:fontsize=42:"
-                     "x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=18"),
+             "-vf", slate_drawtext(font, text),
              "-c:v", "libx264", "-pix_fmt", "yuv420p", slate],
             check=True, capture_output=True)
         parts += [slate, render]
@@ -446,6 +448,19 @@ def main():
         md.append(f"Episode cut: `{cut}`")
     with open(os.path.join(edir, "production_report.md"), "w") as f:
         f.write("\n".join(md) + "\n")
+
+    # PUBLISHING-PLAN hook: delivered episode cut → unlisted upload.
+    # Publish problems are reported, never fatal to the production run.
+    if args.publish and cut:
+        pub = subprocess.run(
+            [VENV_PY, "tools/upload_render.py", "--video", cut,
+             "--episode", episode, "--report", rpath],
+            stdin=subprocess.DEVNULL)
+        if pub.returncode != 0:
+            print(f"[producer] publish FAILED (exit {pub.returncode}) — "
+                  f"render delivered; see upload_render output above")
+    elif args.publish:
+        print("[producer] publish skipped — no episode cut this run")
 
     print(f"[producer] SUMMARY: {n['DELIVERED']} delivered, "
           f"{n['NEEDS_ASSETS']} blocked, {n['FAILED']} failed — {rpath}")

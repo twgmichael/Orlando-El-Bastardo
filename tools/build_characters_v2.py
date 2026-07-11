@@ -15,7 +15,7 @@ nearest pose-correct sources are duplicated under the canonical names (see
 REMAP tables). Revisit when custom clips are authored.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/build_characters_v2.py -- \
     --output assets/characters/oeb_ubc_characters
 """

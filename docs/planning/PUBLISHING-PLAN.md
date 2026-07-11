@@ -74,13 +74,16 @@ On upload, the video URL is recorded in the production report
 PROJECT-DONE entry for the milestone links it. The wiki Journal-Log
 inherits the links via the docs → wiki mirror.
 
-## Build checklist (when actioned)
+## Build checklist (code built 2026-07-11; awaiting the human OAuth step)
 
-- [ ] Human: Google Cloud project + OAuth consent screen + one browser
-      authorization; place `client_secrets.json` in the gitignored path
-- [ ] `tools/upload_render.py` (upload + metadata from production
-      report + playlist management; `--dry-run`)
-- [ ] `producer.py` hook behind `--publish` (off by default)
-- [ ] `.gitignore` entries for the credentials path
-- [ ] Record the first upload's URL in PROJECT-DONE; add this page to
-      the wiki mirror (`tools/sync_wiki.py` PAGES table)
+- [ ] Human: Google Cloud project + enable YouTube Data API v3 + OAuth
+      "Desktop app" client → JSON to `.secrets/client_secrets.json`,
+      then `tools/upload_render.py --auth` once (browser)
+- [x] `tools/upload_render.py` (upload + metadata from production
+      report + playlist management; `--dry-run` and graceful
+      not-configured paths verified)
+- [x] `producer.py` hook behind `--publish` (off by default; publish
+      failure never fails the run)
+- [x] `.gitignore` entry for `.secrets/`
+- [x] This page mirrored to the wiki (PAGES table, 2026-07-11)
+- [ ] Record the first upload's URL in PROJECT-DONE

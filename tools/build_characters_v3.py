@@ -18,7 +18,7 @@ landing the helmet at chest height, so nearest-vertex weights bound the
 whole suit to pelvis/spine and nothing visibly deformed.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/build_characters_v3.py -- \
     --output assets/characters/oeb_dressed_characters
 """

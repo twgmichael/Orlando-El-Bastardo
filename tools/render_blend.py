@@ -9,7 +9,7 @@ H.264 MP4 via the imageio-ffmpeg binary in the venv (this Blender build has
 no FFMPEG output format).
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/render_blend.py -- \
     --blend out/blender/sc_bar_intro_001.blend \
     --output renders/reviews/sc_bar_intro_001.mp4

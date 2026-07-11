@@ -13,7 +13,7 @@ Layout is data (LAYOUT table below): piece name, position, z-rotation deg.
 Floor tiles sit at z = -0.09 so their walking surface is exactly z = 0.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/build_scifi_bar.py -- \
     --output assets/sets/bar_scene_scifi
 """

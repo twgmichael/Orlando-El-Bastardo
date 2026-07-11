@@ -4,6 +4,45 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-11 — No absolute paths in code (rule broadened + enforced)
+
+Owner rule: no absolute filesystem paths anywhere in committable code
+(broadens the agents' /Users|/Volumes guardrail to ALL absolutes).
+Swept and fixed: `run_pipeline.py`'s Blender constant → `find_blender()`
+($OEB_BLENDER → PATH → clear error; brew's PATH wrapper verified through
+a full export run); slate font → `find_slate_font()` in script_desk
+($OEB_SLATE_FONT → platform font dirs → graceful no-font slate), shared
+by producer; nine tool docstrings now say `blender`, not app-bundle
+paths. Logical paths (USD prims, Godot nodes, JSON pointers) exempt —
+identifiers, not filesystem paths.
+
+## 2026-07-11 — YouTube uploader built (code complete; awaiting the human OAuth step)
+
+PUBLISHING-PLAN checklist advanced — everything buildable without Google
+credentials is built and verified:
+
+- `tools/upload_render.py`: metadata generated from the production
+  report (title, commit hash, per-scene statuses, open ticket kinds,
+  repo link — the upload documents itself); unlisted by default, public
+  only by explicit `--privacy public`; playlist per episode
+  (found-or-created); the video URL is written back into
+  `production_report.json` (`uploads` list). Verified: `--dry-run`
+  against the real pilot report produced correct full metadata;
+  not-configured path exits 2 with exact setup instructions.
+- `producer.py --publish`: off by default, fires only when an episode
+  cut was delivered, and a publish failure warns but never fails the
+  production run.
+- Credentials discipline per plan: `.secrets/` gitignored
+  (client_secrets.json + OAuth token live there, never in the tree);
+  deps `google-api-python-client` + `google-auth-oauthlib` installed in
+  the venv (not committed).
+- Environment find: the local reorg left venv console scripts with stale
+  shebangs — `.venv/bin/python -m pip` works; noted in PROJECT-TODO.
+- Remaining (human-only): Google Cloud project + YouTube Data API v3 +
+  OAuth Desktop-app client JSON → `.secrets/client_secrets.json`, one
+  `--auth` browser approval, then the first `--publish` run's URL gets
+  recorded here.
+
 ## 2026-07-11 — Wiki sync automated: GitHub Action live and verified
 
 The manual re-sync habit is retired — the docs → wiki mirror is now a

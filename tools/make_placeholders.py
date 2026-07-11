@@ -6,7 +6,7 @@ Generates grey-box placeholder assets named exactly to canonical IDs in
 docs/BAR-SCENE.md and exports them to glTF (GLB) and USD under --output-dir.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background \
+  blender --background \
     --python tools/make_placeholders.py -- --output-dir assets/placeholders
 """
 
