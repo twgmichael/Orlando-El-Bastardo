@@ -3,13 +3,16 @@
 3D animation orchestration pipeline. Deterministic, asset/rig-based. LLM is a
 translator/constraint layer, not a writer. No generative video.
 
-Status: **Phases 0–5 COMPLETE**; Phase 2 well underway — characters (1999
-salvage) and the set (CC0 kit build) are real, the CC0 asset stack is
-converted and registered, and the skeleton standard is locked
-(docs/RIGGING.md). Three asset generations have rendered through the
-unchanged pipeline. Remaining Phase 2: bar furniture, character v2 on
-`oeb_humanoid_v1` + UAL clip remap, night lighting variant. See
-docs/planning/PROGRESS-2026-07-06-PHASE4-5.md and PROJECT-DONE.md.
+Status: **Phases 0–6 COMPLETE** (2026-07-11) — the production run works
+end-to-end: screenplay in `scripts/<episode>/`, one `tools/producer.py`
+command out to rendered scenes, episode cut, and NEEDED tickets, zero
+prompting. The pilot teaser (4 shots, walk-in + departure, dressed v3
+characters, medium cameras) is delivered. Motion grammar v1 (move cues,
+entrances/exits, NLA crossfades) landed through the whole spine. Public
+front door live: wiki mirror (`tools/sync_wiki.py`), rebuilt README,
+privacy audit passed. Remaining Phase 2: bar furniture, night lighting
+variant. Next frontier: publishing plan build (PUBLISHING-PLAN.md), pilot
+ticket backlog (lounge dressing, audio), Godot/USD move-cue support.
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -75,10 +78,11 @@ recorded). Clip acquisition UNBLOCKED: skeleton decided (docs/RIGGING.md) and
 the CC0 Universal Animation Library (43 clips, same skeleton) is on disk.
 
 - [ ] Acquire/kitbash real bar furniture (counter, stool, glass, bottle) —
-  grey-box props now visibly out-place against the detailed set
-- [ ] Character v2: build hero/bartender from Universal Base Characters on
-  `oeb_humanoid_v1` + remap UAL clips to the canonical clip IDs
-  (docs/RIGGING.md §4–5; needs `data/bone_maps/` starters + asset-build tool)
+  grey-box props now visibly out-place against the detailed set (House
+  Interior pack on disk is the likely donor)
+- [x] Character v2 DONE 2026-07-06 (UBC + UAL remap on `oeb_humanoid_v1`),
+  then v3 DRESSED 2026-07-11 (SpaceSuit hero w/ bare Casual head, Worker
+  bartender; 13 canonical clips incl. stand_from_stool) — see PROJECT-DONE.md
 - [ ] Night-mood lighting variant for the sci-fi bar (variant_night is still
   a tag only; current review lighting is bright/clinical)
 
@@ -101,7 +105,8 @@ chain verified end-to-end on the bar-scene fixture. Both worker profiles
 validator-builder's failed drill 1 produced the protocol-wide "profile
 outranks the task" rule.
 
-- [ ] Gitignore `out/` (human git action) before more resolver output lands
+- [x] Gitignore `out/` — DONE (verified in the 2026-07-11 privacy audit:
+  out/, renders/, llm/, assets/, docs/local/ all ignored; no symlinks tracked)
 
 ## Phase 4 — Exporters — DONE 2026-07-06 (see PROJECT-DONE.md)
 
@@ -166,6 +171,39 @@ names anything the library lacks. Building assets stays human + crew work.
 - [x] P4 Producer qualification DONE 2026-07-11: dry run (pilot teaser →
   scene delivered end-to-end) + missing-asset drill (`rooftop_garden`
   script → clean NEEDED ticket, no improvisation, run continued)
+
+Phase 6 CLOSED 2026-07-11. Follow-on capabilities landed same day:
+departures (R14) + `travel_hold` facing; `medium_on` framing + two set
+cameras; orbital-lounge stand-in. Pilot ticket backlog is the open work
+(see Publishing + Pilot backlog below).
+
+## Publishing + public surface (opened 2026-07-11)
+
+Plan: docs/planning/PUBLISHING-PLAN.md (three-tier YouTube policy — auto
+unlisted per delivered episode cut; human-curated public milestones;
+iteration renders never upload).
+
+- [ ] Human: Google Cloud project + OAuth consent + one browser
+  authorization; `client_secrets.json` into the gitignored path
+- [ ] `tools/upload_render.py` (metadata from production report,
+  playlist per episode, `--dry-run`) + `producer.py` `--publish` hook
+  (off by default) + `.gitignore` entries
+- [ ] Add PUBLISHING-PLAN to the wiki mirror (`tools/sync_wiki.py`
+  PAGES table) and re-sync; standing habit — run `sync_wiki.py` + push
+  the wiki after any docs/TODO/DONE commit
+
+## Pilot backlog (tickets from out/production/pilot/)
+
+- [ ] Orbital-lounge dressing pass: instrument panels, observation
+  windows, booths/tables, station personnel (extras — no third
+  character exists yet)
+- [ ] Real `orbital_station_lounge` set (stand-in ticket; sci-fi bar is
+  a close fit — could be a variant rather than a new build)
+- [ ] Audio bed: jukebox/life-support hum, footsteps, stool scrape
+  (audio cues fail fast everywhere in v0 — needs the Phase 5 audio work)
+- [ ] From-behind medium shot: bartender fully occluded by the hero
+  (script wants her visible beyond) — offset `cam_medium_hero_back`
+  slightly off the bartender→hero axis
 
 ## Phase 5 — First integration test — DONE 2026-07-06 (see PROJECT-DONE.md)
 
