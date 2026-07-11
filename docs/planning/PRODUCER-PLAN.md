@@ -62,9 +62,18 @@ missing-library error classes become NEEDED tickets; bugs stay FAILED) +
 ticket written. Verified: delivered path, blocked path
 (`NEEDED-*.json` + `.md` under `out/production/<episode>/tickets/`,
 `report.json` index with `open_tickets`), and the validator-side
-classifier against a real broken report. Remaining in P1: render QA gates,
-run-time translation fidelity gate (review flag 2), name-extraction polish
-for validator messages.
+classifier against a real broken report.
+
+**P1 COMPLETE 2026-07-07:** render QA gates (duration vs spec ±0.6 s,
+non-black frame sampling via signalstats) and the run-time translation
+FIDELITY GATE (resolved-spec dialogue must match the brief's quoted lines
+verbatim; one retry at seed+1, then FAILED) are live in `run_pipeline.py`.
+Scene-fact stamping also moved into the brief path (last-declaration-wins —
+first-match initially stamped the vocabulary default over the scene's own
+location; caught by gate test, fixed, retested: rooftop brief → exit 4 +
+NEEDED ticket). The fidelity gate has already earned its keep: one rooftop
+translation flaked and was caught + recovered on retry in testing.
+Remaining polish only: validator-message name extraction.
 
 Every stage emits machine-readable JSON status (the validator already
 does). `run_pipeline.py` gains a run manifest. The centerpiece: the
@@ -128,6 +137,18 @@ The producer earns its title the way every agent here did:
   escalation-drill philosophy, applied to the producer.)
 - Per-decision-point vetting matrices, temp-0 gate + sampled configs,
   fidelity judged on resolved output — all per the established harness.
+
+## Decisions (2026-07-07, human sign-off)
+
+- **Tickets are per-episode files only** (no push/committed queue) while in
+  development.
+- **The producer drives the toolchain and tickets the crew** — it never
+  commands worker agents directly; all agent routing stays with
+  human/reviewer-tier orchestration.
+- **All runs are human-initiated for now** — no scheduled/unattended
+  triggers while in development.
+- Single-scene briefs get the same scene-fact stamping as the script desk
+  (moved into `run_pipeline.py`'s brief path).
 
 ## Division of labor
 

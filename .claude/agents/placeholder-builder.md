@@ -21,7 +21,7 @@ generates grey-box placeholder assets named exactly to the canonical IDs in
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. Never hardcode `/Users/...` or `/Volumes/...` absolutes inside the script or
    exported files; the script takes an `--output-dir` argument (default:
    `assets/placeholders/` relative to the repo root).
@@ -201,3 +201,4 @@ Use the `## REPORT` / `## ESCALATION` templates from
 - 2026-07-04 — extended (author tier): added Procedure step 7, Godot headless import check (mechanics verified by orchestrator first); Godot command + scoped `cp` added to allowed actions; corrected done-criteria ID count 13→15
 - 2026-07-04 — revised (author tier). Finding: (F5) Godot hangs in uninterruptible I/O when launched from a sandboxed worker shell (worker's file prep was correct; same command succeeds from the orchestrator shell, 1.6s, import PASSED). Added KNOWN HANG note: timeout → escalate, don't retry
 - 2026-07-05 — privacy pass for public repo (author tier): external-drive constraint generalized from the named volume to all of `/Volumes/` (stronger bound, no drive name in public files)
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

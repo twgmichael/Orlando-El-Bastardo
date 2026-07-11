@@ -334,10 +334,27 @@ def _run_checks(spec, config, grammar, scenespec_schema, asset_root):
                 "path": f"/set/props/{k}",
             })
 
+    # move cue marks (V6 extension, 2026-07-11)
+    for i, shot in enumerate(spec.get('shots', [])):
+        for j, cue in enumerate(shot.get('cues', [])):
+            if cue.get('type') != 'move':
+                continue
+            for field in ('from_mark', 'to_mark'):
+                mk = cue.get(field)
+                if isinstance(mk, str) and mk not in lib_nodes:
+                    errors.append({
+                        "code": "unknown_mark",
+                        "message": (
+                            f"move cue {field} '{mk}' not found in GLB "
+                            f"library nodes"
+                        ),
+                        "path": f"/shots/{i}/cues/{j}",
+                    })
+
     # ── V7: unknown_clip (ERROR) ────────────────────────────────────────────
     for i, shot in enumerate(spec.get('shots', [])):
         for j, cue in enumerate(shot.get('cues', [])):
-            if cue.get('type') == 'animation':
+            if cue.get('type') in ('animation', 'move'):
                 clip_id = cue.get('clip_id')
                 if isinstance(clip_id, str) and clip_id not in lib_anims:
                     errors.append({

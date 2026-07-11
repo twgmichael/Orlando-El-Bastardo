@@ -128,12 +128,41 @@
     "Cue": {
       "oneOf": [
         { "$ref": "#/$defs/AnimationCue" },
+        { "$ref": "#/$defs/MoveCue" },
         { "$ref": "#/$defs/DialogueCue" },
         { "$ref": "#/$defs/CameraCue" },
         { "$ref": "#/$defs/LightingCue" },
         { "$ref": "#/$defs/AudioCue" },
         { "$ref": "#/$defs/FXCue" }
       ]
+    },
+    "MoveCue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "start_time", "duration", "actor_id", "from_mark", "to_mark"],
+      "description": "Translate an actor from one mark to another over `duration`, optionally playing `clip_id` (looped locomotion or a one-shot transition like sitting). Exporters keyframe the object transform; travel facing is derived from the mark positions.",
+      "properties": {
+        "type": { "const": "move" },
+        "cue_id": { "$ref": "#/$defs/logical_id" },
+        "start_time": { "$ref": "#/$defs/seconds" },
+        "duration": { "type": "number", "exclusiveMinimum": 0 },
+        "actor_id": { "$ref": "#/$defs/logical_id" },
+        "from_mark": { "$ref": "#/$defs/logical_id" },
+        "to_mark": { "$ref": "#/$defs/logical_id" },
+        "clip_id": { "$ref": "#/$defs/logical_id" },
+        "loop": { "type": "boolean", "default": false },
+        "facing": {
+          "enum": ["travel", "hold", "travel_hold"],
+          "default": "travel",
+          "description": "'travel': face the direction of movement, turning back to the resting facing near the end (arrivals). 'hold': keep the resting facing throughout (e.g. sliding onto a stool). 'travel_hold': turn INTO the travel direction at the start and keep facing it at the end (exits)."
+        },
+        "blend_in": { "$ref": "#/$defs/blend_seconds" }
+      }
+    },
+    "blend_seconds": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Crossfade window in seconds: this cue's clip fades in over whatever pose the actor held before (NLA blend_in). The cue is expected to overlap the previous one by this amount."
     },
     "AnimationCue": {
       "type": "object",
@@ -145,7 +174,8 @@
         "start_time": { "$ref": "#/$defs/seconds" },
         "actor_id": { "$ref": "#/$defs/logical_id" },
         "clip_id": { "$ref": "#/$defs/logical_id" },
-        "loop": { "type": "boolean", "default": false }
+        "loop": { "type": "boolean", "default": false },
+        "blend_in": { "$ref": "#/$defs/blend_seconds" }
       }
     },
     "DialogueCue": {

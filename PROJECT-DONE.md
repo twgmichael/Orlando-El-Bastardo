@@ -4,6 +4,172 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-11 — Departures (R14): script update rendered same-day, no hand-holding
+
+Pilot script revision (orbital station lounge; new closing wide where the
+hero rises, walks out, and exits) drove the vocabulary loop exactly as
+designed — new capability provided, producer re-run, delivered:
+
+- Resolver R14: `departs: true` → in the LAST shot the actor appears in,
+  after that shot's dialogue: rise move (spawn → approach,
+  `stand_from_stool` = UAL Sitting_Exit, new 13th clip, characters
+  rebuilt), walk-out move (approach → entry mark, walk clip), standing
+  idle held off-frame. Mirror of R13 with `E_NO_DEPARTURE` /
+  `E_DEPARTURE_NOT_PRESENT` errors.
+- MoveCue `facing: travel_hold` (exits): anchor the current resting
+  facing at move start, turn INTO travel, keep facing it. The anchor must
+  be numerically `base_rz` and the heading expressed nearest it —
+  a different 2π representation interpolates as a slow full spin across
+  the shots between rotation keys.
+- Screenplay desk: `detect_departures` ("exits/leaves/walks out"), FADE
+  IN/OUT/TO BLACK transitions; stand-in `orbital_station_lounge` →
+  small_bar_interior (far closer fit than "neighborhood bar"); audio
+  keywords += clicking/hiss.
+- Pilot delivered 1/1: 18.5 s, 4 shots; hero arrives AND departs in one
+  scene (entrance in shot 0, departure in shot 3, both scheduled around
+  the dialogue). Tickets: lounge set stand-in, 5 dressing items (incl.
+  instrument panels, observation windows, station personnel), audio.
+
+## 2026-07-11 — P3+P4: THE PRODUCTION RUN — screenplay in, episode out, zero prompts
+
+`tools/producer.py --script scripts/pilot/pilot.md` is the new front door.
+First run delivered the pilot teaser end-to-end (renders/reviews/
+pilot_episode.mp4). Policies decided with the user this session: location
+stand-ins render NOW + ticket the real asset; screenplays are parsed
+directly (no conversion step); audio directions are ticketed too.
+
+- `tools/screenplay.py`: deterministic industry-screenplay parser —
+  sluglines → scene facts, shot headings → framing intents (vocabulary in
+  `data/standins.json`), transitions, act markers, character cues +
+  verbatim dialogue, action paragraphs; `detect_arrivals` ("HERO enters"
+  → `arrives: true`), audio keyword sweep. No LLM in structure (P2 rule).
+- `data/standins.json`: cast map (HERO→protagonist…), location stand-ins
+  (neighborhood_bar→small_bar_interior), shot-heading vocabulary, audio
+  keywords, known-item list. Substitutions are explicit data, recorded in
+  the report AND ticketed — never silent.
+- Producer LLM review (constrained by `schemas/scenereview.schema.json`):
+  one-sentence beat descriptions + a mentioned-items inventory per scene;
+  the diff against the library yields prop/dressing tickets (pilot:
+  patrons, booths and tables). Flagging only; deterministic fallbacks on
+  LLM failure keep the run going.
+- Camera vocabulary grew: `medium_on` framing (intent schema + resolver +
+  grammar) with two new set cameras placed from marks at build time
+  (`cam_medium_bartender`, `cam_medium_hero_back` on the bartender→hero
+  axis). Surprise found: `hero_entry_A` already existed in the
+  placeholder scene at (−3.5, −3) — the walk-in has been using it.
+- Blocking policy: unknown location with no stand-in / unknown speaker →
+  NEEDED ticket, scene skipped, run continues. Non-blocking vocabulary
+  (stand-ins, audio, dressing, unmapped headings) → NEEDED-<scene>_vocab
+  ticket while the scene still renders.
+- P4 qualification: pilot dry run DELIVERED (1/1); missing-asset drill
+  (rooftop-garden script) BLOCKED cleanly with a correct ticket and no
+  improvisation.
+- Pilot run honest ledger: 1 scene delivered (13 s, 3 shots incl. both
+  new medium cameras); tickets: neighborhood_bar set (stand-in used),
+  3 audio directions, patrons + booths/tables dressing. Known nit: in
+  the from-behind shot the bartender is fully occluded by the hero
+  (script wants her visible beyond) — camera offset follow-up.
+
+## 2026-07-11 — Natural entrance: NLA crossfades + the HOLD-extrapolation bug
+
+Refinement pass on the walk-in (user review: transitions looked mechanical):
+
+- Spec gained optional `blend_in` (seconds) on animation + move cues; the
+  exporter maps it to NLA strip blend_in (crossfade over the pose held by
+  the previous track). Resolver R13 now emits stand idle (blend source
+  only, 0.3 s lead) → walk (fades in over the stand) → settle (overlaps
+  the walk's last 0.3 s) → seated idle (overlaps the settle's last
+  0.2 s). Hero's standing pose comes from `idle_standing_relaxed` — no
+  asset rebuild; clips are shared through the common skeleton.
+  `walk_duration` trimmed to 2.6667 s = exactly two 32-frame walk cycles.
+- **BUG (affects every multi-shot render to date): Blender NLA strips
+  default to extrapolation HOLD, which projects a lone strip's FIRST
+  frame backward over the entire timeline at REPLACE priority.** Shot 2's
+  seated-talk strip (topmost track) froze the whole entrance into one
+  seated pose (diagnosed by per-frame pose-height measurement: constant
+  1.39 m). Fix: exporter sets `HOLD_FORWARD` on every strip — holds the
+  last pose across later shots (required for actors without cues in a
+  shot) but contributes nothing before the strip starts. Verified:
+  stride ~1.8 m through the walk, sit transition 3.0–3.9 s, seated pose
+  held through frames 300/520.
+- Pipeline green, render QA pass (`renders/reviews/sc_bar_walkin_001.mp4`).
+
+Also 2026-07-11: `scripts/` root created for episode scripts in
+development; `scripts/pilot/pilot.md` holds the teaser (hero enters left,
+crosses to the bar, sits, bartender exchange — matches this scene).
+
+## 2026-07-11 — Motion grammar v1: `move` cue + walk-in entrances (hero walks in and sits)
+
+First locomotion through the full spine (the Phase 4 carryover finally
+landed): a generic MoveCue — translate an actor between marks over a
+duration, optionally playing a clip, `facing: travel|hold`.
+
+- Schema: `MoveCue` in scenespec (required from_mark/to_mark/duration);
+  SceneIntent actors gained optional `arrives: true`.
+- Resolver R13: an arriving actor gets, in the opening shot, a walk move
+  (role's entrance `from_mark` → `approach_mark`, walk clip looped), a
+  settle move up onto the raised spawn mark (`facing: hold`, sit clip),
+  then the seated idle; the shot's dialogue is pushed past the entrance.
+  Entrance data lives on the role in `data/resolver_map.json`
+  (protagonist: walk 3.0 s + settle 1.3 s). Errors: E_NO_ENTRANCE,
+  E_ENTRANCE_NOT_IN_OPENING.
+- Set: new floor marks `hero_entry_A` (−3.2, −1.13) and
+  `hero_stool_front_A` (1.05, −1.13) in `build_scifi_bar.py`; walk lane
+  y = −1.13 clears the counter overhang; set GLB rebuilt.
+- Blender exporter R12: move cues keyframe object location between mark
+  positions and z-rotation to face travel (glTF quaternion→XYZ euler
+  conversion; nearest-angle wrap so the turn-back never spins the long
+  way; turn back to resting facing over the final 0.4 s). Looped move
+  clips repeat over the MOVE duration, not the shot.
+- Validator: move marks checked against GLB nodes (V6 ext), move clips
+  against GLB animations (V7).
+- Proof: `fixtures/bar_scene_walkin.sceneintent.json`
+  (sc_bar_walkin_001) → full pipeline green, render QA pass
+  (`renders/reviews/sc_bar_walkin_001.mp4`): hero enters frame left,
+  crosses the room mid-stride, mounts the stool, dialogue starts 4.8 s.
+- v0 boundaries: Godot/USD exporters still fail fast on move cues
+  (consistent with the Phase 4 cue-scope policy); walk speed is map data
+  (no foot-slide compensation); original bar_scene fixtures untouched
+  (walk-in is a separate fixture).
+
+## 2026-07-11 — Character v3: hero + bartender DRESSED (outfit transplant fixed, config swapped)
+
+- Root cause of the "garments don't deform" bug (the one open v3 issue):
+  every Modular Men/Women part GLB ships a hidden `Icosphere.00x` helper
+  mesh spanning z −1..+1. It poisoned the bbox height measurement, so
+  garments were scaled to 64% (helmet at chest height) and the
+  nearest-vertex weight transfer bound the whole suit to pelvis/spine —
+  near-static bones — hence zero visible deformation.
+- `tools/build_characters_v3.py` fixed: Icosphere helpers dropped on
+  import; height-match scale measured from the assembled garment stack
+  itself (now 0.965 hero / 0.954 bartender); garments parented to the
+  armature with an Armature modifier (was missing entirely); the lost
+  `absorb()` (UBC mesh removal) restored — the file had been left mid-edit
+  calling a function that no longer existed.
+- Also learned: the original repro ("import GLB, scrub into a strip") was
+  partly an importer artifact — Blender's glTF importer MUTES all NLA
+  tracks on import, so nothing plays on scrub even for known-good assets.
+  Valid deform test = assign each action to the armature (what
+  export_blender.py does per cue) and compare evaluated vertices between
+  frames.
+- Verified: garment joint bindings anatomically correct (helmet →
+  Head/neck_01, suit torso → 23 joints incl. spine + hands); displacement
+  matches v2 magnitudes (walk moves boots 0.72 m, sit 0.54 m, pour 0.81 m);
+  visual still confirms both dressed characters posing correctly.
+- `oeb.config.json` swapped: both characters now resolve to
+  `characters/oeb_dressed_characters.glb` (hero in SpaceSuit pilot gear,
+  bartender in Worker outfit + hard hat).
+- Addendum (later 2026-07-11): helmet OFF per user review — `dress()`
+  gained `part_overrides` (mix archetypes per part); hero now wears the
+  bare `Casual_Head` with the SpaceSuit body/legs/feet. Characters
+  rebuilt, pilot re-rendered.
+- Full pipeline proof with the dressed characters: `run_pipeline.py
+  --intent fixtures/bar_scene.sceneintent.json --targets blender` →
+  validator clean, render QA pass
+  (`renders/reviews/sc_bar_intro_001_v3dressed.mp4`).
+- Note: `--render-out` takes an .mp4 file path, not a directory — a bare
+  directory name fails at render-QA with "could not read duration".
+
 ## 2026-07-06 — GOAL EARNED: script → render, one command, zero prompts (SEAMLESS-RUN-PLAN executed)
 
 - `tools/run_pipeline.py` — the pipeline's single front door: `--brief` (LLM
@@ -88,9 +254,10 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
   (the vendor's own README warning, encoded).
 - Housekeeping: LLM weights moved `models/` → `llm/` (ends the
   3D-model/ML-model name clash; `generate_intent.py` + gitignore updated,
-  generation smoke-tested); `/Volumes/OEB-PROJECT/OEB-LIBRARY` +
-  `OEB-RENDERS` now accessible from the session shell (TCC unblocked,
-  verified; storage-plan moves actionable; still no backup drive).
+  generation smoke-tested); the external library/render volumes are now
+  accessible from the session shell (macOS permission unblocked, verified;
+  storage-plan moves actionable; still no backup drive — details in
+  `docs/local/`, local only).
 
 ## 2026-07-06 — Phase 2 opened by archaeology: 1999 Orlando salvaged, in the scene
 

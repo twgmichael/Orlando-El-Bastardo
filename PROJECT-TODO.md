@@ -111,6 +111,10 @@ representation between intent verbs and Blender keyframes — consider it for
 the exporter cue→keyframe stage (see
 docs/planning/PROGRESS-2026-07-05-ANIMATED-PREVIEW.md). Motion grammar will
 need elevation-changing verbs (sit/stand/lean), not just horizontal moves.
+→ Motion grammar v1 LANDED 2026-07-11 (see PROJECT-DONE.md): MoveCue
+(mark→mark + clip + facing) through schema/resolver/validator/Blender
+exporter; walk-in entrance via intent `arrives: true`. Godot/USD move
+support still open.
 Worker profiles for the exporters need author-tier authoring first
 (AGENT-WORKFLOW-PLAN §6 suggests one `exporter-dev` profile parameterized by
 target).
@@ -143,19 +147,25 @@ now "the producer" — it oversees script → render using ONLY the provided
 asset library, and emits an obvious structured NEEDED report when a script
 names anything the library lacks. Building assets stays human + crew work.
 
-- [ ] P1 Production reports — ticketing DONE 2026-07-07 (`tools/tickets.py`
-  + `run_pipeline.py --episode`, exit 4 = BLOCKED, NEEDED .json/.md +
-  report.json index; all paths tested). Remaining: render QA gates,
-  run-time translation fidelity gate, validator name-extraction polish
+- [x] P1 Production reports — DONE 2026-07-07: ticketing (`tools/tickets.py`,
+  exit 4 = BLOCKED, NEEDED .json/.md + report.json index) + render QA gates
+  (duration, non-black frames) + run-time translation fidelity gate
+  (verbatim, one seed-retry) + scene-fact stamping in the brief path
+  (last-declaration-wins). Polish left: validator name extraction
 - [x] P2 Script desk DONE 2026-07-07 (`tools/script_desk.py` + script
   format; chunking made DETERMINISTIC — no LLM; structural scene facts
   stamped over the translator after it silently swallowed an unknown
   location in test 1; ep_001: 2 delivered incl. a brand-new scene verbatim,
   1 blocked with correct ticket)
-- [ ] P3 Producer driver (`tools/producer.py`): the deterministic loop,
-  halt-and-report policy, final production report
-- [ ] P4 Producer qualification: dry run (in-library script → all scenes
-  rendered) + missing-asset drill (clean NEEDED report, no improvisation)
+- [x] P3 Producer driver DONE 2026-07-11 (`tools/producer.py` +
+  `tools/screenplay.py` + `data/standins.json`): industry-screenplay
+  parsing (deterministic), vocabulary sweep with stand-in+ticket policy,
+  LLM scene review (beat descriptions + item inventory, constrained by
+  `schemas/scenereview.schema.json`), per-scene pipeline, episode cut,
+  production report — see PROJECT-DONE.md
+- [x] P4 Producer qualification DONE 2026-07-11: dry run (pilot teaser →
+  scene delivered end-to-end) + missing-asset drill (`rooftop_garden`
+  script → clean NEEDED ticket, no improvisation, run continued)
 
 ## Phase 5 — First integration test — DONE 2026-07-06 (see PROJECT-DONE.md)
 
@@ -182,5 +192,25 @@ SceneIntent only.
 ---
 
 ## Eventually (no date, not blocking)
+
+Creative queue (recorded 2026-07-07):
+
+- [ ] Night-mood lighting variant for the sci-fi bar (`variant_night` is
+  still a tag only; current review lighting is bright/clinical)
+- [x] Hair + outfits for the v2 characters — DONE 2026-07-11 (see
+  PROJECT-DONE.md): the no-deform bug was the vendor Icosphere helper mesh
+  poisoning the height-match scale (garments at 64%, weights bound to
+  pelvis/spine). Fixed in `tools/build_characters_v3.py`; config now points
+  at `oeb_dressed_characters.glb`; pipeline render QA green.
+- [ ] Real `nod_small` / `shrug_small` / `wipe_glass_loop` clips (v0 doubles
+  reuse talking/hold loops — see build_characters_v2.py REMAP notes)
+- [ ] Elbows-on-the-bar seated pose (custom `idle_bar_lean` clip; object
+  transforms can't produce it)
+- [ ] `rooftop_garden` location build — standing NEEDED ticket from ep_001
+  (out/production/ep_001/tickets/)
+- [ ] JB5K spaceship reconstruction (plan: `elmo` chunk mining + silhouette
+  tracing from the 1999/2000 renders; Space Kit ships as kitbash donors)
+- [ ] Two-shot camera reframe (clips the seated hero at frame right —
+  placeholder aim carried into the sci-fi set)
 
 - [ ] Add a separate Backup drive and mirror the external asset library + project source to it (see docs/local/STORAGE-PLAN.md, local only). Until then the library drive has zero redundancy — do not put un-redownloadable data on it.

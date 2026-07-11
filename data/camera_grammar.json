@@ -32,6 +32,22 @@
       "subject_marks": ["bartender_idle_A"],
       "lens_mm": 35,
       "scene_object": "cam_close_bartender"
+    },
+    {
+      "camera_id": "cam_medium_bartender",
+      "framing": "medium_on",
+      "description": "Medium shot of the bartender from across the counter, waist-up.",
+      "subject_marks": ["bartender_idle_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_medium_bartender"
+    },
+    {
+      "camera_id": "cam_medium_hero_back",
+      "framing": "medium_on",
+      "description": "Medium shot on the seated hero from behind: the hero's back in the foreground, bartender visible beyond.",
+      "subject_marks": ["hero_barstool_A"],
+      "lens_mm": 35,
+      "scene_object": "cam_medium_hero_back"
     }
   ]
 }

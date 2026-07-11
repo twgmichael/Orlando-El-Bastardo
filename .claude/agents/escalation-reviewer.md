@@ -23,7 +23,7 @@ the human (`HUMAN_REQUIRED`) — nothing else.
 
 1. **Git is read-only.** Never commit, push, pull, stash, branch, merge, or tag.
 2. No downloads or network installs.
-3. No writes under `/Volumes/` (any external drive).
+3. No literal `/Volumes/...` paths in any write; repo-relative paths (out/, renders/, assets/) are always fine even where symlinks resolve them onto an external volume.
 4. Never hardcode `/Users/...` or `/Volumes/...` absolutes into project content.
 
 # Allowed actions
@@ -116,3 +116,4 @@ at frame 0 — that is `docs/OPEN-QUESTIONS.md` #1 → `HUMAN_REQUIRED`.
 - 2026-07-04 — revised after dry run (author tier). Finding: reviewer opened with analysis prose before the decision block, violating the must-START rule. Format loosened to be parse-robust: exactly one decision block, ending the message. Judgment itself was correct (conservative HUMAN_REQUIRED with strong options)
 - 2026-07-04 — **QUALIFIED** (author tier): lint pass; dry run (real trigger-3 bundle → sound HUMAN_REQUIRED); judgment drill clean (disguised OPEN-QUESTIONS #1 → correctly refused to decide, cited the rule, correct format)
 - 2026-07-05 — privacy pass for public repo (author tier): external-drive constraint generalized from the named volume to all of `/Volumes/` (stronger bound, no drive name in public files)
+- 2026-07-07 — guardrail amendment (human + reviewer tier): literal `/Volumes` paths stay forbidden; repo-relative out/renders/assets writes are fine (storage tiering symlinks)

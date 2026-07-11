@@ -269,3 +269,8 @@ The author tier orchestrates while profiles are being authored and qualified
 (steps 1–3). Once the pilot roster is qualified, day-to-day orchestration
 drops to the reviewer tier. The author tier is recalled only for profile
 revisions (and new profile authoring).
+
+AMENDED 2026-07-07 (author tier no longer available): profile authoring and
+revision is now **human + reviewer-tier co-authoring** against
+`.claude/agents/_TEMPLATE.md` and the §4 rules. The qualification bar (§7 —
+lint, dry run, escalation drill) is unchanged and non-negotiable.

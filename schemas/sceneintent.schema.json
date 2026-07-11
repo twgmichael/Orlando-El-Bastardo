@@ -28,6 +28,16 @@
             "type": "string",
             "description": "Semantic role (e.g. 'protagonist', 'bartender'); resolver maps to a character asset.",
             "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "arrives": {
+            "type": "boolean",
+            "default": false,
+            "description": "Actor enters on foot at scene start: the resolver emits move cues from the role's mapped entrance (entry mark -> approach -> spawn mark) in the first shot, before any dialogue. Requires an 'entrance' block on the role in the resolver map."
+          },
+          "departs": {
+            "type": "boolean",
+            "default": false,
+            "description": "Actor exits on foot at scene end: the resolver emits rise + walk-out move cues (spawn mark -> approach -> entry mark, reverse of the entrance) in the LAST shot the actor appears in, after any dialogue. Requires the role's 'entrance' block (rise_clip/rise_duration included)."
           }
         }
       }
@@ -72,12 +82,12 @@
         "properties": {
           "order": { "type": "integer", "minimum": 0 },
           "framing": {
-            "enum": ["establishing", "two_shot", "close_on"],
+            "enum": ["establishing", "two_shot", "close_on", "medium_on"],
             "description": "Grammar-level framing intent; resolver maps to a camera_setup ID."
           },
           "subject_actor_id": {
             "type": "string",
-            "description": "Required by the resolver when framing is close_on.",
+            "description": "Required by the resolver when framing is close_on or medium_on.",
             "pattern": "^[a-z][a-z0-9_]*$"
           },
           "beat_orders": {

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "_comment": "Screenplay vocabulary for the producer (tools/producer.py). Substitutions are EXPLICIT DATA, never silent translator behavior: every location stand-in used in a run is recorded in the production report AND ticketed so the real-asset backlog stays honest.",
+  "cast": {
+    "hero": "protagonist",
+    "bartender": "bartender"
+  },
+  "location_standins": {
+    "neighborhood_bar": "small_bar_interior",
+    "orbital_station_lounge": "small_bar_interior"
+  },
+  "shot_headings": {
+    "WIDE SHOT": "establishing",
+    "ESTABLISHING SHOT": "establishing",
+    "WIDE": "establishing",
+    "TWO SHOT": "two_shot",
+    "TWO-SHOT": "two_shot",
+    "MEDIUM SHOT": "medium_on",
+    "MED SHOT": "medium_on",
+    "CLOSE UP": "close_on",
+    "CLOSE-UP": "close_on",
+    "CLOSE ON": "close_on",
+    "CLOSEUP": "close_on"
+  },
+  "audio_keywords": [
+    "hums", "hum", "murmur", "footsteps", "scrape", "scrapes",
+    "clicking", "clicks", "click", "hiss", "hisses",
+    "music", "jukebox", "song", "clink", "clinks", "creak", "creaks",
+    "thud", "echo", "echoes", "rings", "ringing", "sound", "sounds"
+  ],
+  "known_items": [
+    "bar", "counter", "stool", "glass", "bottle", "bottles", "towel",
+    "door", "wall", "floor", "room", "frame", "shoulder", "hands"
+  ]
+}
