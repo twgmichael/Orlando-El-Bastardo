@@ -91,6 +91,37 @@ def find_ffmpeg():
     return hits[0] if hits else None
 
 
+def find_slate_font():
+    """No absolute paths in code (2026-07-11): $OEB_SLATE_FONT wins, else
+    the platform font dirs are searched for a usable face, else None
+    (drawtext then runs without fontfile — ffmpeg's fontconfig default)."""
+    env = os.environ.get("OEB_SLATE_FONT")
+    if env and os.path.isfile(env):
+        return env
+    roots = [os.path.join(os.sep, "System", "Library", "Fonts"),
+             os.path.join(os.sep, "usr", "share", "fonts"),
+             os.path.expanduser(os.path.join("~", "Library", "Fonts"))]
+    names = {"Helvetica.ttc", "Arial.ttf", "DejaVuSans.ttf",
+             "LiberationSans-Regular.ttf"}
+    for root in roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, _dirs, files in os.walk(root):
+            for f in files:
+                if f in names:
+                    return os.path.join(dirpath, f)
+    return None
+
+
+def slate_drawtext(font, text):
+    """drawtext filter for a slate card; omits fontfile when no font was
+    discovered."""
+    fontfile = f"fontfile={font}:" if font else ""
+    return (f"drawtext={fontfile}text='{text}':"
+            "fontcolor=0xD8D8E0:fontsize=42:"
+            "x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=18")
+
+
 def main():
     args = parse_args()
     text = open(args.script).read()
@@ -171,7 +202,7 @@ def main():
     if delivered and not args.no_render:
         ffmpeg = find_ffmpeg()
         if ffmpeg:
-            font = "/System/Library/Fonts/Helvetica.ttc"
+            font = find_slate_font()
             parts = []
             for sid, r in delivered:
                 slate = os.path.join(edir, "scenes", sid, "slate.mp4")
@@ -179,9 +210,7 @@ def main():
                 subprocess.run(
                     [ffmpeg, "-y", "-f", "lavfi",
                      "-i", "color=c=0x101018:s=960x540:r=24:d=1.5",
-                     "-vf", (f"drawtext=fontfile={font}:text='{text}':"
-                             "fontcolor=0xD8D8E0:fontsize=42:"
-                             "x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=18"),
+                     "-vf", slate_drawtext(font, text),
                      "-c:v", "libx264", "-pix_fmt", "yuv420p", slate],
                     check=True, capture_output=True)
                 parts += [slate, r]

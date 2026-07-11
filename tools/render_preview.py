@@ -6,7 +6,7 @@ Imports the GLB, adds simple preview lighting (sun + world), and renders one
 PNG per requested camera-grammar camera.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/render_preview.py -- \
     --glb assets/placeholders/bar_scene_placeholders.glb \
     --cameras all --output-dir renders/previews

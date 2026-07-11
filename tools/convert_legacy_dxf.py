@@ -11,7 +11,7 @@ tint) and `char_bartender_v1` (green tint) — each with the standard 5-bone
 armature and its 6 canonical keyed actions, exported to GLB + USDC.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/convert_legacy_dxf.py -- \
     --dxf "models/mƒ jb5k/guy.dxf" \
     --output assets/characters/oeb_guy_characters

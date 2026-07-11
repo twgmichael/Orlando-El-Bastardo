@@ -183,11 +183,17 @@ Plan: docs/planning/PUBLISHING-PLAN.md (three-tier YouTube policy — auto
 unlisted per delivered episode cut; human-curated public milestones;
 iteration renders never upload).
 
-- [ ] Human: Google Cloud project + OAuth consent + one browser
-  authorization; `client_secrets.json` into the gitignored path
-- [ ] `tools/upload_render.py` (metadata from production report,
-  playlist per episode, `--dry-run`) + `producer.py` `--publish` hook
-  (off by default) + `.gitignore` entries
+- [ ] Human: Google Cloud project + enable YouTube Data API v3 + OAuth
+  "Desktop app" client → download JSON to `.secrets/client_secrets.json`,
+  then run `tools/upload_render.py --auth` once (browser); first real
+  upload: re-run the pilot with `--publish`, record the URL in
+  PROJECT-DONE
+- [x] `tools/upload_render.py` BUILT 2026-07-11 (metadata from the
+  production report incl. commit hash + scene statuses + ticket kinds;
+  playlist per episode; URL recorded back into the report; `--dry-run` ✓;
+  graceful not-configured exit ✓) + `producer.py --publish` hook (off by
+  default, never fatal) + `.secrets/` gitignored. Note: venv scripts have
+  stale shebangs since the reorg — use `.venv/bin/python -m pip`
 - [x] Wiki sync AUTOMATED 2026-07-11 (`.github/workflows/wiki-sync.yml`):
   pushes to main touching docs/trackers regenerate and push the wiki
   server-side; verified live (run success, banner hash = pushed commit).

@@ -9,7 +9,7 @@ outputs are skipped unless --force. Prints a per-file OK/FAIL summary and a
 final count; exits nonzero if any file failed.
 
 Run from repo root:
-  /Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup \
+  blender --background --factory-startup \
     --python tools/batch_convert_glb.py -- \
     --src "assets/Ultimate Modular Sci-Fi - Feb 2021/FBX" \
     --out "assets/Ultimate Modular Sci-Fi - Feb 2021/GLB"

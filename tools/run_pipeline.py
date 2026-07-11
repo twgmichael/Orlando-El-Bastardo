@@ -38,8 +38,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tickets  # noqa: E402
 
 VENV_PY = ".venv/bin/python"
-BLENDER = "/Applications/Blender.app/Contents/MacOS/Blender"
 EXIT_BLOCKED = 4
+
+
+def find_blender():
+    """No absolute paths in code (2026-07-11): $OEB_BLENDER wins, then
+    PATH. Discovery, never hardcoded locations."""
+    import shutil
+    env = os.environ.get("OEB_BLENDER")
+    if env:
+        return env
+    found = shutil.which("blender") or shutil.which("Blender")
+    if found:
+        return found
+    sys.exit("[run_pipeline] ERROR: Blender not found — set OEB_BLENDER "
+             "or put 'blender' on PATH")
+
+
+BLENDER = find_blender()
 
 
 def parse_args():
