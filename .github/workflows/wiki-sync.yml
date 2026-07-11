@@ -35,8 +35,8 @@ jobs:
       - name: Commit and push the wiki (only if changed)
         run: |
           cd "$RUNNER_TEMP/wiki"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "OEB Wiki Sync [bot]"
+          git config user.email "61707678+twgmichael@users.noreply.github.com"
           git add -A
           if git diff --cached --quiet; then
             echo "Wiki already current — nothing to push."

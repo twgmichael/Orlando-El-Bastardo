@@ -63,12 +63,13 @@ a visible red ✗ on the commit instead of silence. No data is at risk;
 re-running the action or pushing any docs change re-syncs fully (the
 mirror is stateless — every run regenerates every page).
 
-## Build checklist (when actioned)
+## Build checklist — COMPLETED 2026-07-11
 
-- [ ] `.github/workflows/wiki-sync.yml` per the design above
-- [ ] Add `docs/planning/PUBLISHING-PLAN.md` and this file to the
-      `PAGES` table (they are not yet mirrored)
-- [ ] First verification: push a trivial docs change; confirm the action
-      runs, the wiki updates, and the banner hash matches the pushed
-      commit
-- [ ] Retire the manual re-sync habit from PROJECT-TODO once verified
+- [x] `.github/workflows/wiki-sync.yml` per the design above
+- [x] `docs/planning/PUBLISHING-PLAN.md` and this file added to the
+      `PAGES` table (22 pages mirrored)
+- [x] Verified on the first triggering push: action ran (success, 9 s),
+      wiki updated by github-actions[bot], live banner hashes match the
+      pushed commit exactly
+- [x] Manual re-sync habit retired from PROJECT-TODO; the local wiki
+      clone is inspection-only from here on
