@@ -4,6 +4,42 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-11 — Public front door: privacy audit, wiki mirror, README, publishing plan
+
+- **Privacy/PII audit for the public repo** (second audit; first was
+  2026-07-05): full publishable tree scanned — no usernames, home paths,
+  emails, secrets, or hardware specifics. Two findings, both resolved:
+  literal external-volume names in a PROJECT-DONE housekeeping entry
+  (scrubbed to generic wording, details pointed at `docs/local/`), and
+  `model:` fields in `.claude/agents/*.md` frontmatter vs the
+  tier-names-only rule — ACCEPTED as functional configuration, exception
+  recorded in docs/DECISIONS.md.
+- **GitHub wiki is live and mirrored**: `tools/sync_wiki.py` — one-way
+  docs → wiki mirror (repo canonical; wiki is a generated artifact).
+  20 pages: docs/ + planning/ + Roadmap (PROJECT-TODO) + Journal-Log
+  (PROJECT-DONE); per-page banner with source path + commit hash;
+  doc-to-doc links rewritten to wiki links (plain markdown syntax — no
+  [[pipe]] ambiguity), other repo links → absolute blob URLs; grouped
+  _Sidebar + _Footer generated; orphan pages pruned; refuses
+  `docs/local/` sources. Local layout: repo and wiki clone are now
+  sibling working trees. Human pushed; all 18 pages verified live
+  (HTTP 200), Home/sidebar/banner links resolve from every page.
+- **Root README rebuilt as the front door**: original description kept,
+  plus Documentation section (wiki = readable tour, docs/ = canonical
+  version-locked source, TODO/DONE = trackers), a one-paragraph producer
+  walkthrough, and license/provenance links. All relative targets
+  verified.
+- **Publishing plan recorded** (docs/planning/PUBLISHING-PLAN.md,
+  PLANNED not built): three-tier YouTube policy — iteration renders
+  never upload; delivered episode cuts upload automatically (unlisted,
+  metadata generated from the production report); milestone/showcase
+  videos human-curated (public). In-repo `tools/upload_render.py` behind
+  `--publish`; credentials strictly gitignored. Quota math: ~6
+  uploads/day ceiling fits episode cadence, not per-render.
+- Attribution position confirmed: all external packs are Quaternius CC0
+  (no attribution required); docs/PROVENANCE.md publicly credits every
+  pack anyway and is linked from README + wiki.
+
 ## 2026-07-11 — Departures (R14): script update rendered same-day, no hand-holding
 
 Pilot script revision (orbital station lounge; new closing wide where the
