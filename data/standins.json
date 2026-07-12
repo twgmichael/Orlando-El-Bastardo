@@ -3,11 +3,15 @@
   "_comment": "Screenplay vocabulary for the producer (tools/producer.py). Substitutions are EXPLICIT DATA, never silent translator behavior: every location stand-in used in a run is recorded in the production report AND ticketed so the real-asset backlog stays honest.",
   "cast": {
     "hero": "protagonist",
+    "orlando": "protagonist",
     "bartender": "bartender"
   },
   "location_standins": {
     "neighborhood_bar": "small_bar_interior",
-    "orbital_station_lounge": "small_bar_interior"
+    "orbital_station_lounge": "small_bar_interior",
+    "red_dragon_inn": "small_bar_interior",
+    "red_dragon_inn_bar": "small_bar_interior",
+    "red_dragon_inn_orlando_s_booth": "small_bar_interior"
   },
   "shot_headings": {
     "WIDE SHOT": "establishing",
