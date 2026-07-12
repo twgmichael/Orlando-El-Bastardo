@@ -50,10 +50,10 @@ from mathutils import Matrix, Vector
 
 # ── Dimensions (metres) ──────────────────────────────────────────────────────
 HULL_D = 6.5          # saucer diameter
-BOT_TOP = 0.28        # bottom half: short flat-bottom bowl height (v18)
+BOT_TOP = 0.34        # bottom half: short flat-bottom bowl height (+20%, v20)
 BOT_FILLET = 0.18     # rounded corner joining bottom to side wall
 LIP = 0.12            # top hull overhangs the bottom bowl by this much
-DOME_H = 0.6          # top half height at centre (bubble < half of total)
+DOME_H = 0.86         # top half height at centre (+20% again, v21)
 DOME_AFT = 0.4        # aft bias: dome swells toward the back (engine deck)
 CANOPY_R = 1.35       # bubble canopy radius
 BOWL_R = 1.15         # corrugated cockpit bowl sunk below the bubble
@@ -151,8 +151,7 @@ def main():
 
     mat_hull = mat("mat_jb5k_hull", (0.72, 0.02, 0.02), rough=0.32,
                    metallic=0.15)
-    mat_glass = mat("mat_jb5k_canopy", (0.04, 0.04, 0.06), rough=0.04,
-                    metallic=0.1, alpha=0.5)
+    mat_glass = mat("mat_jb5k_canopy", (0.95, 0.95, 0.95), rough=0.5)  # DEBUG solid white
     mat_pod = mat("mat_jb5k_pod", (0.02, 0.02, 0.02), rough=0.45)
     mat_gold = mat("mat_jb5k_intake", (0.85, 0.62, 0.12), rough=0.25,
                    metallic=0.9)
@@ -221,18 +220,25 @@ def main():
     bmesh.ops.delete(bm, geom=hole_verts, context='VERTS')
     hull = obj_from_bmesh("jb5k_hull", bm, mat_hull)
 
-    # Canopy: smoked bubble, centred, low profile, sunk into the hull
+    # Canopy: hollow HALF-GLOBE shell riding HIGH on the top hull,
+    # slightly smaller than the cockpit opening ring; rim conformed
+    # down into the deck to seal (v25)
     bm = bmesh.new()
-    add_sphere(bm, CANOPY_R, (1.05, 1.1, 0.8), (0, 0.05, z0 + 0.4),
-               segs=40, rings=20)
-    canopy = obj_from_bmesh("jb5k_canopy", bm, mat_glass)
+    res = bmesh.ops.create_uvsphere(bm, u_segments=40, v_segments=20,
+                                    radius=1.0)
+    low = [v for v in res["verts"] if v.co.z < 0.0]
+    bmesh.ops.delete(bm, geom=low, context='VERTS')
+    for v in bm.verts:                 # PERFECT half globe, no rim
+        v.co = Vector((v.co.x * 1.15, v.co.y * 1.15,  # +15% (v31)
+                       v.co.z * 1.15 + 1.05))
+    canopy = obj_from_bmesh("jb5k_canopy", bm, mat_glass)  # into the tub
 
     # Cockpit: corrugated open bowl sunk below the bubble (simple
     # shapes, like the '95 original), two L-chairs, console block
     # Tub profile (v14): flat floor, flat vertical wall, rounded corner
     # joining them — lathed around Z, ribbing applied to the wall only
     bm = bmesh.new()
-    FLOOR_Z, FILLET, WALL_TOP = 0.16, 0.16, 0.84
+    FLOOR_Z, FILLET, WALL_TOP = 0.16, 0.16, 1.02
     profile = [(0.02, FLOOR_Z), (BOWL_R - FILLET, FLOOR_Z)]
     for k in range(1, 5):                      # quarter-round corner
         a = math.pi / 2 * k / 4
@@ -247,16 +253,32 @@ def main():
             edges.append(bm.edges.new((prev, vtx)))
         prev = vtx
     bmesh.ops.spin(bm, geom=list(bm.verts) + edges, cent=(0, 0, 0),
-                   axis=(0, 0, 1), angle=2 * math.pi, steps=32,
+                   axis=(0, 0, 1), angle=2 * math.pi, steps=100,
                    use_merge=True)
-    for v in bm.verts:                         # vertical ribbing on wall
+    # fine vertical striping on the wall only — circle preserved from
+    # lip to rounded floor (v28: shallow, high-frequency)
+    for v in bm.verts:
         r = math.hypot(v.co.x, v.co.y)
-        if r > 0.1 and v.co.z > FLOOR_Z + FILLET * 0.6:
+        if r > 0.1 and FLOOR_Z + FILLET * 0.6 < v.co.z < WALL_TOP - 0.06:
             ang = math.atan2(v.co.y, v.co.x)
-            f = 1.0 + 0.05 * math.cos(8 * ang)
+            f = 1.0 + 0.018 * math.cos(20 * ang)
             v.co.x *= f
             v.co.y *= f
-    cockpit = obj_from_bmesh("jb5k_bowl", bm, mat_dark)
+    for v in bm.verts:                         # rim rises past the deck
+        if v.co.z > WALL_TOP - 0.01:
+            v.co.z = deck_z(v.co.x, v.co.y) + 0.09
+    # LIP: flare the cup's top ring outward into a collar proud of the
+    # hull — the glass seals against THIS, not the red metal (v27)
+    rim_edges = [e for e in bm.edges if e.is_boundary]
+    ret = bmesh.ops.extrude_edge_only(bm, edges=rim_edges)
+    for g in ret["geom"]:
+        if isinstance(g, bmesh.types.BMVert):
+            r = math.hypot(g.co.x, g.co.y)
+            f = (r + 0.12) / r
+            g.co.x *= f
+            g.co.y *= f
+            g.co.z = deck_z(g.co.x, g.co.y) + 0.01   # flange lands ON
+    cockpit = obj_from_bmesh("jb5k_bowl", bm, mat_dark)  # the deck (v29)
 
     cockpit_parts = [cockpit]
 
