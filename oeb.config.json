@@ -36,6 +36,11 @@
       "file": "sets/bar_scene_scifi.glb",
       "node": "prop_bottle_generic_A",
       "kind": "prop"
+    },
+    "prop_jb5k_A": {
+      "file": "ships/jb5k.glb",
+      "node": "prop_jb5k_A",
+      "kind": "prop"
     }
   }
 }

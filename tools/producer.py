@@ -71,6 +71,9 @@ def parse_args():
                    help="Upload the episode cut to YouTube (unlisted) per "
                         "docs/planning/PUBLISHING-PLAN.md. Off by default; "
                         "a publish failure never fails the run.")
+    p.add_argument("--scenes", default=None,
+                   help="Comma list of scene numbers to run (testing aid); "
+                        "others are skipped entirely.")
     return p.parse_args()
 
 
@@ -251,10 +254,17 @@ def main():
            for w in k.split("_")}
     audio_kw = {k.lower() for k in vocab.get("audio_keywords", [])}
 
+    only = None
+    if args.scenes:
+        only = {int(n) for n in args.scenes.split(",") if n.strip()}
+
     outcomes = {}
     vocab_findings = {}
     for idx, scene in enumerate(doc["scenes"]):
-        scene_id = f"{episode}_sc{idx + 1:02d}"
+        number = scene.get("number", idx + 1)
+        if only is not None and number not in only:
+            continue
+        scene_id = f"{episode}_sc{number:02d}"
         sdir = os.path.join(edir, "scenes", scene_id)
         os.makedirs(sdir, exist_ok=True)
         print(f"[producer] ── {scene_id}: {scene['slugline']}")

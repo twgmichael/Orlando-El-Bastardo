@@ -3,7 +3,7 @@
   "locations": {
     "small_bar_interior": {
       "set_id": "set_bar_small_A",
-      "variants": { "night": "variant_night" },
+      "variants": { "night": "variant_night", "day": "variant_day" },
       "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A", "hero_entry_A", "hero_stool_front_A"],
       "default_props": [
         { "prop_id": "counter_main", "asset_id": "prop_bar_counter_A" },

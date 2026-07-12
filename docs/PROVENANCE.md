@@ -27,6 +27,8 @@ register is the committed record.
 
 | `Ultimate Modular Women - April 2022/` | Quaternius | **CC0 1.0** (in-folder) | 1 | Added 2026-07-07. Rigged modular female characters, same structure as the Men pack. **Converted to GLB 2026-07-07 (56 pieces, 0 failed; skins + 24 bundled clips intact). Same legacy skeleton as the Men pack** (62 joints, `Hips`/`Chest`/`LowerArm.L` style — NOT `oeb_humanoid_v1`); the two packs pair with each other and share one future bone map |
 
+| `ships/jb5k.glb` (+`.usdc`) | Built 2026-07-12 by `tools/build_jb5k.py` — primitives reconstruction of the owner's 1995 Infini-D "Journey Blaster 5000" (Yakara Starcraft) from the owner's 2000/2001 reference renders, anatomy corrected in owner review | Owner's original design (1995–2001); reconstruction is project original | 1 (no external license) | Canonical node `prop_jb5k_A`; nose −Y (character facing convention, move-cue steerable); TWO-HALF hull like the '95 original — flat bottom plate + flatter aft-swelling top shell with rolled rim bulge — smoked bubble canopy + cockpit hint, 4 senso-globes per side (proudest aft), twin frap-ray cannons lying along the fore hull (3 barrel rings), twin slim splayed aft engine pods (red-cored vents, orange tips), 16 white belly discs w/ rotating-thruster stubs (owner canon 2026-07-12) |
+
 Standing rules: CC0 preferred (Tier 1); anything else needs explicit records
 here BEFORE use (Tier 2); attribution-heavy/share-alike/unclear = blocked
 pending review (Tier 3). Downloads require human approval per the workflow
