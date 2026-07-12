@@ -59,12 +59,12 @@ CANOPY_R = 1.35       # bubble canopy radius
 BOWL_R = 1.15         # corrugated cockpit bowl sunk below the bubble
 HOLE_R = 1.05         # hollow centre of the top shell (cockpit opening)
 SEAT_YS = (-0.2, 0.55)  # tandem chairs IN LINE, fore then aft (v10)
-POD_L = 1.5           # engine pod length
-POD_R = 0.3           # engine pod radius
+POD_L = 2.16          # engine pod length (+20% again, v33)
+POD_R = 0.43          # engine pod radius (+20% again, v33)
 POD_X = 0.95          # pod lateral offset (aft deck beside canopy)
 POD_Y = 1.93          # pod aft offset (+Y is aft)
 POD_YAW = 0.0         # engines point STRAIGHT BACK (v10)
-GLOBE_R = 0.26        # senso-globe radius
+GLOBE_R = 0.37        # senso-globe radius (+20% again, v34)
 # Senso-globes: (y position, sink into hull) — protrusion grows toward
 # the AFT (owner correction 2026-07-12); bases ride the hull profile.
 GLOBES = [(1.35, 0.01), (0.55, 0.03), (-0.35, 0.05), (-1.25, 0.08)]
@@ -331,13 +331,6 @@ def main():
         pod_objs.append(pod)
         aft = centre + yaw @ Vector((0, POD_L * 0.5, 0))
         bm = bmesh.new()
-        add_cone(bm, POD_R * 1.15, POD_R * 1.15, 0.09,
-                 centre + yaw @ Vector((0, POD_L * 0.5 - 0.12, 0)),
-                 rot=yaw @ pitch, segs=16)                     # vent ring
-        ring = obj_from_bmesh(f"jb5k_vent_{'l' if sx < 0 else 'r'}",
-                              bm, mat_pod)
-        pod_objs.append(ring)
-        bm = bmesh.new()
         add_cone(bm, POD_R * 0.62, POD_R * 0.5, 0.1,
                  aft + yaw @ Vector((0, -0.03, 0)), rot=yaw @ pitch,
                  segs=16)                                      # red core
@@ -345,8 +338,8 @@ def main():
                               bm, mat_burn)
         pod_objs.append(burn)
         bm = bmesh.new()
-        add_cone(bm, 0.06, 0.02, 0.24,
-                 aft + yaw @ Vector((0, 0.14, 0)), rot=yaw @ pitch,
+        add_cone(bm, 0.086, 0.029, 0.35,
+                 aft + yaw @ Vector((0, 0.2, 0)), rot=yaw @ pitch,
                  segs=10)                                      # orange tip
         tip = obj_from_bmesh(f"jb5k_venttip_{'l' if sx < 0 else 'r'}",
                              bm, mat_lamp)
@@ -393,6 +386,9 @@ def main():
         add_cone(bm, 0.055, 0.05, 0.24,
                  (cx + sx * 0.14, CANNON_Y + 0.04, zb),
                  rot=side, segs=10)
+        centroid = sum((v.co for v in bm.verts), Vector()) / len(bm.verts)
+        for v in bm.verts:                       # +20% about centroid
+            v.co = centroid + (v.co - centroid) * 1.44  # 1.2 x 1.2 (v34)
         cannon = obj_from_bmesh(
             f"jb5k_cannon_{'l' if sx < 0 else 'r'}", bm, mat_pod)
         cannon_parts.append(cannon)
