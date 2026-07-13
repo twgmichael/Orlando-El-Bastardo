@@ -4,6 +4,34 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-12/13 — The JourneyBlasters: JB5K reconstructed, JB100 spun off
+
+Design record: docs/JOURNEYBLASTER.md. Owner-directed, 30+ review
+iterations of constant-edit → rebuild → six-view sheet → markup.
+
+- `tools/build_jb5k.py` → `assets/ships/jb5k.glb` (`prop_jb5k_A`):
+  primitives reconstruction of the 1995 Infini-D JourneyBlaster 5000
+  from the 2000/2001 reference renders. Anatomy converged through owner
+  review: two-half hull (flat-bottom bowl + lip-overhang top shell),
+  ribbed circular cockpit tub with lip, perfect half-globe bubble
+  sealing at the lip, tandem seats, frap-ray cannons (3-ring barrels,
+  outboard exhaust ports), straight-back engines, aft-proudest yellow
+  senso-globes, 16-disc belly thruster ring.
+- `tools/build_jb100.py` → `assets/ships/jb100.glb` (`prop_jb100_A`):
+  the line's FIRST model — single seat, concave belly recess with the
+  thruster discs mounted inside, cockpit furniture (L-chair, oxygen
+  tanks, chest-height control panel) sized to the DRESSED hero (1.82 m;
+  the 1.70 m DXF guy served as interim scale figure), vibrant-yellow
+  globes.
+- Review rigs (`tmp_jb100_review/cutaway.py`): six-view sheets framed
+  aft-left like the reference, port cutaway with seated hero
+  (`JB_PILOT`/`JB_CAST` toggles); pilots never enter the ship assets.
+- Findings recorded in the design doc: AgX desaturation (previews use
+  Standard transform), two-character salvage GLB leaking the bartender
+  into rigs, silent-patch lesson (all script edits now assert before
+  writing), no sci-fi chairs anywhere in the CC0 library.
+- Both ships registered in oeb.config.json + PROVENANCE (Tier 1).
+
 ## 2026-07-11 — No absolute paths in code (rule broadened + enforced)
 
 Owner rule: no absolute filesystem paths anywhere in committable code

@@ -29,6 +29,8 @@ register is the committed record.
 
 | `ships/jb5k.glb` (+`.usdc`) | Built 2026-07-12 by `tools/build_jb5k.py` — primitives reconstruction of the owner's 1995 Infini-D "Journey Blaster 5000" (Yakara Starcraft) from the owner's 2000/2001 reference renders, anatomy corrected in owner review | Owner's original design (1995–2001); reconstruction is project original | 1 (no external license) | Canonical node `prop_jb5k_A`; nose −Y (character facing convention, move-cue steerable); TWO-HALF hull like the '95 original — flat bottom plate + flatter aft-swelling top shell with rolled rim bulge — smoked bubble canopy + cockpit hint, 4 senso-globes per side (proudest aft), twin frap-ray cannons lying along the fore hull (3 barrel rings), twin slim splayed aft engine pods (red-cored vents, orange tips), 16 white belly discs w/ rotating-thruster stubs (owner canon 2026-07-12) |
 
+| `ships/jb100.glb` (+`.usdc`) | Built 2026-07-12 by `tools/build_jb100.py` — fork of the JB5K reconstruction; the JourneyBlaster 100, first version of the Yakara Starcraft sport-attack line | Owner's original design; project original | 1 (no external license) | Canonical node `prop_jb100_A`; starts as the JB5K's geometry, diverging under owner direction |
+
 Standing rules: CC0 preferred (Tier 1); anything else needs explicit records
 here BEFORE use (Tier 2); attribution-heavy/share-alike/unclear = blocked
 pending review (Tier 3). Downloads require human approval per the workflow

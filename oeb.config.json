@@ -41,6 +41,11 @@
       "file": "ships/jb5k.glb",
       "node": "prop_jb5k_A",
       "kind": "prop"
+    },
+    "prop_jb100_A": {
+      "file": "ships/jb100.glb",
+      "node": "prop_jb100_A",
+      "kind": "prop"
     }
   }
 }
