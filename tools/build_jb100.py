@@ -51,10 +51,10 @@ from mathutils import Matrix, Vector
 
 # ── Dimensions (metres) ──────────────────────────────────────────────────────
 HULL_D = 6.5          # saucer diameter
-BOT_TOP = 0.34        # bottom half: short flat-bottom bowl height (+20%, v20)
+BOT_TOP = 0.337       # bottom half: short flat-bottom bowl height (−10%, v36)
 BOT_FILLET = 0.18     # rounded corner joining bottom to side wall
 LIP = 0.12            # top hull overhangs the bottom bowl by this much
-DOME_H = 0.86         # top half height at centre (+20% again, v21)
+DOME_H = 0.903        # top half height at centre (+5%, v35)
 DOME_AFT = 0.4        # aft bias: dome swells toward the back (engine deck)
 CANOPY_R = 1.35       # bubble canopy radius
 BOWL_R = 1.15         # corrugated cockpit bowl sunk below the bubble
@@ -233,8 +233,8 @@ def main():
     low = [v for v in res["verts"] if v.co.z < 0.0]
     bmesh.ops.delete(bm, geom=low, context='VERTS')
     for v in bm.verts:                 # PERFECT half globe, no rim
-        v.co = Vector((v.co.x * 1.15, v.co.y * 1.15,  # +15% (v31)
-                       v.co.z * 1.15 + 1.05))
+        v.co = Vector((v.co.x * 1.15, v.co.y * 1.15,
+                       v.co.z * 1.208 + 1.12))
     canopy = obj_from_bmesh("jb100_canopy", bm, mat_glass)  # into the tub
 
     # Cockpit: corrugated open bowl sunk below the bubble (simple
@@ -242,7 +242,7 @@ def main():
     # Tub profile (v14): flat floor, flat vertical wall, rounded corner
     # joining them — lathed around Z, ribbing applied to the wall only
     bm = bmesh.new()
-    FLOOR_Z, FILLET, WALL_TOP = 0.16, 0.16, 1.02
+    FLOOR_Z, FILLET, WALL_TOP = 0.22, 0.16, 1.09
     profile = [(0.02, FLOOR_Z), (BOWL_R - FILLET, FLOOR_Z)]
     for k in range(1, 5):                      # quarter-round corner
         a = math.pi / 2 * k / 4
@@ -297,20 +297,20 @@ def main():
     # 1.39 above origin, shoulder ~1.1)
     bm = bmesh.new()
     for cy in SEAT_YS:
-        add_box(bm, (0.72, 0.66, 0.12), (0, cy, 0.64))       # seat of the L
-        add_box(bm, (0.72, 0.12, 0.72), (0, cy + 0.36, 1.01))  # back of the L
+        add_box(bm, (0.72, 0.66, 0.12), (0, cy, 0.75))       # seat of the L
+        add_box(bm, (0.72, 0.12, 0.72), (0, cy + 0.36, 1.14))  # back of the L
     # control panel: chest height, reaching aft over the knees (bottom
     # clears them), pedestal at the tub wall
-    add_box(bm, (0.8, 0.5, 0.18), (0, -0.92, 1.2))
-    add_cone(bm, 0.09, 0.07, 1.05, (0, -1.1, 0.6), segs=10)
+    add_box(bm, (0.8, 0.5, 0.18), (0, -0.92, 1.34))
+    add_cone(bm, 0.09, 0.07, 1.05, (0, -1.1, 0.71), segs=10)
     seats = obj_from_bmesh("jb100_seats", bm, mat_seat)
     cockpit_parts.append(seats)
     # oxygen tanks: twin cylinders on the chair back
     bm = bmesh.new()
     for tx in (-0.15, 0.15):
-        add_cone(bm, 0.144, 0.144, 0.78, (tx, SEAT_YS[0] + 0.56, 1.05),
+        add_cone(bm, 0.144, 0.144, 0.78, (tx, SEAT_YS[0] + 0.56, 1.18),
                  segs=14)
-        add_cone(bm, 0.06, 0.036, 0.144, (tx, SEAT_YS[0] + 0.56, 1.5),
+        add_cone(bm, 0.06, 0.036, 0.144, (tx, SEAT_YS[0] + 0.56, 1.65),
                  segs=10)                                    # valve neck
     tanks = obj_from_bmesh("jb100_tanks", bm, mat_white)
     cockpit_parts.append(tanks)
@@ -371,9 +371,9 @@ def main():
     for k in range(DISC_N):
         ang = 2 * math.pi * k / DISC_N
         dx, dy = DISC_RING_R * math.cos(ang), DISC_RING_R * math.sin(ang)
-        add_cone(bm, DISC_R, DISC_R, 0.08, (dx, dy, 0.13), segs=18)
+        add_cone(bm, DISC_R, DISC_R, 0.08, (dx, dy, 0.12), segs=18)
         add_cone(bmt, THRUSTER_R, THRUSTER_R * 0.55, 0.1,
-                 (dx, dy, 0.08), segs=10)   # stub inside the recess
+                 (dx, dy, 0.07), segs=10)   # stub inside the recess
     discs = obj_from_bmesh("jb100_belly_discs", bm, mat_white)
     pod_objs.append(discs)
     thrusters = obj_from_bmesh("jb100_belly_thrusters", bmt, mat_pod)

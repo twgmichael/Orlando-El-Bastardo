@@ -35,7 +35,7 @@ act = bpy.data.actions.get("idle_seated_relaxed")
 if hero.animation_data is None:
     hero.animation_data_create()
 hero.animation_data.action = act
-hero.location = (0, -0.4, 0.17 if CAST == 'hero' else 0.43)
+hero.location = (0, -0.4, 0.23 if CAST == 'hero' else 0.49)
 hero.rotation_mode = 'XYZ'
 hero.rotation_euler.z += math.radians(180)
 hero.scale = (1.2, 1.2, 1.2)
@@ -70,7 +70,7 @@ co.location = (-0.6, 0.1, 1.8)
 cd = bpy.data.cameras.new("cam"); cd.lens = 50
 cam = bpy.data.objects.new("cam", cd); scene.collection.objects.link(cam)
 scene.camera = cam
-cam.location = (-8.5, 0, 1.4)
+cam.location = (-9.35, 0, 1.4)
 d = Vector((0, 0, 1.0)) - Vector(cam.location)
 cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
 scene.render.resolution_x = 1280

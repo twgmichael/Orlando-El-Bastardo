@@ -100,7 +100,7 @@ if hero:
         hero.animation_data_create()
     hero.animation_data.action = act
     scene.frame_set(10)
-    hero.location = (0, -0.4, 0.17)
+    hero.location = (0, -0.4, 0.23)
     hero.rotation_mode = 'XYZ'
     hero.rotation_euler.z += math.radians(180)   # face the nose (-Y)
     hero.scale = (1.2, 1.2, 1.2)
