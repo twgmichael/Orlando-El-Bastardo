@@ -200,6 +200,19 @@ iteration renders never upload).
   Manual re-sync habit retired; local wiki clone is now inspection-only
   (`git pull` before use). Both plan docs mirrored.
 
+## JourneyBlaster backlog (docs/JOURNEYBLASTER.md; opened 2026-07-13)
+
+- [ ] Restore JB5K glass bubble (builder still has the solid-white
+  debug material) + decide whether to back-port JB100 refinements
+  (concave belly, yellow globes) or retire the JB5K asset
+- [ ] Deep-space environment set (starfield, camera marks, ship as
+  prop) — the blocker for Episode 1's EXT scenes and first flight
+- [ ] Separate-node thruster/gimbal variant for flight animation
+- [ ] Detail pass when close-ups demand it: Yakara logo, hull dents,
+  cockpit greebles
+- [ ] Decide scene-render color policy: AgX (current pipeline default)
+  washes the ships' era-correct saturated colors; previews use Standard
+
 ## Pilot backlog (tickets from out/production/pilot/)
 
 - [ ] Orbital-lounge dressing pass: instrument panels, observation

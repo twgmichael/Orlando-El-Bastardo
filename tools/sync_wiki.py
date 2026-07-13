@@ -36,6 +36,7 @@ PAGES = [
     ("docs/DECISIONS.md",         "Decisions",      "Standards", "Decisions"),
     ("docs/OPEN-QUESTIONS.md",    "Open-Questions", "Standards", "Open Questions"),
     ("docs/RESOURCES.md",         "Resources",      "Standards", "Resources"),
+    ("docs/JOURNEYBLASTER.md",    "JourneyBlaster", "Design",    "JourneyBlaster"),
     ("docs/planning/AGENT-WORKFLOW-PLAN.md", "Agent-Workflow-Plan",
      "Planning", "Agent Workflow Plan"),
     ("docs/planning/PRODUCER-PLAN.md",       "Producer-Plan",
