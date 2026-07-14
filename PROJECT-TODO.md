@@ -10,9 +10,15 @@ prompting. The pilot teaser (4 shots, walk-in + departure, dressed v3
 characters, medium cameras) is delivered. Motion grammar v1 (move cues,
 entrances/exits, NLA crossfades) landed through the whole spine. Public
 front door live: wiki mirror (`tools/sync_wiki.py`), rebuilt README,
-privacy audit passed. Remaining Phase 2: bar furniture, night lighting
-variant. Next frontier: publishing plan build (PUBLISHING-PLAN.md), pilot
-ticket backlog (lounge dressing, audio), Godot/USD move-cue support.
+privacy audit passed. **Studio harness RUNNING** (2026-07-14): FastAPI
+control plane + PostgreSQL + Ansible role on docker-pi-01; cross-platform
+worker agent with OllamaAdapter + BlenderCLIAdapter (script_file + cwd +
+output_root live); macOS menu bar app on the Mac mini; pipeline render
+scripts dispatching and writing renders to OEB-PROJECT external drive.
+Remaining Phase 2: bar furniture, night lighting variant. Next frontier:
+publishing plan build (PUBLISHING-PLAN.md), pilot ticket backlog (lounge
+dressing, audio), Godot/USD move-cue support, agent bus (AGENT-BUS-PLAN.md),
+gaming-PC worker install.
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -34,6 +40,37 @@ them to `PROJECT-DONE.md` with a date.
   profiles; any Phase 6+ code work starts with author-tier profile authoring.
 - Placeholder-asset track (2026-07-03 note) is complete — see Phase 2A in
   PROJECT-DONE.md. Real CC0 assets remain a later drop-in (Phase 2).
+
+---
+
+## Studio harness (oeb-studio-harness) — control plane LIVE 2026-07-14
+
+Harness spec: `docs/planning/studio-production-pipeline-harness-ansible-spec.json`.
+Agent bus plan: `docs/planning/AGENT-BUS-PLAN.md` (PLANNED, not built).
+Worker plan: `docs/planning/WORKER-AGENT-PLAN.md`.
+Control plane on docker-pi-01 at `http://oeb-studio.docker-pi`; mac-mini
+worker running with menu bar app; first job submitted and claimed end-to-end.
+
+- [x] Install worker on Mac mini — DONE 2026-07-14 (menu bar running,
+  worker registered, first job claimed)
+- [x] Create first project via `POST /api/v1/projects` — DONE 2026-07-14
+- [x] Add `script_file` + `cwd` payload support to BlenderCLIAdapter —
+  DONE 2026-07-14; pipeline render scripts now dispatch as harness jobs
+- [x] Add `output_root` per-worker config + `{output_root}` substitution —
+  DONE 2026-07-14; renders write to OEB-PROJECT external drive
+- [x] Expose PostgreSQL port 5432 for direct SQL client access — DONE 2026-07-14
+- [ ] Install worker on gaming PC (`config-examples/gaming-pc.yml`)
+- [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
+- [ ] Add `oeb-studio.docker-pi` to the `traefik_domains` list in
+  project-pi-admin as a committed entry (currently added manually; should be
+  declarative so it survives playbook reruns)
+- [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
+  - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
+  - [ ] `tools/agent_bus.py` (file/claim/report/block/query verbs + payload schema)
+  - [ ] Label/field taxonomy in the repo/Project
+  - [ ] `tickets.py` extension: NEEDED tickets also file `stream:production` issues
+  - [ ] Orchestrator + worker profile amendments: bus verbs in standing instructions
+  - [ ] First live run: file pilot-backlog issues, dispatch one to production designer
 
 ---
 
@@ -205,8 +242,15 @@ iteration renders never upload).
 - [ ] Restore JB5K glass bubble (builder still has the solid-white
   debug material) + decide whether to back-port JB100 refinements
   (concave belly, yellow globes) or retire the JB5K asset
-- [ ] Deep-space environment set (starfield, camera marks, ship as
-  prop) — the blocker for Episode 1's EXT scenes and first flight
+- [x] Deep-space environment: spec LOCKED 2026-07-13 (docs/world-building/
+  SPACESCAPE.md) — star sphere (radius=800, Generated coords, threshold=0.75,
+  emission=8) + emissive sun sphere + EEVEE bloom. Confirmed working in two
+  render scripts. EEVEE Next World shader non-functional (documented).
+  Pipeline integration (set asset, camera marks, prop registration) still
+  pending.
+- [ ] Integrate deep-space environment into the production pipeline: extract
+  `setup_space_env()` into a shared module, register as a set asset, add
+  camera marks for EXT shots
 - [ ] Separate-node thruster/gimbal variant for flight animation
 - [ ] Detail pass when close-ups demand it: Yakara logo, hull dents,
   cockpit greebles

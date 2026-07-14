@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Studio Harness — PostgreSQL daily backup
+# Managed by Ansible. Do not edit manually.
+set -euo pipefail
+
+BACKUP_DIR="{{ oeb_studio_harness_root }}/backups"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+FILE="${BACKUP_DIR}/harness_${TIMESTAMP}.sql.gz"
+RETAIN={{ oeb_studio_harness_backup_retention_days }}
+
+docker exec {{ oeb_studio_harness_compose_project }}-postgres-1 \
+    pg_dump -U harness harness \
+    | gzip > "${FILE}"
+
+echo "[$(date -Is)] Backup written: ${FILE}" >> "${BACKUP_DIR}/backup.log"
+
+# Prune backups older than retention limit
+find "${BACKUP_DIR}" -name "harness_*.sql.gz" -mtime "+${RETAIN}" -delete
+
+echo "[$(date -Is)] Pruned backups older than ${RETAIN} days" >> "${BACKUP_DIR}/backup.log"

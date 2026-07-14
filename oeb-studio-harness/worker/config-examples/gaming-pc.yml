@@ -1,0 +1,37 @@
+worker_id: gaming-pc
+platform: windows-x64
+agent_version: "0.1.0"
+
+capabilities:
+  - blender.final_render
+  - blender.preview_render
+  - blender.command_line
+  - gpu.cycles_render
+  - gpu.texture_bake
+
+resources:
+  ram_gb: 64
+  gpu_type: NVIDIA RTX 4090
+  vram_gb: 24
+  available_storage_gb: 1000
+
+# harness_url and enrollment_token are set via env vars:
+#   OEB_HARNESS_URL=https://studio-orchestrator.local
+#   OEB_ENROLLMENT_TOKEN=<from vault>
+token_file: C:/Users/studio/.oeb-harness-worker-token
+
+poll_interval_seconds: 5
+heartbeat_interval_seconds: 20
+# Artifacts written to the Mac mini SMB share, mounted here
+artifact_store_root: Z:/oeb-studio-harness/artifacts
+output_root: Z:/OEB-PROJECT/OEB-PRODUCTION
+
+adapters:
+  ollama:
+    base_url: http://localhost:11434
+    default_model: qwen2.5-coder:32b
+    timeout_seconds: 600
+  blender:
+    executable: "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe"
+    max_concurrent: 1
+    timeout_seconds: 7200

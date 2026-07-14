@@ -1,0 +1,25 @@
+---
+- name: Wait for harness API to be healthy
+  ansible.builtin.uri:
+    url: "http://localhost:{{ oeb_studio_harness_api_port }}/health"
+    status_code: 200
+    timeout: 5
+  register: health
+  until: health.status == 200
+  retries: 20
+  delay: 3
+
+- name: Check database readiness
+  ansible.builtin.uri:
+    url: "http://localhost:{{ oeb_studio_harness_api_port }}/ready"
+    status_code: 200
+    timeout: 5
+
+- name: Expose harness URL as Ansible fact
+  ansible.builtin.set_fact:
+    oeb_studio_harness_api_url: >-
+      {{ 'https' if oeb_studio_harness_enable_reverse_proxy else 'http' }}://{{
+        ansible_hostname }}.local:{{
+        oeb_studio_harness_nginx_https_port if oeb_studio_harness_enable_reverse_proxy else oeb_studio_harness_api_port
+      }}
+  cacheable: true

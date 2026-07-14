@@ -1,0 +1,28 @@
+---
+- name: Deploy Compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ oeb_studio_harness_root }}/compose/compose.yml"
+    owner: "{{ oeb_studio_harness_user }}"
+    group: "{{ oeb_studio_harness_group }}"
+    mode: "0640"
+  become: true
+  notify: restart studio harness
+
+- name: Deploy Nginx config
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ oeb_studio_harness_root }}/nginx/nginx.conf"
+    owner: "{{ oeb_studio_harness_user }}"
+    group: "{{ oeb_studio_harness_group }}"
+    mode: "0640"
+  become: true
+  when: oeb_studio_harness_enable_reverse_proxy
+  notify: restart studio harness
+
+- name: Start Docker Compose stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ oeb_studio_harness_root }}/compose"
+    project_name: "{{ oeb_studio_harness_compose_project }}"
+    state: present
+  become: true

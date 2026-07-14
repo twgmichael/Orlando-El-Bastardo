@@ -13,6 +13,12 @@ pipeline data — it does not generate pixels, fabricate imagery, or write story
 - [BAR-SCENE.md](BAR-SCENE.md) — first integration target: assets, marks, animations, cameras
 - [DECISIONS.md](DECISIONS.md) — locked decisions from the research phase
 - [OPEN-QUESTIONS.md](OPEN-QUESTIONS.md) — unresolved design questions
+- [vehicles/JOURNEYBLASTER.md](vehicles/JOURNEYBLASTER.md) — JB100 / JB5K ship design record
+
+## World-building
+
+- [world-building/SPACESCAPE.md](world-building/SPACESCAPE.md) — deep-space environment: starfield, sun, planet; discovery, options, decision, implementation spec
+- [world-building/FLIGHT-ANIMATION.md](world-building/FLIGHT-ANIMATION.md) — flight animation patterns: hero-in-rolling-ship tracking, two-phase choreography, sweep-hold-track camera
 
 ## Non-goals
 

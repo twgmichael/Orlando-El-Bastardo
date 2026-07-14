@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Studio Harness{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <span class="logo">Studio Harness</span>
+    <span class="tagline">Orlando El Bastardo Production Pipeline</span>
+    <span class="clock" id="clock"></span>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    function tick() {
+      document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+    }
+    tick();
+    setInterval(tick, 1000);
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

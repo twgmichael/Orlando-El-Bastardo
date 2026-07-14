@@ -4,6 +4,156 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-14 — Harness fully wired: script_file + cwd + output_root; renders to OEB-PROJECT drive
+
+Pipeline render scripts now dispatch and complete as harness jobs. Renders
+write to `/Volumes/OEB-PROJECT/OEB-PRODUCTION` on the mac-mini. First
+successful harness render of the primitive bar scene and JB100 review sheets.
+
+**Bug fixes:**
+- `JobLease` unique constraint: `fail_job` endpoint and the maintenance loop
+  both set `is_active = False` but left the row — the unique constraint on
+  `job_id` blocked all reclaims of requeued idempotent jobs. Fixed in both
+  places: lease row is now deleted (`await db.delete(lease)`) so the
+  constraint allows future reclaims.
+- `JobSummary` schema missing `payload` field — workers polled eligible jobs
+  and received job metadata but no payload, so every adapter call saw an empty
+  dict and failed. Added `payload: dict = {}` to `JobSummary`.
+
+**BlenderCLIAdapter additions (`oeb-studio-harness/worker/agent/adapters/blender.py`):**
+- `script_file` mode: `blender --background --python <script.py>` — the
+  mode used by all existing OEB pipeline render scripts
+- `cwd` payload field: sets the working directory for the Blender process;
+  required for scripts that use `os.getcwd()` for relative asset/output paths
+  (e.g. `tmp_jb100_review.py` must run from the repo root)
+- `script_args` payload field: list of strings appended after `--`
+- `{output_root}` substituted in every `script_args` element at runtime
+
+**`output_root` per-worker config:**
+- Added to `WorkerConfig` (`agent/config.py`) and both config examples:
+  mac-mini → `/Volumes/OEB-PROJECT/OEB-PRODUCTION`,
+  gaming-pc → `Z:/OEB-PROJECT/OEB-PRODUCTION`
+- Job payloads use `{output_root}` in `script_args` — machine-agnostic
+- `oeb_menu_bar.py` updated to pass `output_root` to `BlenderCLIAdapter`
+
+**Infrastructure:**
+- PostgreSQL port 5432 exposed in the compose template; SQL client
+  (TablePlus / psql) can connect directly at `docker-pi-01.local:5432`
+
+**Verified end-to-end:**
+- `tools/render_preview.py` (bar scene, placeholder GLB, `cam_establishing_wide`)
+  dispatched via Swagger, rendered by mac-mini worker, PNG written to
+  `/Volumes/OEB-PROJECT/OEB-PRODUCTION/renders/jb100-preview/`
+- `tools/tmp_jb100_review.py` dispatched with `cwd` = repo root; all 6 views
+  + pilot variants rendered to `out/` as the script specifies
+
+## 2026-07-14 — Harness end-to-end: first job claimed; DNS wired; Swagger UI; open item identified
+
+Worker registered against the live control plane, first render job submitted
+and claimed by the mac-mini worker end-to-end. Key findings and fixes this
+session:
+
+- **Domain routing**: `oeb-studio.docker-pi` set as the harness Traefik domain.
+  Pi-hole's wildcard `*.docker-pi` covers all network devices; the Mac resolves
+  `.docker-pi` hosts via `/etc/hosts` written by the macos-setup playbook from
+  `traefik_domains` in host_vars. `oeb-studio.docker-pi` was missing from that
+  list — added manually; permanent fix is to commit it to `traefik_domains`.
+- **Swagger UI** at `http://oeb-studio.docker-pi/docs` — FastAPI auto-generated,
+  used to create the first project and submit the first job interactively.
+- **First project created**: OEB production project via `POST /api/v1/projects`.
+- **First job claimed**: `blender.preview_render` job dispatched to mac-mini,
+  claimed within seconds, menu bar icon switched to busy state.
+- **BlenderCLIAdapter gap identified**: adapter only supports
+  `blender --background <file.blend>`; existing pipeline render scripts use
+  `blender --background --python <script.py>`. Job failed with
+  `"payload requires blend_file and output_path"` because no `.blend` file
+  exists — build scripts output GLB. Fix: add `script_file` payload option
+  to the adapter (open item in PROJECT-TODO).
+- **Starlette 1.x compat fix**: `TemplateResponse` API changed — `request`
+  must be the first positional arg, not buried in the context dict. Fixed in
+  `app/routers/dashboard.py` before deploy.
+
+## 2026-07-14 — Studio harness deployed; cross-platform worker agent + macOS menu bar built
+
+Full studio production pipeline harness (`oeb-studio-harness/`) built and
+deployed. Control plane live on docker-pi-01 via Ansible; worker agent
+running on the Mac mini workstation with a custom menu bar app.
+
+**Control plane (FastAPI + PostgreSQL on docker-pi-01):**
+- Full job lifecycle: pending → claimed → running → complete/failed with
+  lease renewal, idempotent requeue on failure, and maintenance loop for
+  stale workers/expired leases
+- `preview_now_final_later` policy: atomically creates sibling preview
+  (run_anywhere, priority+1) + final (wait_for_preferred_worker) jobs
+- Worker registration + heartbeat (with busy/idle state); enrollment token
+  auth; SHA256 artifact registration with provenance tagging
+- Dashboard at the harness domain (dark-mode Jinja2, 15 s auto-refresh;
+  workers table, last-50 jobs, last-20 audit events, status chips)
+- Deployed via `ansible-playbook playbooks/phase2-resource.yml -e
+  resource=oeb_studio_harness_orchestrator`; Alembic migrations (0001
+  initial + 0002 artifacts/sibling) run on every deploy; pg_dump backup
+  systemd timer active
+
+**Worker agent (`oeb-studio-harness/worker/`):**
+- `OllamaAdapter`: covers llm.scene_spec, llm.blender_python, llm.general,
+  vision.image_analysis, vision.render_comparison; uses urllib (no extra deps)
+- `BlenderCLIAdapter`: blender.final_render, blender.preview_render,
+  blender.command_line; path-traversal protection; inline Python overrides
+  for samples/resolution; preview vs final tagging from `_preview` payload flag
+- Registration retry with exponential backoff (5 s → 60 s cap); lease
+  renewal concurrent with job execution; artifacts uploaded after success
+- Config examples for mac-mini (`qwen2.5-coder:14b`, `/Users/Shared/…`)
+  and gaming-pc (`qwen2.5-coder:32b`, RTX 4090, Windows paths)
+
+**macOS menu bar app (`oeb_menu_bar.py`):**
+- Custom OEB icons: idle (OEB badge) + busy (OEB with rotation arrows),
+  44 px template images, dark-mode inverted variants generated
+- `rumps` on main thread; asyncio worker loop on daemon thread; thread-safe
+  queue drains via `rumps.Timer`; shows job title when busy, "Idle" at rest
+- "Open Dashboard" menu item; `on_busy`/`on_idle` callbacks wired into
+  `HeartbeatLoop`; tested running on the Mac mini desktop workstation
+
+---
+
+## 2026-07-13 — Deep-space environment validated; JB100 space action + barrel roll rendered
+
+Prototype render scripts demonstrate the full deep-space environment and the
+JB100 in flight with a seated pilot. Not yet wired into the production
+pipeline — tmp scripts only.
+
+- **`docs/world-building/SPACESCAPE.md`** — research record: 1995 reference
+  clip analysis, three options evaluated (World Shader, updated globe, HDRI),
+  decision rationale, implementation spec, planet spec, tuning table. Key
+  finding: EEVEE Next silently ignores complex World node trees in headless
+  mode (byte-for-byte identical output confirmed); sphere approach is the
+  canonical solution — object materials always evaluate.
+- **Star sphere spec** (confirmed working): radius=800 UV sphere,
+  `visible_shadow=False`, `use_backface_culling=False`, Generated coords,
+  Noise(Scale=300, Detail=8) → CONSTANT ColorRamp(threshold=0.75) →
+  Emission(strength=8). Star density confirmed by I-frame size jump (5 KB →
+  34 KB). Sun disc: emissive sphere radius=18, strength=120, EEVEE bloom.
+- **`tools/build_jb100.py`** — added separate `mat_jb100_tanks` material so
+  O2 tanks can be colored independently from the belly discs (`mat_jb100_disc`).
+  GLB rebuilt; O2 tanks now dark blue in render scripts via name lookup.
+- **`tools/tmp_jb100_space_action.py`** — 5 s flyby (hero in cockpit, working
+  arm controls, cabin light, dark-blue O2 tanks, engine flare, star sphere,
+  sun, bloom). Cabin light: warm amber POINT (energy=50) parented to ship in
+  local space. Hero follows bar-scene no-parenting pattern with ship at fixed
+  90° Z rotation.
+- **`tools/tmp_jb100_barrel_roll.py`** — 10 s action sequence. Key details:
+  - Ship starts at (64, 57, −3) — twice the original distance back along the
+    flight path — covering 123.6 units in 9 s via quadratic accel, then a 4×
+    speed boost for the final 1 s (punches to distance).
+  - One full 360° quaternion barrel roll: `Quaternion(travel_dir, 2π×t/10) @
+    travel_dir.to_track_quat('-Y', 'Z')`. Hero world position tracks the roll
+    via `final_quat.to_matrix() @ COCKPIT_LOCAL` (no parenting; safe with
+    quaternion rotation).
+  - Camera sweeps from action-shot position to 50% of shoulder position over
+    first 5 s (smoothstep), then holds and tracks the cockpit for the
+    remaining 5 s. `cam_look.to_track_quat('-Z','Y')` every 2 frames.
+
+---
+
 ## 2026-07-12/13 — The JourneyBlasters: JB5K reconstructed, JB100 spun off
 
 Design record: docs/JOURNEYBLASTER.md. Owner-directed, 30+ review

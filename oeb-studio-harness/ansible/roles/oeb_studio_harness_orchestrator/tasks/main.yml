@@ -1,0 +1,30 @@
+---
+- name: Load OS-specific vars
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Validate prerequisites
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Provision service user and group
+  ansible.builtin.import_tasks: user.yml
+
+- name: Create directory hierarchy
+  ansible.builtin.import_tasks: directories.yml
+
+- name: Deploy secrets
+  ansible.builtin.import_tasks: secrets.yml
+
+- name: Deploy Docker Compose stack
+  ansible.builtin.import_tasks: compose.yml
+
+- name: Initialise database and run migrations
+  ansible.builtin.import_tasks: database.yml
+
+- name: Configure firewall rules
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Configure backup timer
+  ansible.builtin.import_tasks: backups.yml
+
+- name: Verify service health
+  ansible.builtin.import_tasks: healthcheck.yml
