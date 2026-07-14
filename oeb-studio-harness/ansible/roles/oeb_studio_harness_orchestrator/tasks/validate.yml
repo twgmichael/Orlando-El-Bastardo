@@ -1,0 +1,38 @@
+---
+- name: Assert ARM64 architecture
+  ansible.builtin.assert:
+    that: ansible_architecture == "aarch64"
+    fail_msg: "This role targets ARM64 (aarch64). Detected: {{ ansible_architecture }}"
+
+- name: Assert minimum 4 GB RAM
+  ansible.builtin.assert:
+    that: ansible_memtotal_mb >= 3800
+    fail_msg: "Minimum 4 GB RAM required. Detected: {{ ansible_memtotal_mb }} MB"
+
+- name: Assert OS family is Debian
+  ansible.builtin.assert:
+    that: ansible_os_family == "Debian"
+    fail_msg: "This role requires a Debian-family OS. Detected: {{ ansible_os_family }}"
+
+- name: Assert oeb_studio_harness_local_network_cidr is configured
+  ansible.builtin.assert:
+    that: oeb_studio_harness_local_network_cidr != "CONFIGURE_IN_INVENTORY"
+    fail_msg: "oeb_studio_harness_local_network_cidr must be set in inventory (e.g. 192.168.1.0/24)"
+
+- name: Assert secrets are defined
+  ansible.builtin.assert:
+    that:
+      - oeb_studio_harness_postgres_password is defined and oeb_studio_harness_postgres_password | length > 0
+      - oeb_studio_harness_db_password is defined and oeb_studio_harness_db_password | length > 0
+      - oeb_studio_harness_admin_token is defined and oeb_studio_harness_admin_token | length > 0
+      - oeb_studio_harness_worker_enrollment_token is defined and oeb_studio_harness_worker_enrollment_token | length > 0
+      - oeb_studio_harness_signing_secret is defined and oeb_studio_harness_signing_secret | length > 0
+    fail_msg: "Required secrets are not defined. Set them in Ansible Vault."
+
+- name: Assert SSD mount exists and is not the system root
+  ansible.builtin.assert:
+    that:
+      - oeb_studio_harness_root is defined
+      - oeb_studio_harness_root | length > 1
+      - oeb_studio_harness_root != "/"
+    fail_msg: "oeb_studio_harness_root must be a valid path on the external SSD"

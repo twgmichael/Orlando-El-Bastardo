@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block head %}
+<meta http-equiv="refresh" content="15">
+{% endblock %}
+
+{% block content %}
+
+<section class="summary-bar">
+  {% set statuses = ["pending", "running", "completed", "failed"] %}
+  {% for s in statuses %}
+  <div class="summary-chip status-{{ s }}">
+    <span class="count">{{ job_counts.get(s, 0) }}</span>
+    <span class="label">{{ s }}</span>
+  </div>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Workers</h2>
+  {% if workers %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Platform</th>
+        <th>Status</th>
+        <th>Capabilities</th>
+        <th>Last Heartbeat</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for w in workers %}
+      <tr>
+        <td class="mono">{{ w.id }}</td>
+        <td>{{ w.platform }}</td>
+        <td><span class="badge status-{{ w.status }}">{{ w.status }}</span></td>
+        <td class="caps">
+          {% for cap in caps_by_worker.get(w.id, []) %}
+          <span class="cap">{{ cap }}</span>
+          {% endfor %}
+        </td>
+        <td class="mono">
+          {% if w.last_heartbeat_at %}
+            {{ w.last_heartbeat_at.strftime("%H:%M:%S") }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No workers registered.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Jobs <small>(last 50)</small></h2>
+  {% if jobs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Policy</th>
+        <th>Worker</th>
+        <th>Priority</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td>{{ j.title }}</td>
+        <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
+        <td class="mono small">{{ j.policy }}</td>
+        <td class="mono small">{{ j.assigned_worker_id or "—" }}</td>
+        <td>{{ j.priority }}</td>
+        <td class="mono small">{{ j.created_at.strftime("%m-%d %H:%M") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No jobs yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Recent Audit Events</h2>
+  {% if audit_events %}
+  <table>
+    <thead>
+      <tr>
+        <th>Event</th>
+        <th>Actor</th>
+        <th>Resource</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in audit_events %}
+      <tr>
+        <td class="mono small">{{ e.event_type }}</td>
+        <td class="mono small">{{ e.actor_type }}:{{ e.actor_id }}</td>
+        <td class="mono small">{{ e.resource_type }}:{{ e.resource_id or "" }}</td>
+        <td class="mono small">{{ e.created_at.strftime("%H:%M:%S") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No audit events yet.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

@@ -1,0 +1,27 @@
+---
+- name: Allow harness API port from local network
+  community.general.ufw:
+    rule: allow
+    port: "{{ oeb_studio_harness_nginx_http_port if oeb_studio_harness_enable_reverse_proxy else oeb_studio_harness_api_port }}"
+    proto: tcp
+    src: "{{ oeb_studio_harness_local_network_cidr }}"
+    comment: oeb-studio-harness API
+  become: true
+
+- name: Allow HTTPS from local network
+  community.general.ufw:
+    rule: allow
+    port: "{{ oeb_studio_harness_nginx_https_port }}"
+    proto: tcp
+    src: "{{ oeb_studio_harness_local_network_cidr }}"
+    comment: oeb-studio-harness HTTPS
+  become: true
+  when: oeb_studio_harness_enable_reverse_proxy
+
+- name: Deny direct PostgreSQL access from outside Docker network
+  community.general.ufw:
+    rule: deny
+    port: "5432"
+    proto: tcp
+    comment: postgres internal only
+  become: true

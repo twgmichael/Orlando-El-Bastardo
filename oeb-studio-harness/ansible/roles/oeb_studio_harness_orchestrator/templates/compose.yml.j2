@@ -1,0 +1,75 @@
+---
+name: {{ oeb_studio_harness_compose_project }}
+
+services:
+
+  postgres:
+    image: postgres:{{ oeb_studio_harness_postgres_version }}-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: harness
+      POSTGRES_DB: harness
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - {{ oeb_studio_harness_root }}/postgres:/var/lib/postgresql/data
+    mem_limit: {{ oeb_studio_harness_postgres_memory_limit }}
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harness -d harness"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  harness-api:
+    image: oeb-studio-harness-api:latest
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: harness.env
+    environment:
+      TZ: {{ oeb_studio_harness_timezone }}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+{% if not oeb_studio_harness_enable_reverse_proxy %}
+    ports:
+      - "{{ oeb_studio_harness_bind_address }}:{{ oeb_studio_harness_api_port }}:8080"
+{% endif %}
+    volumes:
+      - {{ oeb_studio_harness_root }}/artifacts:/srv/oeb-studio-harness/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+{% if oeb_studio_harness_enable_reverse_proxy %}
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "{{ oeb_studio_harness_bind_address }}:{{ oeb_studio_harness_nginx_http_port }}:80"
+      - "{{ oeb_studio_harness_bind_address }}:{{ oeb_studio_harness_nginx_https_port }}:443"
+    volumes:
+      - {{ oeb_studio_harness_root }}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - {{ oeb_studio_harness_root }}/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - harness-api
+    networks:
+      - internal
+{% endif %}
+
+networks:
+  internal:
+    driver: bridge
+
+secrets:
+  postgres_password:
+    file: {{ oeb_studio_harness_root }}/compose/secrets/postgres_password.txt

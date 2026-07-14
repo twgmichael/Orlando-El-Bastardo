@@ -1,0 +1,5 @@
+httpx>=0.27.2
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+pyyaml>=6.0.2
+rumps>=0.4.0

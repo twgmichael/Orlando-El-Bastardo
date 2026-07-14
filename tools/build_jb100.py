@@ -164,6 +164,7 @@ def main():
     mat_dark = mat("mat_jb100_interior", (0.08, 0.08, 0.1), rough=0.8)
     mat_white = mat("mat_jb100_disc", (0.92, 0.92, 0.95), rough=0.35,
                     emission=((1.0, 1.0, 1.0), 0.3))
+    mat_tanks = mat("mat_jb100_tanks", (0.92, 0.92, 0.95), rough=0.35)
     mat_seat = mat("mat_jb100_seat", (0.34, 0.35, 0.4), rough=0.6)
 
     # Two-half hull (v18, like the 1995 original): flat-bottom bowl
@@ -312,7 +313,7 @@ def main():
                  segs=14)
         add_cone(bm, 0.06, 0.036, 0.144, (tx, SEAT_YS[0] + 0.56, 1.65),
                  segs=10)                                    # valve neck
-    tanks = obj_from_bmesh("jb100_tanks", bm, mat_white)
+    tanks = obj_from_bmesh("jb100_tanks", bm, mat_tanks)
     cockpit_parts.append(tanks)
 
     # Senso-globes: four per side riding the hull's side profile;

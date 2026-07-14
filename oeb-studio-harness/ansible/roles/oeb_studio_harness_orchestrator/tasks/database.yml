@@ -1,0 +1,20 @@
+---
+- name: Wait for PostgreSQL to be ready
+  ansible.builtin.command:
+    cmd: >
+      docker exec {{ oeb_studio_harness_compose_project }}-postgres-1
+      pg_isready -U harness -d harness
+  register: pg_ready
+  until: pg_ready.rc == 0
+  retries: 20
+  delay: 3
+  become: true
+  changed_when: false
+
+- name: Run Alembic migrations
+  ansible.builtin.command:
+    cmd: >
+      docker exec {{ oeb_studio_harness_compose_project }}-harness-api-1
+      alembic upgrade head
+  become: true
+  changed_when: true

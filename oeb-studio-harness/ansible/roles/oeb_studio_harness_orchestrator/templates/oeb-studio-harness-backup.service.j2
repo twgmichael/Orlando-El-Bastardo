@@ -1,0 +1,11 @@
+[Unit]
+Description=Studio Harness PostgreSQL backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/oeb-studio-harness-backup-postgres
+User=root
+StandardOutput=journal
+StandardError=journal

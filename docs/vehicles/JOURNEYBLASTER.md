@@ -22,6 +22,9 @@ original 1995 Infini-D designs; Tier 1 provenance.
 - Scale discovery: the salvaged DXF guy stands 1.70 m, the dressed hero
   1.82 m; the DXF rig barely bends when "seated," so furniture sized to
   him dwarfed the hero. Cockpit furniture is sized to the DRESSED hero.
+  Verified in motion 2026-07-13: pilot renders correctly seated in the
+  JB100 cockpit in both `tmp_jb100_space_action.py` and
+  `tmp_jb100_barrel_roll.py`.
 - Library gap: no sci-fi chairs exist in any CC0 pack (House Interior's
   four wooden dining chairs + stool only).
 
@@ -38,6 +41,7 @@ original 1995 Infini-D designs; Tier 1 provenance.
 | Senso-globes | Four per side riding the hull profile, proudest AFT; VIBRANT YELLOW (hot core) |
 | Belly | 16 white thruster discs ringing the belly near the edge; JB100: mounted inside the concave recess, nothing protruding past the hull line. Rotating thrusters (cooperative/individual) modeled as static stubs — individually animatable version needs separate nodes (later variant) |
 | Conventions | Nose −Y (move-cue steerable); flat belly at z = 0; pilot/scale figures live in review rigs, never in the ship asset |
+| Materials | `mat_jb100_tanks` (O2 tanks on chair back) is SEPARATE from `mat_jb100_disc` (belly thruster discs) — allows independent color overrides in render scripts (tanks currently set dark blue via `bpy.data.materials.get("mat_jb100_tanks")`) |
 
 ## Recommendations (open)
 
@@ -47,8 +51,10 @@ original 1995 Infini-D designs; Tier 1 provenance.
 - Separate-node thruster/gimbal variant when flight animation lands.
 - Yakara logo, hull dents ("does not respect warranties"), cockpit
   greebles — detail pass when a scene demands close-ups.
-- Deep-space environment set is the blocker for putting either ship on
-  screen (Episode 1 EXT scenes).
+- Deep-space environment spec is locked (docs/world-building/SPACESCAPE.md)
+  and confirmed working in two render scripts. Pipeline integration
+  (set asset, camera marks, `setup_space_env()` shared module) is the
+  remaining step before Episode 1 EXT scenes.
 
 ## Process notes
 

@@ -1,0 +1,40 @@
+---
+# Root directory for all harness data on the Pi
+oeb_studio_harness_root: /srv/oeb-studio-harness
+
+# Docker Compose project name
+oeb_studio_harness_compose_project: oeb-studio-harness
+
+# API bind settings
+oeb_studio_harness_api_port: 8080
+oeb_studio_harness_bind_address: "0.0.0.0"
+
+# PostgreSQL
+oeb_studio_harness_postgres_version: "17"
+oeb_studio_harness_postgres_memory_limit: "2g"
+
+# Nginx reverse proxy (enabled by default)
+oeb_studio_harness_enable_reverse_proxy: true
+oeb_studio_harness_nginx_http_port: 80
+oeb_studio_harness_nginx_https_port: 443
+
+# Redis (disabled until measured need)
+oeb_studio_harness_enable_redis: false
+
+# Worker protocol timings (seconds)
+oeb_studio_harness_worker_heartbeat_seconds: 20
+oeb_studio_harness_worker_timeout_seconds: 75
+oeb_studio_harness_job_lease_seconds: 120
+
+# Backup retention
+oeb_studio_harness_backup_retention_days: 14
+
+# Timezone
+oeb_studio_harness_timezone: America/New_York
+
+# Local network CIDR for firewall allow rule — MUST be set in inventory
+oeb_studio_harness_local_network_cidr: "CONFIGURE_IN_INVENTORY"
+
+# Service user
+oeb_studio_harness_user: harness
+oeb_studio_harness_group: harness

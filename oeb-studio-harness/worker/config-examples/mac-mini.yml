@@ -1,0 +1,38 @@
+worker_id: mac-mini
+platform: macos-arm64
+agent_version: "0.1.0"
+
+capabilities:
+  - llm.scene_spec
+  - llm.blender_python
+  - llm.general
+  - vision.image_analysis
+  - vision.render_comparison
+  - blender.preview_render
+  - blender.command_line
+
+resources:
+  ram_gb: 32
+  gpu_type: Apple Silicon integrated
+  available_storage_gb: 500
+
+# harness_url and enrollment_token are set via env vars:
+#   OEB_HARNESS_URL=https://studio-orchestrator.local
+#   OEB_ENROLLMENT_TOKEN=<from vault>
+# token_file stores the per-worker token after first registration
+token_file: ~/.oeb-harness-worker-token
+
+poll_interval_seconds: 5
+heartbeat_interval_seconds: 20
+artifact_store_root: /Users/Shared/oeb-studio-harness/artifacts
+output_root: /Volumes/OEB-PROJECT/OEB-PRODUCTION
+
+adapters:
+  ollama:
+    base_url: http://localhost:11434
+    default_model: qwen2.5-coder:14b
+    timeout_seconds: 300
+  blender:
+    executable: blender
+    max_concurrent: 1
+    timeout_seconds: 1800

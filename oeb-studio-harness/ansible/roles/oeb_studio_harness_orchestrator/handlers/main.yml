@@ -1,0 +1,8 @@
+---
+- name: restart studio harness
+  community.docker.docker_compose_v2:
+    project_src: "{{ oeb_studio_harness_root }}/compose"
+    project_name: "{{ oeb_studio_harness_compose_project }}"
+    state: present
+    recreate: always
+  become: true

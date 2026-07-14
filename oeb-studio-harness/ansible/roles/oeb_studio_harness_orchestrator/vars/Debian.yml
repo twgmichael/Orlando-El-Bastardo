@@ -1,0 +1,15 @@
+---
+oeb_studio_harness_packages:
+  - curl
+  - ca-certificates
+  - gnupg
+  - logrotate
+
+oeb_studio_harness_data_dirs:
+  - "{{ oeb_studio_harness_root }}"
+  - "{{ oeb_studio_harness_root }}/postgres"
+  - "{{ oeb_studio_harness_root }}/artifacts"
+  - "{{ oeb_studio_harness_root }}/metadata"
+  - "{{ oeb_studio_harness_root }}/backups"
+  - "{{ oeb_studio_harness_root }}/compose"
+  - "{{ oeb_studio_harness_root }}/nginx"
