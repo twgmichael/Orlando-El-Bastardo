@@ -94,7 +94,11 @@ async def run(config_path: str) -> None:
     # Build adapter registry
     registry = AdapterRegistry()
     registry.register(OllamaAdapter(cfg.adapters.ollama))
-    registry.register(BlenderCLIAdapter(cfg.adapters.blender, output_root=cfg.output_root))
+    registry.register(BlenderCLIAdapter(
+        cfg.adapters.blender,
+        output_root=cfg.output_root,
+        workspace_root=cfg.workspace_root,
+    ))
 
     heartbeat = HeartbeatLoop(client, cfg.worker_id, cfg.heartbeat_interval_seconds)
     runner = JobRunner(client, heartbeat, registry, cfg)

@@ -9,7 +9,7 @@ from app.schemas.job import JobSummary
 class PrimitiveBuildSpec(BaseModel):
     canonical_id: str
     name: str
-    kind: str = "ship"
+    kind: str = "asset"
     style: str
     build_method: str = "blender_primitives"
     components: list[str] = Field(default_factory=list)
@@ -32,6 +32,7 @@ class ConversationProposalResponse(BaseModel):
 class ConversationJobRequest(BaseModel):
     creative_request: str
     spec: PrimitiveBuildSpec
+    llm_response: Optional[str] = None
     priority: int = 0
     policy: str = "run_anywhere"
 

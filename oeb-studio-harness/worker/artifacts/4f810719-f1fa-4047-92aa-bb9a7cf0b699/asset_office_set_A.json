@@ -1,0 +1,18 @@
+{
+  "canonical_id": "asset_office_set_A",
+  "name": "Office Set",
+  "kind": "location",
+  "style": "Modern Office Interior",
+  "components": [
+    "desk",
+    "chair_1",
+    "chair_2",
+    "window",
+    "lamp"
+  ],
+  "variant": "office",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_office_set_A.glb",
+    "preview": "renders/renders/asset_previews/asset_office_set_A.png"
+  }
+}

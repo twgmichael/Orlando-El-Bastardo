@@ -7,6 +7,7 @@ import uuid
 class JobCreateRequest(BaseModel):
     title: str
     description: Optional[str] = None
+    llm_response: Optional[str] = None
     project_id: Optional[uuid.UUID] = None
     required_capabilities: list[str] = []
     policy: str = "run_anywhere"
@@ -20,6 +21,7 @@ class JobSummary(BaseModel):
     id: uuid.UUID
     title: str
     description: Optional[str]
+    llm_response: Optional[str]
     status: str
     required_capabilities: list
     policy: str

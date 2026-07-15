@@ -1,0 +1,19 @@
+{
+  "canonical_id": "ship_simple_space_station_shaped_A",
+  "name": "Simple Space Station T-Shaped",
+  "kind": "ship",
+  "style": "Minimalistic, futuristic design with clean lines and metallic surfaces.",
+  "components": [
+    "wedge nose",
+    "compact dark cockpit",
+    "low main hull",
+    "two swept wings",
+    "two large rear engines",
+    "crooked tail fin",
+    "asymmetric greebles"
+  ],
+  "outputs": {
+    "glb": "renders/assets/ships/ship_simple_space_station_shaped_A.glb",
+    "preview": "renders/renders/asset_previews/ship_simple_space_station_shaped_A.png"
+  }
+}

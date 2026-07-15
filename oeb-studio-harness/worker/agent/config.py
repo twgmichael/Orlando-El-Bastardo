@@ -42,6 +42,7 @@ class WorkerConfig(BaseModel):
     heartbeat_interval_seconds: int = 20
     artifact_store_root: str = "/srv/oeb-studio-harness/artifacts"
     output_root: str = ""  # base path for render/file output; substituted into {output_root} in job script_args
+    workspace_root: str = "."  # base path for repo-relative job scripts; substituted into {workspace_root}
 
 
 _ENV_DEFAULT_PATTERN = re.compile(r"\$\{([A-Z0-9_]+):-([^}]+)\}")
@@ -64,4 +65,9 @@ def load_config(config_path: str) -> WorkerConfig:
     with path.open() as f:
         data = yaml.safe_load(f)
     data = _expand_env_defaults(data)
+    workspace_root = data.get("workspace_root")
+    if workspace_root:
+        workspace_path = Path(workspace_root)
+        if not workspace_path.is_absolute():
+            data["workspace_root"] = str((path.parent / workspace_path).resolve())
     return WorkerConfig(**data)

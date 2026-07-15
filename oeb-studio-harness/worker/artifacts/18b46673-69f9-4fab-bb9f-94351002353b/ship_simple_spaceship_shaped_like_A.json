@@ -1,0 +1,20 @@
+{
+  "canonical_id": "ship_simple_spaceship_shaped_like_A",
+  "name": "Simple Y-shaped Spaceship",
+  "kind": "ship",
+  "style": "Minimalistic, futuristic design.",
+  "components": [
+    "wedge nose",
+    "compact dark cockpit",
+    "low main hull",
+    "two swept wings",
+    "two large rear engines",
+    "crooked tail fin",
+    "asymmetric greebles"
+  ],
+  "variant": "fighter",
+  "outputs": {
+    "glb": "renders/assets/ships/ship_simple_spaceship_shaped_like_A.glb",
+    "preview": "renders/renders/asset_previews/ship_simple_spaceship_shaped_like_A.png"
+  }
+}
