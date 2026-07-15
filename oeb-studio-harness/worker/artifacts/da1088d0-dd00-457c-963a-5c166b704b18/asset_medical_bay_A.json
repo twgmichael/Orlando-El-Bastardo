@@ -1,0 +1,15 @@
+{
+  "canonical_id": "asset_medical_bay_A",
+  "name": "Medical Bay",
+  "kind": "location",
+  "style": "modern hospital design",
+  "components": [
+    "examination_table_center",
+    "medical_computer_background"
+  ],
+  "variant": "component_layout",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_medical_bay_A.glb",
+    "preview": "renders/renders/asset_previews/asset_medical_bay_A.png"
+  }
+}

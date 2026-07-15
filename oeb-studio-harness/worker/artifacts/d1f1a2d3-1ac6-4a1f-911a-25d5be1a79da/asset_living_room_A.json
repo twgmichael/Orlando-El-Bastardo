@@ -1,0 +1,17 @@
+{
+  "canonical_id": "asset_living_room_A",
+  "name": "Living Room",
+  "kind": "location",
+  "style": "modern minimalist design",
+  "components": [
+    "couch_center",
+    "reclining_chair_left",
+    "floor_lamp_right_corner",
+    "television_mounted_wall"
+  ],
+  "variant": "component_layout",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_living_room_A.glb",
+    "preview": "renders/renders/asset_previews/asset_living_room_A.png"
+  }
+}

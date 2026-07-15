@@ -1,0 +1,19 @@
+{
+  "canonical_id": "asset_office_set_A",
+  "name": "Office Set",
+  "kind": "location",
+  "style": "Modern Office Layout",
+  "components": [
+    "office floor",
+    "back wall",
+    "desk",
+    "large window",
+    "lamp",
+    "two chairs"
+  ],
+  "variant": "office",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_office_set_A.glb",
+    "preview": "renders/renders/asset_previews/asset_office_set_A.png"
+  }
+}
