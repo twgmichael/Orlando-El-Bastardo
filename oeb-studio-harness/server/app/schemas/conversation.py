@@ -1,9 +1,33 @@
-from typing import Optional
+from typing import Any, Optional
 import uuid
 
 from pydantic import BaseModel, Field
 
 from app.schemas.job import JobSummary
+
+
+class SceneObject(BaseModel):
+    id: str
+    label: str
+    category: str = "unknown"
+    count: int = 1
+    size: Optional[str] = None
+    placement: Optional[str] = None
+    mounting: Optional[str] = None
+    orientation: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpatialRelationship(BaseModel):
+    subject: str
+    relation: str
+    target: str
+
+
+class ScenePlan(BaseModel):
+    scene_type: str = "asset"
+    style: Optional[str] = None
+    objects: list[SceneObject] = Field(default_factory=list)
+    relationships: list[SpatialRelationship] = Field(default_factory=list)
 
 
 class PrimitiveBuildSpec(BaseModel):
@@ -13,6 +37,8 @@ class PrimitiveBuildSpec(BaseModel):
     style: str
     build_method: str = "blender_primitives"
     components: list[str] = Field(default_factory=list)
+    scene_plan: Optional[ScenePlan] = None
+    repaired_scene_plan: Optional[ScenePlan] = None
     deliverables: list[str] = Field(default_factory=lambda: ["glb", "preview_render", "review_page"])
 
 
@@ -33,6 +59,10 @@ class ConversationJobRequest(BaseModel):
     creative_request: str
     spec: PrimitiveBuildSpec
     llm_response: Optional[str] = None
+    scene_plan_response: Optional[str] = None
+    repair_response: Optional[str] = None
+    scene_plan: Optional[ScenePlan] = None
+    repaired_scene_plan: Optional[ScenePlan] = None
     priority: int = 0
     policy: str = "run_anywhere"
 

@@ -69,7 +69,7 @@ def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
 
 def _infer_kind(creative_request: str) -> str:
     text = creative_request.lower()
-    if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location")):
+    if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab")):
         return "location"
     if _text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not _text_has_any(text, ("room", "office")):
         return "prop"
@@ -87,19 +87,9 @@ def _default_components_for(creative_request: str) -> list[str]:
     station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
     if any(word in text for word in station_words):
         return STATION_COMPONENTS
-    return FIGHTER_COMPONENTS
-
-
-def _request_wants_station(creative_request: str) -> bool:
-    text = creative_request.lower()
-    station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
-    return any(word in text for word in station_words)
-
-
-def _components_look_like_fighter(components: list[str]) -> bool:
-    text = " ".join(components).lower()
-    fighter_words = ("wedge", "cockpit", "wing", "engine", "tail", "fin", "nose")
-    return sum(1 for word in fighter_words if word in text) >= 3
+    if _infer_kind(creative_request) == "vehicle":
+        return FIGHTER_COMPONENTS
+    return ["primary structure", "secondary feature", "detail element"]
 
 
 def _normalize_spec_for_request(creative_request: str, spec: PrimitiveBuildSpec) -> PrimitiveBuildSpec:
@@ -111,10 +101,6 @@ def _normalize_spec_for_request(creative_request: str, spec: PrimitiveBuildSpec)
     if spec.kind not in {"asset", "location", "prop", "vehicle", "character", "set"}:
         spec.kind = inferred_kind
     if not spec.components:
-        spec.components = _default_components_for(creative_request)
-    if _request_wants_station(creative_request) and _components_look_like_fighter(spec.components):
-        spec.components = STATION_COMPONENTS
-    if inferred_kind == "location" and _components_look_like_fighter(spec.components):
         spec.components = _default_components_for(creative_request)
     return spec
 
@@ -183,7 +169,18 @@ async def propose_build(body: ConversationProposalRequest):
 @router.post("/jobs", response_model=ConversationJobResponse, dependencies=[Depends(require_admin)])
 async def create_conversation_job(body: ConversationJobRequest, db: AsyncSession = Depends(get_db)):
     spec = _normalize_spec_for_request(body.creative_request, body.spec)
+    if body.scene_plan and not spec.scene_plan:
+        spec.scene_plan = body.scene_plan
+    if body.repaired_scene_plan and not spec.repaired_scene_plan:
+        spec.repaired_scene_plan = body.repaired_scene_plan
     payload = _build_job_payload(body.creative_request, spec)
+    payload["payload"]["conversation"] = {
+        **payload["payload"]["conversation"],
+        "scene_plan_response": body.scene_plan_response,
+        "repair_response": body.repair_response,
+        "scene_plan": body.scene_plan.model_dump() if body.scene_plan else None,
+        "repaired_scene_plan": body.repaired_scene_plan.model_dump() if body.repaired_scene_plan else None,
+    }
     job = Job(
         title=payload["title"],
         description=payload["description"],

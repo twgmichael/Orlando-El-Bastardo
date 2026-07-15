@@ -1,0 +1,16 @@
+{
+  "canonical_id": "asset_living_room_A",
+  "name": "Living Room",
+  "kind": "location",
+  "style": "modern living space with comfortable furnishings.",
+  "components": [
+    "reclining_chair_center",
+    "floor_lamp_left_side",
+    "television_mounted_center_rear_wall"
+  ],
+  "variant": "component_layout",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_living_room_A.glb",
+    "preview": "renders/renders/asset_previews/asset_living_room_A.png"
+  }
+}

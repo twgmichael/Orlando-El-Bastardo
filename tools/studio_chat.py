@@ -67,7 +67,7 @@ def text_has_any(text: str, words: tuple[str, ...]) -> bool:
 
 def infer_kind(request: str, spec: dict | None = None) -> str:
     text = request_text(request, spec)
-    if text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location")):
+    if text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab")):
         return "location"
     if text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not text_has_any(text, ("room", "office")):
         return "prop"
@@ -95,13 +95,9 @@ def default_components_for(request: str, spec: dict | None = None) -> list[str]:
         return PARK_COMPONENTS
     if request_wants_station(request, spec):
         return STATION_COMPONENTS
-    return FIGHTER_COMPONENTS
-
-
-def components_look_like_fighter(components: list) -> bool:
-    text = " ".join(str(component) for component in components).lower()
-    fighter_words = ("wedge", "cockpit", "wing", "engine", "tail", "fin", "nose")
-    return sum(1 for word in fighter_words if word in text) >= 3
+    if infer_kind(request, spec) == "vehicle":
+        return FIGHTER_COMPONENTS
+    return ["primary structure", "secondary feature", "detail element"]
 
 
 def parse_args():
@@ -146,6 +142,73 @@ def slugify_asset_id(text: str) -> str:
     return f"asset_{stem}_A"
 
 
+def normalize_id(text: str, fallback: str = "object") -> str:
+    words = re.findall(r"[a-z0-9]+", str(text).lower())
+    return "_".join(words) or fallback
+
+
+def named_object_candidates(request: str) -> list[str]:
+    text = request.lower()
+    text = re.sub(r"\b(build|make|create|with|and|a|an|the|in|on|at|to|from|of|for)\b", " ", text)
+    text = re.sub(r"\b(left|right|center|middle|rear|back|front|large|small|tall|wide|facing|mounted)\b", " ", text)
+    parts = [p.strip() for p in re.split(r"[,.;]|\s+and\s+|\s+with\s+", text) if p.strip()]
+    candidates = []
+    for part in parts:
+        words = [w for w in re.findall(r"[a-z0-9]+", part) if w not in {"room", "scene", "set", "location"}]
+        if words:
+            candidates.append("_".join(words[-3:]))
+    return candidates[:12]
+
+
+def scene_object_component(obj: dict) -> str:
+    parts = []
+    count = obj.get("count")
+    size = obj.get("size")
+    label = obj.get("label") or obj.get("id") or "object"
+    placement = obj.get("placement")
+    mounting = obj.get("mounting")
+    orientation = obj.get("orientation") or {}
+
+    if isinstance(count, int) and count > 1:
+        number_words = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+        parts.append(number_words.get(count, str(count)))
+    if size:
+        parts.append(str(size))
+    parts.append(str(label))
+    if placement:
+        parts.append(str(placement))
+    if mounting:
+        parts.append(str(mounting))
+    if isinstance(orientation, dict):
+        faces = orientation.get("faces")
+        if faces:
+            parts.append(f"facing_{faces}")
+    return normalize_id("_".join(parts), "component")
+
+
+def derive_spec_from_scene_plan(request: str, scene_plan: dict) -> dict:
+    objects = scene_plan.get("objects") if isinstance(scene_plan, dict) else []
+    components = []
+    if isinstance(objects, list):
+        for obj in objects:
+            if isinstance(obj, dict):
+                components.append(scene_object_component(obj))
+
+    style = scene_plan.get("style") if isinstance(scene_plan, dict) else None
+    scene_type = scene_plan.get("scene_type") if isinstance(scene_plan, dict) else None
+    return normalize_spec(request, {
+        "canonical_id": slugify_asset_id(request),
+        "name": str(scene_type or "Primitive Asset Concept").replace("_", " ").title(),
+        "kind": infer_kind(request),
+        "style": style or request,
+        "build_method": "blender_primitives",
+        "components": components,
+        "scene_plan": scene_plan,
+        "repaired_scene_plan": scene_plan,
+        "deliverables": ["glb", "preview_render", "review_page"],
+    })
+
+
 def normalize_spec(request: str, spec: dict) -> dict:
     canonical_id = str(spec.get("canonical_id", "")).strip()
     inferred_kind = infer_kind(request, spec)
@@ -163,10 +226,8 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
 
     components = spec.get("components")
-    if not isinstance(components, list) or len(components) < 5:
+    if not isinstance(components, list) or not components:
         spec["components"] = default_components_for(request, spec)
-    elif request_wants_station(request, spec) and components_look_like_fighter(components):
-        spec["components"] = STATION_COMPONENTS
     else:
         generic = {"cube", "sphere", "cylinder", "cone", "primitive"}
         component_words = {str(c).lower().strip() for c in components}
@@ -175,7 +236,84 @@ def normalize_spec(request: str, spec: dict) -> dict:
     return spec
 
 
-def ollama_spec(args) -> dict:
+def ollama_generate(args, prompt: str) -> dict:
+    payload = {
+        "model": args.model,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
+    result = post_json(f"{args.ollama_url.rstrip('/')}/api/generate", payload, timeout=180)
+    raw_response = result["response"]
+    return {
+        "prompt": prompt,
+        "raw_response": raw_response,
+        "parsed_response": extract_json(raw_response),
+    }
+
+
+def scene_plan_prompt(request: str) -> str:
+    return f"""
+You are the production-designer intake assistant for a deterministic Blender studio harness.
+Turn the user's creative request into one strict JSON scene plan. Do not include markdown.
+
+Schema:
+{{
+  "scene_type": "short_snake_case_scene_type",
+  "style": "short visual style summary",
+  "objects": [
+    {{
+      "id": "stable_snake_case_object_id",
+      "label": "human readable object name",
+      "category": "seating|surface|storage|screen|lighting|bed|medical|plant|path|wall_item|machine|structure|unknown",
+      "count": 1,
+      "size": "small|medium|large|wide|tall",
+      "placement": "center|left|right|front|rear_wall|back|corner|on_surface",
+      "mounting": "floor|wall|ceiling|surface",
+      "orientation": {{"faces": "target_object_id"}}
+    }}
+  ],
+  "relationships": [
+    {{"subject": "object_id", "relation": "faces|left_of|right_of|behind|in_front_of|near|on_top_of|mounted_on|inside|around|aligned_with", "target": "object_id_or_scene_feature"}}
+  ]
+}}
+
+Rules:
+- Every named object in the user request must appear as its own object.
+- Preserve quantities, sizes, mounting, placement, and orientation.
+- Relationship records may reference objects, but cannot replace object records.
+- Use primitive-friendly categories. Do not request external assets.
+- Use stable snake_case ids.
+- Output only valid JSON.
+
+User request: {request}
+""".strip()
+
+
+def repair_scene_plan_prompt(request: str, scene_plan: dict, named_objects: list[str]) -> str:
+    return f"""
+You are repairing a scene plan for a deterministic Blender studio harness.
+Compare the original creative request to the parsed scene plan and return one corrected JSON scene plan. Do not include markdown.
+
+Repair rules:
+- Every named object from the request must be represented in objects.
+- Preserve quantities such as two chairs or 3 trees.
+- Preserve size hints like large, small, wide, tall.
+- Preserve mounting and placement hints like rear wall, corner, on desk, background.
+- Preserve relationships like facing, next to, left of, right of, mounted on.
+- Keep object ids stable when they are already good.
+- Output only valid JSON in the same schema.
+
+Original creative request: {request}
+
+Possible named object hints from request: {json.dumps(named_objects)}
+
+Current scene plan:
+{json.dumps(scene_plan, indent=2)}
+""".strip()
+
+
+def legacy_spec_prompt(request: str) -> str:
     prompt = f"""
 You are the production-designer intake assistant for a deterministic Blender studio harness.
 Turn the user's request into one strict JSON object. Do not include markdown.
@@ -195,25 +333,48 @@ Rules:
 - Use kind "location" for places or scenes, "vehicle" for ships/craft, "prop" for single objects, or "asset" when unsure.
 - Use build_method "blender_primitives".
 - Keep components buildable from cubes, cylinders, cones, spheres, and simple materials.
+- Components should be actual requested objects or scene features, not only primitive names.
+- Use short snake_case phrases with semantic nouns and optional hints, like examination_table_center, monitor_on_wall, chair_left, lamp_on_desk, window_back_wall.
+- Every named object in the user request must appear as its own component. Relationship hints may reference other components, but cannot replace them.
+- Do not pad the component list with generic primitives; two specific components are better than five vague ones.
 - Do not request external assets.
 - canonical_id must be lowercase snake case, start with asset_, and end with _A.
 
-User request: {args.request}
+User request: {request}
 """.strip()
-    payload = {
-        "model": args.model,
-        "prompt": prompt,
-        "stream": False,
-        "format": "json",
-    }
-    result = post_json(f"{args.ollama_url.rstrip('/')}/api/generate", payload, timeout=180)
-    raw_response = result["response"]
-    parsed_response = extract_json(raw_response)
+    return prompt
+
+
+def ollama_spec(args) -> dict:
+    scene_trace = ollama_generate(args, scene_plan_prompt(args.request))
+    scene_plan = scene_trace["parsed_response"]
+    named_objects = named_object_candidates(args.request)
+
+    repair_trace = None
+    repaired_scene_plan = scene_plan
+    try:
+        repair_trace = ollama_generate(args, repair_scene_plan_prompt(args.request, scene_plan, named_objects))
+        repaired_scene_plan = repair_trace["parsed_response"]
+    except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError):
+        repair_trace = {
+            "prompt": repair_scene_plan_prompt(args.request, scene_plan, named_objects),
+            "raw_response": "",
+            "parsed_response": scene_plan,
+            "repair_failed": True,
+        }
+
+    spec = derive_spec_from_scene_plan(args.request, repaired_scene_plan)
     return {
-        "prompt": prompt,
-        "raw_response": raw_response,
-        "parsed_response": parsed_response,
-        "spec": normalize_spec(args.request, parsed_response),
+        "scene_plan_prompt": scene_trace["prompt"],
+        "scene_plan_response": scene_trace["raw_response"],
+        "parsed_scene_plan": scene_plan,
+        "repair_prompt": repair_trace["prompt"],
+        "repair_response": repair_trace["raw_response"],
+        "repaired_scene_plan": repaired_scene_plan,
+        "llm_prompt": legacy_spec_prompt(args.request),
+        "raw_response": scene_trace["raw_response"],
+        "parsed_response": scene_plan,
+        "spec": spec,
     }
 
 
@@ -231,7 +392,13 @@ def main() -> int:
     if args.dry_run:
         print(json.dumps({
             "creative_request": args.request,
-            "llm_prompt": llm_trace["prompt"],
+            "scene_plan_prompt": llm_trace["scene_plan_prompt"],
+            "scene_plan_response": llm_trace["scene_plan_response"],
+            "parsed_scene_plan": llm_trace["parsed_scene_plan"],
+            "repair_prompt": llm_trace["repair_prompt"],
+            "repair_response": llm_trace["repair_response"],
+            "repaired_scene_plan": llm_trace["repaired_scene_plan"],
+            "llm_prompt": llm_trace["llm_prompt"],
             "llm_response": llm_trace["raw_response"],
             "parsed_llm_response": llm_trace["parsed_response"],
             "spec": llm_trace["spec"],
@@ -251,6 +418,10 @@ def main() -> int:
             {
                 "creative_request": args.request,
                 "llm_response": llm_trace["raw_response"],
+                "scene_plan_response": llm_trace["scene_plan_response"],
+                "repair_response": llm_trace["repair_response"],
+                "scene_plan": llm_trace["parsed_scene_plan"],
+                "repaired_scene_plan": llm_trace["repaired_scene_plan"],
                 "spec": llm_trace["spec"],
             },
             token=args.admin_token,
