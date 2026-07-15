@@ -17,7 +17,7 @@
 - name: Assert oeb_studio_harness_local_network_cidr is configured
   ansible.builtin.assert:
     that: oeb_studio_harness_local_network_cidr != "CONFIGURE_IN_INVENTORY"
-    fail_msg: "oeb_studio_harness_local_network_cidr must be set in inventory (e.g. 192.168.1.0/24)"
+    fail_msg: "oeb_studio_harness_local_network_cidr must be set in inventory (e.g. 192.168.1.0/24)"  # sweep:ok — example format string
 
 - name: Assert secrets are defined
   ansible.builtin.assert:

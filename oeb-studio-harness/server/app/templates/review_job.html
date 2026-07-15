@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Review {{ job.title }}{% endblock %}
+
+{% block head %}
+{% if job.status in ["pending", "running"] %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>{{ job.title }}</h1>
+    <p>{{ job.description or "No description." }}</p>
+  </div>
+  <span class="badge status-{{ job.status }}">{{ job.status }}</span>
+</section>
+
+<section class="review-grid">
+  <div>
+    <h2>Job</h2>
+    <dl class="details">
+      <dt>ID</dt><dd class="mono small">{{ job.id }}</dd>
+      <dt>Worker</dt><dd class="mono small">{{ job.assigned_worker_id or "—" }}</dd>
+      <dt>Policy</dt><dd class="mono small">{{ job.policy }}</dd>
+      <dt>Created</dt><dd class="mono small">{{ job.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+      <dt>Updated</dt><dd class="mono small">{{ job.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+    </dl>
+  </div>
+
+  <div>
+    <h2>Conversation Spec</h2>
+    {% set convo = job.payload.get("conversation", {}) if job.payload else {} %}
+    {% if convo %}
+    <pre>{{ convo | tojson(indent=2) }}</pre>
+    {% else %}
+    <p class="empty">No conversation payload recorded.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <h2>Artifacts</h2>
+  {% if artifacts %}
+  <div class="artifact-list">
+    {% for artifact in artifacts %}
+    <div class="artifact-row">
+      <div>
+        <a href="/review/artifacts/{{ artifact.id }}">{{ artifact.filename }}</a>
+        <span class="mono small">{{ artifact.artifact_type }}</span>
+      </div>
+      <span class="mono small">{{ artifact.mime_type or "application/octet-stream" }}</span>
+    </div>
+    {% if artifact.mime_type and artifact.mime_type.startswith("image/") %}
+    <img class="preview-image" src="/review/artifacts/{{ artifact.id }}" alt="{{ artifact.filename }}">
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">No artifacts registered yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Attempts</h2>
+  {% if attempts %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Worker</th>
+        <th>Status</th>
+        <th>Started</th>
+        <th>Finished</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for attempt in attempts %}
+      <tr>
+        <td>{{ attempt.attempt_number }}</td>
+        <td class="mono small">{{ attempt.worker_id }}</td>
+        <td><span class="badge status-{{ attempt.status }}">{{ attempt.status }}</span></td>
+        <td class="mono small">{{ attempt.started_at.strftime("%m-%d %H:%M:%S") }}</td>
+        <td class="mono small">
+          {% if attempt.finished_at %}{{ attempt.finished_at.strftime("%m-%d %H:%M:%S") }}{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No attempts yet.</p>
+  {% endif %}
+</section>
+
+{% endblock %}

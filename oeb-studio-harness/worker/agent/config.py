@@ -2,6 +2,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+import os
+import re
 import yaml
 
 
@@ -42,8 +44,24 @@ class WorkerConfig(BaseModel):
     output_root: str = ""  # base path for render/file output; substituted into {output_root} in job script_args
 
 
+_ENV_DEFAULT_PATTERN = re.compile(r"\$\{([A-Z0-9_]+):-([^}]+)\}")
+
+
+def _expand_env_defaults(value):
+    if isinstance(value, str):
+        def repl(match):
+            return os.environ.get(match.group(1), match.group(2))
+        return os.path.expandvars(_ENV_DEFAULT_PATTERN.sub(repl, value))
+    if isinstance(value, dict):
+        return {k: _expand_env_defaults(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env_defaults(v) for v in value]
+    return value
+
+
 def load_config(config_path: str) -> WorkerConfig:
     path = Path(config_path)
     with path.open() as f:
         data = yaml.safe_load(f)
+    data = _expand_env_defaults(data)
     return WorkerConfig(**data)

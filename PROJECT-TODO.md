@@ -25,6 +25,28 @@ them to `PROJECT-DONE.md` with a date.
 
 ---
 
+## Current general priorities — conversation-first studio loop
+
+The absolute project goal is a conversational 3D animation studio: chat with a
+local LLM, escalate to stronger assistants when needed, and have the harness
+produce story-relevant 3D assets, scenes, animations, renders, and production
+artifacts. Prioritize work that shortens the distance from creative sentence to
+visible shot.
+
+1. **Conversation-to-job intake** — build the smallest usable chat entry point
+   where a creative request becomes a structured harness job payload.
+2. **Asset registry lite, only as needed** — keep the registry focused on
+   conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
+   availability, and seed data from `oeb.config.json`.
+3. **Story scene loop** — make one narrative beat travel end-to-end: chat prompt
+   → scene intent → asset lookup → Blender job → preview render → artifact
+   returned to the conversation.
+
+Avoid tool-building that does not directly serve this loop or the immediate
+storytelling pipeline.
+
+---
+
 ## Carryover notes (updated 2026-07-05)
 
 - **Local LLM (Qwen2.5-3B-Instruct Q4) is CONFIRMED** (2026-07-06): passed

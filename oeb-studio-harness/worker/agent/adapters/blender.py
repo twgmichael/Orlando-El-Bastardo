@@ -37,6 +37,8 @@ class BlenderCLIAdapter(Adapter):
     def _resolve_path(self, raw: str) -> str:
         if self._output_root:
             raw = raw.replace("{output_root}", self._output_root)
+        else:
+            raw = raw.replace("{output_root}/", "").replace("{output_root}", "")
         return raw
 
     def execute(self, job: dict) -> AdapterResult:
@@ -144,7 +146,13 @@ class BlenderCLIAdapter(Adapter):
             return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
 
         rendered: list[Path] = []
-        if out:
+        artifact_paths = payload.get("artifact_paths") or []
+        if artifact_paths:
+            for artifact_path in artifact_paths:
+                resolved = Path(self._resolve_path(str(artifact_path)))
+                if resolved.exists():
+                    rendered.append(resolved)
+        elif out:
             rendered = sorted(out.parent.glob(f"{out.stem}*")) or ([out] if out.exists() else [])
 
         is_preview = payload.get("_preview", False)
@@ -152,7 +160,7 @@ class BlenderCLIAdapter(Adapter):
             success=True,
             log_output=log_output,
             artifacts=rendered,
-            artifact_type="preview_render" if is_preview else "final_render",
+            artifact_type=payload.get("artifact_type") or ("preview_render" if is_preview else "final_render"),
             output_summary={"script_file": str(script), "frames_rendered": len(rendered)},
         )
 

@@ -36,7 +36,10 @@ PAGES = [
     ("docs/DECISIONS.md",         "Decisions",      "Standards", "Decisions"),
     ("docs/OPEN-QUESTIONS.md",    "Open-Questions", "Standards", "Open Questions"),
     ("docs/RESOURCES.md",         "Resources",      "Standards", "Resources"),
-    ("docs/JOURNEYBLASTER.md",    "JourneyBlaster", "Design",    "JourneyBlaster"),
+    ("docs/SECURITY.md",          "Security",       "Standards", "Security"),
+    ("docs/vehicles/JOURNEYBLASTER.md", "JourneyBlaster", "Design", "JourneyBlaster"),
+    ("docs/world-building/SPACESCAPE.md",       "Spacescape",        "Design", "Spacescape"),
+    ("docs/world-building/FLIGHT-ANIMATION.md", "Flight-Animation",  "Design", "Flight Animation"),
     ("docs/planning/AGENT-WORKFLOW-PLAN.md", "Agent-Workflow-Plan",
      "Planning", "Agent Workflow Plan"),
     ("docs/planning/PRODUCER-PLAN.md",       "Producer-Plan",
@@ -67,6 +70,10 @@ PAGES = [
      "Planning", "Studio Harness Vision"),
     ("docs/planning/STUDIO-HARNESS-ANSIBLE-SPEC.md", "Studio-Harness-Ansible-Spec",
      "Planning", "Studio Harness Ansible Spec"),
+    ("docs/planning/ASSET-REGISTRY-PLAN.md", "Asset-Registry-Plan",
+     "Planning", "Asset Registry Plan"),
+    ("docs/planning/CONVERSATION-TO-BUILD-LOOP.md", "Conversation-To-Build-Loop",
+     "Planning", "Conversation To Build Loop"),
     ("PROJECT-TODO.md",           "Roadmap",     "Tracking", "Roadmap"),
     ("PROJECT-DONE.md",           "Journal-Log", "Tracking", "Journal Log"),
 ]
@@ -169,7 +176,25 @@ def main():
                 os.remove(os.path.join(wiki, entry))
                 print(f"[sync_wiki] pruned {entry}")
 
-    print(f"[sync_wiki] done — {len(generated)} pages @ {rev}. Review the "
+    # Warn about docs/ files not in PAGES so nothing gets silently forgotten.
+    registered = {os.path.normpath(src) for src, *_ in PAGES}
+    unregistered = []
+    for dirpath, _dirs, files in os.walk("docs"):
+        if os.path.normpath(dirpath).startswith(os.path.normpath("docs/local")):
+            continue
+        for fname in sorted(files):
+            if not fname.endswith(".md"):
+                continue
+            rel = os.path.normpath(os.path.join(dirpath, fname))
+            if rel not in registered:
+                unregistered.append(rel)
+    if unregistered:
+        print(f"\n[sync_wiki] WARNING — {len(unregistered)} docs/ file(s) not in PAGES "
+              f"(add to sync_wiki.py PAGES or ignore):")
+        for u in unregistered:
+            print(f"  {u}")
+
+    print(f"\n[sync_wiki] done — {len(generated)} pages @ {rev}. Review the "
           f"wiki working tree, then commit and push it yourself.")
 
 

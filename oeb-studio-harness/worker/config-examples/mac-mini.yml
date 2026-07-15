@@ -24,8 +24,8 @@ token_file: ~/.oeb-harness-worker-token
 
 poll_interval_seconds: 5
 heartbeat_interval_seconds: 20
-artifact_store_root: /Users/Shared/oeb-studio-harness/artifacts
-output_root: /Volumes/OEB-PROJECT/OEB-PRODUCTION
+artifact_store_root: ${OEB_ARTIFACT_STORE_ROOT:-artifacts}
+output_root: ${OEB_OUTPUT_ROOT:-renders}
 
 adapters:
   ollama:
