@@ -102,13 +102,19 @@ def create_app() -> FastAPI:
     from app.routers.workers import router as workers_router
     from app.routers.jobs import router as jobs_router
     from app.routers.artifacts import router as artifacts_router
+    from app.routers.assets import router as assets_router
+    from app.routers.conversations import router as conversations_router
+    from app.routers.review import router as review_router
 
     app.include_router(health_router)
     app.include_router(dashboard_router)
+    app.include_router(review_router)
     app.include_router(projects_router, prefix="/api/v1")
     app.include_router(workers_router, prefix="/api/v1")
     app.include_router(jobs_router, prefix="/api/v1")
     app.include_router(artifacts_router, prefix="/api/v1")
+    app.include_router(assets_router, prefix="/api/v1")
+    app.include_router(conversations_router, prefix="/api/v1")
 
     return app
 

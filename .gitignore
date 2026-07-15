@@ -1,7 +1,9 @@
 .venv/
-models
+models/
+!oeb-studio-harness/server/app/models/
+!oeb-studio-harness/server/app/models/*.py
 llm
-assets
+assets/
 __pycache__/
 renders
 out

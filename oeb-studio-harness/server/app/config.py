@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     job_lease_seconds: int = Field(default=120, alias="JOB_LEASE_SECONDS")
 
     artifacts_root: str = Field(default="/srv/oeb-studio-harness/artifacts", alias="ARTIFACTS_ROOT")
+    asset_root: str = Field(default="assets", alias="OEB_ASSET_ROOT")
+    oeb_config_path: str = Field(default="../../oeb.config.json", alias="OEB_CONFIG_PATH")
     timezone: str = "America/New_York"
 
     # Derived at validation time; not set from env
