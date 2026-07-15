@@ -14,6 +14,7 @@ class Job(Base):
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
     required_capabilities: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     policy: Mapped[str] = mapped_column(String(64), default="run_anywhere", nullable=False)

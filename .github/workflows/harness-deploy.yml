@@ -1,0 +1,50 @@
+# Harness deploy — SSH into the Pi, pull, rebuild, restart on server code changes.
+#
+# Secrets required (set in GitHub repo Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_KEY       private key for the deploy user on the Pi
+#   DEPLOY_HOST          Pi hostname or IP
+#   DEPLOY_USER          Pi user (must be in the docker group)
+#   DEPLOY_REPO_PATH     absolute path to the repo on the Pi
+#   DEPLOY_COMPOSE_PATH  absolute path to the compose directory on the Pi
+#
+# Ansible-managed config changes (harness.env, nginx, firewall) are NOT
+# handled here — run the Ansible playbook from the Mac when those change.
+
+name: Harness deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "oeb-studio-harness/server/**"
+      - ".github/workflows/harness-deploy.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH key
+        run: |
+          install -m 600 -D /dev/null ~/.ssh/id_rsa
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pull latest code on Pi
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "git -C '${{ secrets.DEPLOY_REPO_PATH }}' pull"
+
+      - name: Rebuild harness-api image
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "docker compose -f '${{ secrets.DEPLOY_COMPOSE_PATH }}/compose.yml' build harness-api"
+
+      - name: Restart harness-api container
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "docker compose -f '${{ secrets.DEPLOY_COMPOSE_PATH }}/compose.yml' up -d harness-api"
+
+      - name: Health check (30 s timeout)
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "for i in \$(seq 1 6); do curl -sf http://localhost:8080/health && exit 0; sleep 5; done; echo 'Health check failed'; exit 1"

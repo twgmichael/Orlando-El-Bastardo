@@ -131,7 +131,11 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
 
         registry = AdapterRegistry()
         registry.register(OllamaAdapter(cfg.adapters.ollama))
-        registry.register(BlenderCLIAdapter(cfg.adapters.blender, output_root=cfg.output_root))
+        registry.register(BlenderCLIAdapter(
+            cfg.adapters.blender,
+            output_root=cfg.output_root,
+            workspace_root=cfg.workspace_root,
+        ))
 
         heartbeat = HeartbeatLoop(
             client,

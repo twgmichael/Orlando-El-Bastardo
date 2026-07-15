@@ -39,6 +39,15 @@
     <p class="empty">No conversation payload recorded.</p>
     {% endif %}
   </div>
+
+  <div>
+    <h2>LLM Response</h2>
+    {% if job.llm_response %}
+    <pre>{{ job.llm_response }}</pre>
+    {% else %}
+    <p class="empty">No LLM response recorded.</p>
+    {% endif %}
+  </div>
 </section>
 
 <section>
