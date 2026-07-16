@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     artifacts_root: str = Field(default="/srv/oeb-studio-harness/artifacts", alias="ARTIFACTS_ROOT")
     asset_root: str = Field(default="assets", alias="OEB_ASSET_ROOT")
     oeb_config_path: str = Field(default="../../oeb.config.json", alias="OEB_CONFIG_PATH")
+    studio_chat_harness_url: str = Field(default="", alias="OEB_STUDIO_CHAT_HARNESS_URL")
+    studio_chat_admin_token: str = Field(default="", alias="OEB_STUDIO_CHAT_ADMIN_TOKEN")
+    studio_chat_ollama_url: str = Field(default="http://host.docker.internal:11434", alias="OEB_STUDIO_CHAT_OLLAMA_URL")
+    studio_chat_model: str = Field(default="oeb-qwen2.5-3b", alias="OEB_STUDIO_CHAT_MODEL")
     timezone: str = "America/New_York"
 
     # Derived at validation time; not set from env

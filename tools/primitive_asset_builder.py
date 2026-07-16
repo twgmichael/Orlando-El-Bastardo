@@ -658,6 +658,7 @@ def main():
         "name": spec.get("name"),
         "kind": spec.get("kind"),
         "style": spec.get("style"),
+        "creative_request": spec.get("creative_request"),
         "components": spec.get("components", []),
         "scene_plan": spec.get("scene_plan"),
         "repaired_scene_plan": spec.get("repaired_scene_plan"),

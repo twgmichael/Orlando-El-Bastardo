@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, Depends
@@ -10,6 +11,8 @@ from app.database import get_db
 from app.models.audit import AuditEvent
 from app.models.job import Job
 from app.schemas.conversation import (
+    ConversationAcceptRequest,
+    ConversationAcceptResponse,
     ConversationJobRequest,
     ConversationJobResponse,
     ConversationProposalRequest,
@@ -64,7 +67,8 @@ def _slugify_asset_id(text: str) -> str:
 
 
 def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
-    return any(word in text for word in words)
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return any(word in tokens for word in words)
 
 
 def _infer_kind(creative_request: str) -> str:
@@ -116,9 +120,11 @@ def _proposal_from_request(creative_request: str) -> PrimitiveBuildSpec:
 
 
 def _build_job_payload(creative_request: str, spec: PrimitiveBuildSpec) -> dict:
-    asset_path = PurePosixPath("assets") / f"{spec.kind}s" / f"{spec.canonical_id}.glb"
-    preview_path = PurePosixPath("renders") / "asset_previews" / f"{spec.canonical_id}.png"
-    manifest_path = PurePosixPath("out") / "asset_builds" / f"{spec.canonical_id}.json"
+    spec.creative_request = creative_request
+    job_root = PurePosixPath("jobs") / "{job_id}"
+    asset_path = job_root / "assets" / f"{spec.kind}s" / f"{spec.canonical_id}.glb"
+    preview_path = job_root / "renders" / "asset_previews" / f"{spec.canonical_id}.png"
+    manifest_path = job_root / "out" / "asset_builds" / f"{spec.canonical_id}.json"
     spec_json = spec.model_dump_json()
 
     return {
@@ -155,6 +161,26 @@ def _build_job_payload(creative_request: str, spec: PrimitiveBuildSpec) -> dict:
     }
 
 
+@router.post("/accept", response_model=ConversationAcceptResponse, dependencies=[Depends(require_admin)])
+async def accept_prompt(body: ConversationAcceptRequest, db: AsyncSession = Depends(get_db)):
+    accepted_at = datetime.now(timezone.utc)
+    db.add(AuditEvent(
+        event_type="conversation.prompt_accepted",
+        actor_type="user",
+        actor_id="admin",
+        resource_type="conversation",
+        resource_id=None,
+        details={
+            "creative_request": body.creative_request,
+        },
+    ))
+    await db.commit()
+    return ConversationAcceptResponse(
+        creative_request=body.creative_request,
+        accepted_at=accepted_at,
+    )
+
+
 @router.post("/proposals", response_model=ConversationProposalResponse,
              dependencies=[Depends(require_admin)])
 async def propose_build(body: ConversationProposalRequest):
@@ -176,7 +202,10 @@ async def create_conversation_job(body: ConversationJobRequest, db: AsyncSession
     payload = _build_job_payload(body.creative_request, spec)
     payload["payload"]["conversation"] = {
         **payload["payload"]["conversation"],
+        "llm_prompt": body.llm_prompt,
+        "scene_plan_prompt": body.scene_plan_prompt,
         "scene_plan_response": body.scene_plan_response,
+        "repair_prompt": body.repair_prompt,
         "repair_response": body.repair_response,
         "scene_plan": body.scene_plan.model_dump() if body.scene_plan else None,
         "repaired_scene_plan": body.repaired_scene_plan.model_dump() if body.repaired_scene_plan else None,

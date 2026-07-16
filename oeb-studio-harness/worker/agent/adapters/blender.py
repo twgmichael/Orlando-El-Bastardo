@@ -35,27 +35,28 @@ class BlenderCLIAdapter(Adapter):
         caps = set(job.get("required_capabilities") or [])
         return bool(caps & BLENDER_CAPABILITIES)
 
-    def _resolve_path(self, raw: str) -> str:
+    def _resolve_path(self, raw: str, job_id: str = "") -> str:
         if self._output_root:
             raw = raw.replace("{output_root}", self._output_root)
         else:
             raw = raw.replace("{output_root}/", "").replace("{output_root}", "")
         raw = raw.replace("{workspace_root}", self._workspace_root)
+        raw = raw.replace("{job_id}", job_id)
         return raw
 
-    def _resolve_existing_path(self, raw: str, label: str, cwd: str | None = None) -> Path:
-        resolved = _safe_path(self._resolve_path(raw), label)
+    def _resolve_existing_path(self, raw: str, label: str, cwd: str | None = None, job_id: str = "") -> Path:
+        resolved = _safe_path(self._resolve_path(raw, job_id=job_id), label)
         if cwd and not resolved.is_absolute():
-            cwd_path = _safe_path(self._resolve_path(cwd), "cwd")
+            cwd_path = _safe_path(self._resolve_path(cwd, job_id=job_id), "cwd")
             if not cwd_path.is_absolute():
                 cwd_path = cwd_path.resolve()
             return cwd_path / resolved
         return resolved
 
-    def _resolve_runtime_path(self, raw: str, label: str, cwd: str | None = None) -> Path:
-        resolved = _safe_path(self._resolve_path(raw), label)
+    def _resolve_runtime_path(self, raw: str, label: str, cwd: str | None = None, job_id: str = "") -> Path:
+        resolved = _safe_path(self._resolve_path(raw, job_id=job_id), label)
         if cwd and not resolved.is_absolute():
-            cwd_path = _safe_path(self._resolve_path(cwd), "cwd")
+            cwd_path = _safe_path(self._resolve_path(cwd, job_id=job_id), "cwd")
             if not cwd_path.is_absolute():
                 cwd_path = cwd_path.resolve()
             return cwd_path / resolved
@@ -69,20 +70,20 @@ class BlenderCLIAdapter(Adapter):
         if blend_file and script_file:
             return AdapterResult(success=False, error="payload must specify blend_file or script_file, not both")
         if blend_file:
-            return self._execute_blend(payload)
+            return self._execute_blend(payload, job.get("id", ""))
         if script_file:
-            return self._execute_script(payload)
+            return self._execute_script(payload, job.get("id", ""))
         return AdapterResult(success=False, error="payload requires blend_file or script_file")
 
-    def _execute_blend(self, payload: dict) -> AdapterResult:
+    def _execute_blend(self, payload: dict, job_id: str = "") -> AdapterResult:
         blend_file = payload.get("blend_file")
         output_path = payload.get("output_path")
         if not output_path:
             return AdapterResult(success=False, error="payload requires output_path with blend_file")
 
         try:
-            blend = _safe_path(blend_file, "blend_file")
-            out = _safe_path(output_path, "output_path")
+            blend = self._resolve_existing_path(blend_file, "blend_file", job_id=job_id)
+            out = self._resolve_runtime_path(output_path, "output_path", job_id=job_id)
         except ValueError as exc:
             return AdapterResult(success=False, error=str(exc))
 
@@ -138,14 +139,14 @@ class BlenderCLIAdapter(Adapter):
             output_summary={"blend_file": str(blend), "engine": engine, "frames_rendered": len(rendered)},
         )
 
-    def _execute_script(self, payload: dict) -> AdapterResult:
+    def _execute_script(self, payload: dict, job_id: str = "") -> AdapterResult:
         script_file = payload.get("script_file")
         output_path = payload.get("output_path")
-        cwd = self._resolve_path(payload.get("cwd")) if payload.get("cwd") else None
+        cwd = self._resolve_path(payload.get("cwd"), job_id=job_id) if payload.get("cwd") else None
 
         try:
-            script = self._resolve_existing_path(script_file, "script_file", cwd=cwd)
-            out = self._resolve_runtime_path(output_path, "output_path", cwd=cwd) if output_path else None
+            script = self._resolve_existing_path(script_file, "script_file", cwd=cwd, job_id=job_id)
+            out = self._resolve_runtime_path(output_path, "output_path", cwd=cwd, job_id=job_id) if output_path else None
         except ValueError as exc:
             return AdapterResult(success=False, error=str(exc))
 
@@ -158,7 +159,7 @@ class BlenderCLIAdapter(Adapter):
         cmd = [self._cfg.executable, "--background", "--python", str(script)]
         script_args = payload.get("script_args")
         if script_args:
-            cmd += ["--"] + [self._resolve_path(str(a)) for a in script_args]
+            cmd += ["--"] + [self._resolve_path(str(a), job_id=job_id) for a in script_args]
 
         log_output, returncode = self._run(cmd, cwd=cwd)
         if returncode != 0:
@@ -168,7 +169,7 @@ class BlenderCLIAdapter(Adapter):
         artifact_paths = payload.get("artifact_paths") or []
         if artifact_paths:
             for artifact_path in artifact_paths:
-                resolved = self._resolve_runtime_path(str(artifact_path), "artifact_path", cwd=cwd)
+                resolved = self._resolve_runtime_path(str(artifact_path), "artifact_path", cwd=cwd, job_id=job_id)
                 if resolved.exists():
                     rendered.append(resolved)
         elif out:

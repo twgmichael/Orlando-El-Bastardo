@@ -5,9 +5,18 @@ import httpx
 log = logging.getLogger(__name__)
 
 
+def _normalize_base_url(base_url: str) -> str:
+    url = base_url.strip().rstrip("/")
+    if url and "://" not in url:
+        url = f"http://{url}"
+    if not url:
+        raise ValueError("Harness base URL is empty; set harness_url or OEB_HARNESS_URL")
+    return url
+
+
 class HarnessClient:
     def __init__(self, base_url: str, worker_token: str = "", enrollment_token: str = ""):
-        self._base = base_url.rstrip("/")
+        self._base = _normalize_base_url(base_url)
         self._worker_token = worker_token
         self._enrollment_token = enrollment_token
 

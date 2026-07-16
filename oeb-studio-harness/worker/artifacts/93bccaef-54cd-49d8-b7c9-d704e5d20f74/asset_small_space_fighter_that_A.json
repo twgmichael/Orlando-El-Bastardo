@@ -1,0 +1,121 @@
+{
+  "canonical_id": "asset_small_space_fighter_that_A",
+  "name": "Space Fighter",
+  "kind": "vehicle",
+  "style": "simple|abstract",
+  "creative_request": "Build a small space fighter that looks like the capital letter A.",
+  "components": [
+    "small_fighter_body_center_floor_facing_object_2",
+    "small_fighter_engine_front_floor_facing_object_1",
+    "two_small_fighter_panel_corner_rear_wall_floor"
+  ],
+  "scene_plan": {
+    "scene_type": "space_fighter",
+    "style": "simple|abstract",
+    "objects": [
+      {
+        "id": "object_1",
+        "label": "fighter_body",
+        "category": "structure",
+        "count": 1,
+        "size": "small",
+        "placement": "center",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "object_2"
+        }
+      },
+      {
+        "id": "object_2",
+        "label": "fighter_engine",
+        "category": "lighting",
+        "count": 1,
+        "size": "small",
+        "placement": "front",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "object_1"
+        }
+      },
+      {
+        "id": "object_3",
+        "label": "fighter_panel",
+        "category": "structure",
+        "count": 2,
+        "size": "small",
+        "placement": "corner|rear_wall",
+        "mounting": "floor",
+        "orientation": {}
+      }
+    ],
+    "relationships": [
+      {
+        "subject": "object_2",
+        "relation": "mounted_on",
+        "target": "object_1"
+      },
+      {
+        "subject": "object_3",
+        "relation": "facing",
+        "target": "object_2"
+      }
+    ]
+  },
+  "repaired_scene_plan": {
+    "scene_type": "space_fighter",
+    "style": "simple|abstract",
+    "objects": [
+      {
+        "id": "object_1",
+        "label": "fighter_body",
+        "category": "structure",
+        "count": 1,
+        "size": "small",
+        "placement": "center",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "object_2"
+        }
+      },
+      {
+        "id": "object_2",
+        "label": "fighter_engine",
+        "category": "lighting",
+        "count": 1,
+        "size": "small",
+        "placement": "front",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "object_1"
+        }
+      },
+      {
+        "id": "object_3",
+        "label": "fighter_panel",
+        "category": "structure",
+        "count": 2,
+        "size": "small",
+        "placement": "corner|rear_wall",
+        "mounting": "floor",
+        "orientation": {}
+      }
+    ],
+    "relationships": [
+      {
+        "subject": "object_2",
+        "relation": "mounted_on",
+        "target": "object_1"
+      },
+      {
+        "subject": "object_3",
+        "relation": "facing",
+        "target": "object_2"
+      }
+    ]
+  },
+  "variant": "component_layout",
+  "outputs": {
+    "glb": "renders/assets/vehicles/asset_small_space_fighter_that_A.glb",
+    "preview": "renders/renders/asset_previews/asset_small_space_fighter_that_A.png"
+  }
+}

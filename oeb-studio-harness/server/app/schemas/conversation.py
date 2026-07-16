@@ -1,4 +1,5 @@
 from typing import Any, Optional
+from datetime import datetime
 import uuid
 
 from pydantic import BaseModel, Field
@@ -35,6 +36,7 @@ class PrimitiveBuildSpec(BaseModel):
     name: str
     kind: str = "asset"
     style: str
+    creative_request: Optional[str] = None
     build_method: str = "blender_primitives"
     components: list[str] = Field(default_factory=list)
     scene_plan: Optional[ScenePlan] = None
@@ -44,6 +46,17 @@ class PrimitiveBuildSpec(BaseModel):
 
 class ConversationProposalRequest(BaseModel):
     creative_request: str
+
+
+class ConversationAcceptRequest(BaseModel):
+    creative_request: str
+
+
+class ConversationAcceptResponse(BaseModel):
+    accepted: bool = True
+    status: str = "accepted"
+    creative_request: str
+    accepted_at: datetime
 
 
 class ConversationProposalResponse(BaseModel):
@@ -59,7 +72,10 @@ class ConversationJobRequest(BaseModel):
     creative_request: str
     spec: PrimitiveBuildSpec
     llm_response: Optional[str] = None
+    llm_prompt: Optional[str] = None
+    scene_plan_prompt: Optional[str] = None
     scene_plan_response: Optional[str] = None
+    repair_prompt: Optional[str] = None
     repair_response: Optional[str] = None
     scene_plan: Optional[ScenePlan] = None
     repaired_scene_plan: Optional[ScenePlan] = None

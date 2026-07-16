@@ -1,0 +1,331 @@
+import json
+import re
+import urllib.request
+
+from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
+
+FIGHTER_COMPONENTS = [
+    "wedge nose",
+    "compact dark cockpit",
+    "low main hull",
+    "two swept wings",
+    "two large rear engines",
+    "crooked tail fin",
+    "asymmetric greebles",
+]
+OFFICE_COMPONENTS = [
+    "office floor",
+    "back wall",
+    "desk",
+    "large window",
+    "lamp",
+    "two chairs",
+]
+PARK_COMPONENTS = [
+    "grass ground",
+    "walking path",
+    "four trees",
+    "park bench",
+]
+STATION_COMPONENTS = [
+    "central habitat hub",
+    "large observation window",
+    "outer ring modules",
+    "four docking arms",
+    "antenna mast",
+    "solar panel arrays",
+]
+
+
+class StudioChatLLMConfig:
+    def __init__(self, ollama_url: str, model: str):
+        self.ollama_url = ollama_url
+        self.model = model
+
+
+def post_json(url: str, payload: dict, token: str | None = None, timeout: int = 60) -> dict:
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def extract_json(text: str) -> dict:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:]
+    return json.loads(text.strip())
+
+
+def text_has_any(text: str, words: tuple[str, ...]) -> bool:
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return any(word in tokens for word in words)
+
+
+def request_text(request: str, spec: dict | None = None) -> str:
+    parts = [request]
+    if spec:
+        parts.extend([
+            str(spec.get("canonical_id", "")),
+            str(spec.get("name", "")),
+            str(spec.get("style", "")),
+            " ".join(str(c) for c in spec.get("components", [])),
+        ])
+    return " ".join(parts).lower()
+
+
+def infer_kind(request: str, spec: dict | None = None) -> str:
+    text = request_text(request, spec)
+    if text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab")):
+        return "location"
+    if text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not text_has_any(text, ("room", "office")):
+        return "prop"
+    if text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck")):
+        return "vehicle"
+    return "asset"
+
+
+def default_components_for(request: str, spec: dict | None = None) -> list[str]:
+    text = request_text(request, spec)
+    if text_has_any(text, ("office", "desk", "chair", "lamp", "workspace")):
+        return OFFICE_COMPONENTS
+    if text_has_any(text, ("park", "tree", "path", "trail", "bench", "grass", "garden")):
+        return PARK_COMPONENTS
+    if text_has_any(text, ("station", "orbital", "habitat", "ring", "dock", "solar")):
+        return STATION_COMPONENTS
+    if infer_kind(request, spec) == "vehicle":
+        return FIGHTER_COMPONENTS
+    return ["primary structure", "secondary feature", "detail element"]
+
+
+def slugify_asset_id(text: str) -> str:
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    skip = {"a", "an", "the", "me", "make", "build", "from", "with", "of", "and"}
+    useful = [w for w in words if w not in skip]
+    stem = "_".join(useful[:4]) or "primitive_asset"
+    return f"asset_{stem}_A"
+
+
+def normalize_id(text: str, fallback: str = "object") -> str:
+    words = re.findall(r"[a-z0-9]+", str(text).lower())
+    return "_".join(words) or fallback
+
+
+def named_object_candidates(request: str) -> list[str]:
+    text = request.lower()
+    text = re.sub(r"\b(build|make|create|with|and|a|an|the|in|on|at|to|from|of|for)\b", " ", text)
+    text = re.sub(r"\b(left|right|center|middle|rear|back|front|large|small|tall|wide|facing|mounted)\b", " ", text)
+    parts = [p.strip() for p in re.split(r"[,.;]|\s+and\s+|\s+with\s+", text) if p.strip()]
+    candidates = []
+    for part in parts:
+        words = [w for w in re.findall(r"[a-z0-9]+", part) if w not in {"room", "scene", "set", "location"}]
+        if words:
+            candidates.append("_".join(words[-3:]))
+    return candidates[:12]
+
+
+def scene_object_component(obj: dict) -> str:
+    parts = []
+    count = obj.get("count")
+    size = obj.get("size")
+    label = obj.get("label") or obj.get("id") or "object"
+    placement = obj.get("placement")
+    mounting = obj.get("mounting")
+    orientation = obj.get("orientation") or {}
+
+    if isinstance(count, int) and count > 1:
+        number_words = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+        parts.append(number_words.get(count, str(count)))
+    if size:
+        parts.append(str(size))
+    parts.append(str(label))
+    if placement:
+        parts.append(str(placement))
+    if mounting:
+        parts.append(str(mounting))
+    if isinstance(orientation, dict):
+        faces = orientation.get("faces")
+        if faces:
+            parts.append(f"facing_{faces}")
+    return normalize_id("_".join(parts), "component")
+
+
+def normalize_spec(request: str, spec: dict) -> dict:
+    canonical_id = str(spec.get("canonical_id", "")).strip()
+    inferred_kind = infer_kind(request, spec)
+    if (
+        not re.fullmatch(r"[a-z]+_[a-z0-9_]+_A", canonical_id)
+        or "snake_case" in canonical_id
+        or canonical_id in {"ship_A", "asset_A"}
+        or (canonical_id.startswith("ship_") and inferred_kind != "vehicle")
+    ):
+        spec["canonical_id"] = slugify_asset_id(request)
+
+    spec.setdefault("name", "Primitive Asset Concept")
+    spec["kind"] = inferred_kind
+    spec["creative_request"] = request
+    spec["build_method"] = "blender_primitives"
+    spec["deliverables"] = ["glb", "preview_render", "review_page"]
+
+    components = spec.get("components")
+    if not isinstance(components, list) or not components:
+        spec["components"] = default_components_for(request, spec)
+    else:
+        generic = {"cube", "sphere", "cylinder", "cone", "primitive"}
+        component_words = {str(c).lower().strip() for c in components}
+        if component_words <= generic:
+            spec["components"] = default_components_for(request, spec)
+    return spec
+
+
+def derive_spec_from_scene_plan(request: str, scene_plan: dict) -> PrimitiveBuildSpec:
+    objects = scene_plan.get("objects") if isinstance(scene_plan, dict) else []
+    components = []
+    if isinstance(objects, list):
+        for obj in objects:
+            if isinstance(obj, dict):
+                components.append(scene_object_component(obj))
+
+    style = scene_plan.get("style") if isinstance(scene_plan, dict) else None
+    scene_type = scene_plan.get("scene_type") if isinstance(scene_plan, dict) else None
+    spec = normalize_spec(request, {
+        "canonical_id": slugify_asset_id(request),
+        "name": str(scene_type or "Primitive Asset Concept").replace("_", " ").title(),
+        "kind": infer_kind(request),
+        "style": style or request,
+        "creative_request": request,
+        "build_method": "blender_primitives",
+        "components": components,
+        "scene_plan": scene_plan,
+        "repaired_scene_plan": scene_plan,
+        "deliverables": ["glb", "preview_render", "review_page"],
+    })
+    return PrimitiveBuildSpec.model_validate(spec)
+
+
+def scene_plan_prompt(request: str) -> str:
+    return f"""
+You are the production-designer intake assistant for a deterministic Blender studio harness.
+Turn the user's creative request into one strict JSON scene plan. Do not include markdown.
+
+Schema:
+{{
+  "scene_type": "short_snake_case_scene_type",
+  "style": "short visual style summary",
+  "objects": [
+    {{
+      "id": "stable_snake_case_object_id",
+      "label": "human readable object name",
+      "category": "seating|surface|storage|screen|lighting|bed|medical|plant|path|wall_item|machine|structure|unknown",
+      "count": 1,
+      "size": "small|medium|large|wide|tall",
+      "placement": "center|left|right|front|rear_wall|back|corner|on_surface",
+      "mounting": "floor|wall|ceiling|surface",
+      "orientation": {{"faces": "target_object_id"}}
+    }}
+  ],
+  "relationships": [
+    {{"subject": "object_id", "relation": "faces|left_of|right_of|behind|in_front_of|near|on_top_of|mounted_on|inside|around|aligned_with", "target": "object_id_or_scene_feature"}}
+  ]
+}}
+
+Rules:
+- Every named object in the user request must appear as its own object.
+- Preserve quantities, sizes, mounting, placement, and orientation.
+- Relationship records may reference objects, but cannot replace object records.
+- Use primitive-friendly categories. Do not request external assets.
+- Use stable snake_case ids.
+- Output only valid JSON.
+
+User request: {request}
+""".strip()
+
+
+def repair_scene_plan_prompt(request: str, scene_plan: dict, named_objects: list[str]) -> str:
+    return f"""
+You are repairing a scene plan for a deterministic Blender studio harness.
+Compare the original creative request to the parsed scene plan and return one corrected JSON scene plan. Do not include markdown.
+
+Repair rules:
+- Every named object from the request must be represented in objects.
+- Preserve quantities such as two chairs or 3 trees.
+- Preserve size hints like large, small, wide, tall.
+- Preserve mounting and placement hints like rear wall, corner, on desk, background.
+- Preserve relationships like facing, next to, left of, right of, mounted on.
+- Keep object ids stable when they are already good.
+- Output only valid JSON in the same schema.
+
+Original creative request: {request}
+
+Possible named object hints from request: {json.dumps(named_objects)}
+
+Current scene plan:
+{json.dumps(scene_plan, indent=2)}
+""".strip()
+
+
+def legacy_spec_prompt(request: str) -> str:
+    return f"""
+You are the production-designer intake assistant for a deterministic Blender studio harness.
+Turn the user's request into one strict JSON object. Do not include markdown.
+
+User request: {request}
+""".strip()
+
+
+def ollama_generate(config: StudioChatLLMConfig, prompt: str) -> dict:
+    payload = {
+        "model": config.model,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json",
+    }
+    result = post_json(f"{config.ollama_url.rstrip('/')}/api/generate", payload, timeout=180)
+    raw_response = result["response"]
+    return {
+        "prompt": prompt,
+        "raw_response": raw_response,
+        "parsed_response": extract_json(raw_response),
+    }
+
+
+def build_studio_chat_trace(request: str, config: StudioChatLLMConfig) -> dict:
+    scene_trace = ollama_generate(config, scene_plan_prompt(request))
+    scene_plan = scene_trace["parsed_response"]
+    named_objects = named_object_candidates(request)
+
+    repair_trace = None
+    repaired_scene_plan = scene_plan
+    try:
+        repair_trace = ollama_generate(config, repair_scene_plan_prompt(request, scene_plan, named_objects))
+        repaired_scene_plan = repair_trace["parsed_response"]
+    except Exception:
+        repair_trace = {
+            "prompt": repair_scene_plan_prompt(request, scene_plan, named_objects),
+            "raw_response": "",
+            "parsed_response": scene_plan,
+            "repair_failed": True,
+        }
+
+    spec = derive_spec_from_scene_plan(request, repaired_scene_plan)
+    return {
+        "scene_plan_prompt": scene_trace["prompt"],
+        "scene_plan_response": scene_trace["raw_response"],
+        "parsed_scene_plan": ScenePlan.model_validate(scene_plan),
+        "repair_prompt": repair_trace["prompt"],
+        "repair_response": repair_trace["raw_response"],
+        "repaired_scene_plan": ScenePlan.model_validate(repaired_scene_plan),
+        "llm_prompt": legacy_spec_prompt(request),
+        "raw_response": scene_trace["raw_response"],
+        "parsed_response": scene_plan,
+        "spec": spec,
+    }

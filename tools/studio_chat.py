@@ -62,7 +62,8 @@ def request_text(request: str, spec: dict | None = None) -> str:
 
 
 def text_has_any(text: str, words: tuple[str, ...]) -> bool:
-    return any(word in text for word in words)
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    return any(word in tokens for word in words)
 
 
 def infer_kind(request: str, spec: dict | None = None) -> str:
@@ -108,6 +109,11 @@ def parse_args():
     parser.add_argument("--ollama-url", default=os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_URL))
     parser.add_argument("--model", default=os.environ.get("OEB_STUDIO_CHAT_MODEL", DEFAULT_MODEL))
     parser.add_argument("--dry-run", action="store_true", help="Print the spec without submitting a job")
+    parser.add_argument(
+        "--legacy-local-intake",
+        action="store_true",
+        help="Run the old CLI-owned LLM intake flow instead of calling /api/v1/studio-chat",
+    )
     return parser.parse_args()
 
 
@@ -201,6 +207,7 @@ def derive_spec_from_scene_plan(request: str, scene_plan: dict) -> dict:
         "name": str(scene_type or "Primitive Asset Concept").replace("_", " ").title(),
         "kind": infer_kind(request),
         "style": style or request,
+        "creative_request": request,
         "build_method": "blender_primitives",
         "components": components,
         "scene_plan": scene_plan,
@@ -222,6 +229,7 @@ def normalize_spec(request: str, spec: dict) -> dict:
 
     spec.setdefault("name", "Primitive Asset Concept")
     spec["kind"] = inferred_kind
+    spec["creative_request"] = request
     spec["build_method"] = "blender_primitives"
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
 
@@ -380,6 +388,65 @@ def ollama_spec(args) -> dict:
 
 def main() -> int:
     args = parse_args()
+    if not args.dry_run and not args.legacy_local_intake:
+        if not args.harness_url:
+            print("[studio_chat] ERROR: set OEB_HARNESS_URL or pass --harness-url", file=sys.stderr)
+            return 2
+        if not args.admin_token:
+            print("[studio_chat] ERROR: set API_ADMIN_TOKEN or pass --admin-token", file=sys.stderr)
+            return 2
+
+        try:
+            result = post_json(
+                f"{args.harness_url.rstrip('/')}/api/v1/studio-chat",
+                {"prompt": args.request},
+                token=args.admin_token,
+                timeout=240,
+            )
+        except urllib.error.HTTPError as exc:
+            print(f"[studio_chat] ERROR: harness rejected studio chat ({exc.code}): {exc.read().decode()}", file=sys.stderr)
+            return 3
+        except urllib.error.URLError as exc:
+            print(f"[studio_chat] ERROR: could not reach studio chat at {args.harness_url}: {exc}", file=sys.stderr)
+            return 3
+
+        print(json.dumps({
+            "job_id": result["job_id"],
+            "status": result["status"],
+            "review_url": result["review_url"],
+            "trace_url": result["trace_url"],
+            "canonical_id": result["canonical_id"],
+            "saved_llm_response": result["saved_llm_response"],
+        }, indent=2))
+        return 0
+
+    if not args.dry_run:
+        if not args.harness_url:
+            print("[studio_chat] ERROR: set OEB_HARNESS_URL or pass --harness-url", file=sys.stderr)
+            return 2
+        if not args.admin_token:
+            print("[studio_chat] ERROR: set API_ADMIN_TOKEN or pass --admin-token", file=sys.stderr)
+            return 2
+
+        try:
+            accepted = post_json(
+                f"{args.harness_url.rstrip('/')}/api/v1/conversations/accept",
+                {"creative_request": args.request},
+                token=args.admin_token,
+                timeout=10,
+            )
+            print(
+                f"[studio_chat] 200 OK harness accepted prompt at {accepted['accepted_at']}",
+                file=sys.stderr,
+                flush=True,
+            )
+        except urllib.error.HTTPError as exc:
+            print(f"[studio_chat] ERROR: harness rejected prompt ({exc.code}): {exc.read().decode()}", file=sys.stderr)
+            return 3
+        except urllib.error.URLError as exc:
+            print(f"[studio_chat] ERROR: could not reach harness at {args.harness_url}: {exc}", file=sys.stderr)
+            return 3
+
     try:
         llm_trace = ollama_spec(args)
     except (urllib.error.URLError, TimeoutError) as exc:
@@ -405,20 +472,16 @@ def main() -> int:
         }, indent=2))
         return 0
 
-    if not args.harness_url:
-        print("[studio_chat] ERROR: set OEB_HARNESS_URL or pass --harness-url", file=sys.stderr)
-        return 2
-    if not args.admin_token:
-        print("[studio_chat] ERROR: set API_ADMIN_TOKEN or pass --admin-token", file=sys.stderr)
-        return 2
-
     try:
         result = post_json(
             f"{args.harness_url.rstrip('/')}/api/v1/conversations/jobs",
             {
                 "creative_request": args.request,
                 "llm_response": llm_trace["raw_response"],
+                "llm_prompt": llm_trace["llm_prompt"],
+                "scene_plan_prompt": llm_trace["scene_plan_prompt"],
                 "scene_plan_response": llm_trace["scene_plan_response"],
+                "repair_prompt": llm_trace["repair_prompt"],
                 "repair_response": llm_trace["repair_response"],
                 "scene_plan": llm_trace["parsed_scene_plan"],
                 "repaired_scene_plan": llm_trace["repaired_scene_plan"],
