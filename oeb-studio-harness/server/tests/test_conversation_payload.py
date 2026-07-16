@@ -35,13 +35,37 @@ def test_conversation_spec_normalization_repairs_motorcycle_asset_slug():
     assert normalized.components == [
         "front wheel",
         "rear wheel",
-        "low motorcycle frame",
+        "low vehicle frame",
         "engine block",
-        "fuel tank",
         "single saddle seat",
-        "front fork",
         "handlebars",
-        "rear exhaust pipe",
+    ]
+
+
+def test_conversation_spec_normalization_repairs_plane_surface_misread():
+    prompt = "Build a plane."
+    spec = PrimitiveBuildSpec(
+        canonical_id="asset_plane_A",
+        name="Simple Plane",
+        kind="asset",
+        style="minimalistic",
+        components=[
+            "wide_plane_center_floor_facing_plane_2",
+            "wide_target_plane_center_floor_facing_plane_1",
+        ],
+    )
+
+    normalized = _normalize_spec_for_request(prompt, spec)
+
+    assert normalized.canonical_id == "vehicle_plane_A"
+    assert normalized.kind == "vehicle"
+    assert normalized.components == [
+        "long aircraft fuselage",
+        "front nose cone",
+        "left wing",
+        "right wing",
+        "tail fin",
+        "rear engine",
     ]
 
 

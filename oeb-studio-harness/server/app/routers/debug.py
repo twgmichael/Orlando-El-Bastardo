@@ -53,6 +53,7 @@ def _prompt_loop(job: Job) -> DebugPromptLoop:
         repair_prompt=conversation.get("repair_prompt"),
         repair_response=conversation.get("repair_response"),
         repaired_scene_plan=conversation.get("repaired_scene_plan"),
+        detail_validation_warnings=conversation.get("detail_validation_warnings") or [],
         primitive_spec=spec,
         script_file=payload.get("script_file"),
         script_args=payload.get("script_args") or [],

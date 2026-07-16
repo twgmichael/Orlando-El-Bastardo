@@ -13,16 +13,21 @@ FIGHTER_COMPONENTS = [
     "crooked tail fin",
     "asymmetric greebles",
 ]
-MOTORCYCLE_COMPONENTS = [
+AIRCRAFT_COMPONENTS = [
+    "long aircraft fuselage",
+    "front nose cone",
+    "left wing",
+    "right wing",
+    "tail fin",
+    "rear engine",
+]
+TWO_WHEELED_VEHICLE_COMPONENTS = [
     "front wheel",
     "rear wheel",
-    "low motorcycle frame",
+    "low vehicle frame",
     "engine block",
-    "fuel tank",
     "single saddle seat",
-    "front fork",
     "handlebars",
-    "rear exhaust pipe",
 ]
 OFFICE_COMPONENTS = [
     "office floor",
@@ -82,6 +87,14 @@ def text_has_any(text: str, words: tuple[str, ...]) -> bool:
     return any(word in tokens for word in words)
 
 
+def is_aircraft_request(text: str) -> bool:
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    if tokens & {"aircraft", "airplane", "aeroplane", "jet", "biplane"}:
+        return True
+    surface_qualifiers = {"floor", "ground", "geometric", "geometry", "flat", "math", "mathematical"}
+    return "plane" in tokens and not (tokens & surface_qualifiers)
+
+
 def request_text(request: str, spec: dict | None = None) -> str:
     parts = [request]
     if spec:
@@ -96,11 +109,16 @@ def request_text(request: str, spec: dict | None = None) -> str:
 
 def infer_kind(request: str, spec: dict | None = None) -> str:
     text = request_text(request, spec)
+    if (
+        text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf", "stool", "bed"))
+        and not text_has_any(text, ("office", "location", "scene", "set"))
+    ):
+        return "prop"
     if text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab", "garage", "hangar")):
         return "location"
-    if text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not text_has_any(text, ("room", "office")):
+    if text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf", "stool", "bed")):
         return "prop"
-    if text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
+    if is_aircraft_request(request) or text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
         return "vehicle"
     return "asset"
 
@@ -113,8 +131,10 @@ def default_components_for(request: str, spec: dict | None = None) -> list[str]:
         return PARK_COMPONENTS
     if text_has_any(text, ("station", "orbital", "habitat", "ring", "dock", "solar")):
         return STATION_COMPONENTS
-    if text_has_any(text, ("motorcycle", "motorbike", "bike")):
-        return MOTORCYCLE_COMPONENTS
+    if is_aircraft_request(request):
+        return AIRCRAFT_COMPONENTS
+    if text_has_any(text, ("motorcycle", "motorbike", "bike")) and not text_has_any(text, ("rack", "stand")):
+        return TWO_WHEELED_VEHICLE_COMPONENTS
     if infer_kind(request, spec) == "vehicle":
         return FIGHTER_COMPONENTS
     return ["primary structure", "secondary feature", "detail element"]
@@ -197,6 +217,129 @@ def named_object_candidates(request: str) -> list[str]:
     return candidates[:12]
 
 
+def normalize_feature(text: str) -> str:
+    return normalize_id(text, "feature")
+
+
+def detail_hints_for_request(request: str) -> list[dict]:
+    lowered = request.lower()
+    hints = []
+    if re.search(r"\brounded\s+corners?\b", lowered):
+        hints.append({
+            "feature": "rounded_corners",
+            "source_phrase": "rounded corners",
+            "shape": {"corner_style": "rounded"},
+        })
+    if re.search(r"\bbevel(?:ed|led)?\s+edges?\b|\bsoft\s+bevel", lowered):
+        hints.append({
+            "feature": "beveled_edges",
+            "source_phrase": "beveled edges",
+            "shape": {"edge_profile": "beveled"},
+        })
+    if re.search(r"\bthin\s+legs?\b", lowered):
+        hints.append({
+            "feature": "thin_legs",
+            "source_phrase": "thin legs",
+            "style_detail": "thin legs",
+        })
+    if re.search(r"\b(tapered|curved|soft|wide|narrow|low|tall)\b", lowered):
+        for word in re.findall(r"\b(tapered|curved|soft|wide|narrow|low|tall)\b", lowered):
+            hints.append({
+                "feature": normalize_feature(word),
+                "source_phrase": word,
+                "style_detail": word,
+            })
+    for material_word in ("wood", "wooden", "metal", "steel", "glass", "stone", "plastic"):
+        if re.search(rf"\b{material_word}\b", lowered):
+            hints.append({
+                "feature": normalize_feature(material_word),
+                "source_phrase": material_word,
+                "materials": {"primary": material_word},
+            })
+    return hints
+
+
+def object_matches_detail_target(obj: dict, request: str) -> bool:
+    tokens = set(re.findall(r"[a-z0-9]+", " ".join([
+        str(obj.get("id") or ""),
+        str(obj.get("label") or ""),
+        str(obj.get("category") or ""),
+    ]).lower()))
+    request_tokens = set(re.findall(r"[a-z0-9]+", request.lower()))
+    if "table" in request_tokens:
+        return bool(tokens & {"table", "surface", "desk", "counter", "workbench"})
+    if "chair" in request_tokens or "stool" in request_tokens:
+        return bool(tokens & {"chair", "stool", "seating", "seat"})
+    if "ship" in request_tokens or "vehicle" in request_tokens:
+        return bool(tokens & {"ship", "vehicle", "hull", "body", "fuselage"})
+    return True
+
+
+def list_append_unique(values: list, value: str) -> None:
+    if value and value not in values:
+        values.append(value)
+
+
+def enrich_scene_plan_details(request: str, scene_plan: dict) -> tuple[dict, list[str]]:
+    if not isinstance(scene_plan, dict):
+        return scene_plan, ["scene plan is not a JSON object"]
+    objects = scene_plan.get("objects")
+    if not isinstance(objects, list):
+        return scene_plan, ["scene plan has no objects list"]
+
+    hints = detail_hints_for_request(request)
+    warnings = []
+    if not hints:
+        return scene_plan, warnings
+
+    target = None
+    for obj in objects:
+        if isinstance(obj, dict) and object_matches_detail_target(obj, request):
+            target = obj
+            break
+    if target is None:
+        warnings.append("detail hints found but no target object matched")
+        return scene_plan, warnings
+
+    shape = target.setdefault("shape", {})
+    if not isinstance(shape, dict):
+        shape = {}
+        target["shape"] = shape
+    required_features = target.setdefault("required_features", [])
+    if not isinstance(required_features, list):
+        required_features = []
+        target["required_features"] = required_features
+    source_phrases = target.setdefault("source_phrases", [])
+    if not isinstance(source_phrases, list):
+        source_phrases = []
+        target["source_phrases"] = source_phrases
+    style_details = target.setdefault("style_details", [])
+    if not isinstance(style_details, list):
+        style_details = []
+        target["style_details"] = style_details
+    materials = target.setdefault("materials", {})
+    if not isinstance(materials, dict):
+        materials = {}
+        target["materials"] = materials
+
+    for hint in hints:
+        feature = hint.get("feature")
+        if feature:
+            list_append_unique(required_features, feature)
+        source_phrase = hint.get("source_phrase")
+        if source_phrase:
+            list_append_unique(source_phrases, source_phrase)
+        for key, value in (hint.get("shape") or {}).items():
+            shape.setdefault(key, value)
+        for key, value in (hint.get("materials") or {}).items():
+            materials.setdefault(key, value)
+        style_detail = hint.get("style_detail")
+        if style_detail:
+            list_append_unique(style_details, style_detail)
+
+    return scene_plan, warnings
+
+
 def scene_object_component(obj: dict) -> str:
     parts = []
     count = obj.get("count")
@@ -205,6 +348,11 @@ def scene_object_component(obj: dict) -> str:
     placement = obj.get("placement")
     mounting = obj.get("mounting")
     orientation = obj.get("orientation") or {}
+    shape = obj.get("shape") or {}
+    materials = obj.get("materials") or {}
+    required_features = obj.get("required_features") or []
+    style_details = obj.get("style_details") or []
+    source_phrases = obj.get("source_phrases") or []
 
     if isinstance(count, int) and count > 1:
         number_words = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
@@ -216,6 +364,18 @@ def scene_object_component(obj: dict) -> str:
         parts.append(str(placement))
     if mounting:
         parts.append(str(mounting))
+    if isinstance(shape, dict):
+        for key in ("primary_form", "corner_style", "edge_profile", "profile", "silhouette"):
+            if shape.get(key):
+                parts.append(str(shape[key]))
+    if isinstance(required_features, list):
+        parts.extend(str(feature) for feature in required_features)
+    if isinstance(materials, dict):
+        parts.extend(str(value) for value in materials.values() if value)
+    if isinstance(style_details, list):
+        parts.extend(str(detail) for detail in style_details)
+    if isinstance(source_phrases, list):
+        parts.extend(str(phrase) for phrase in source_phrases)
     if isinstance(orientation, dict):
         faces = orientation.get("faces")
         if faces:
@@ -249,7 +409,11 @@ def normalize_spec(request: str, spec: dict) -> dict:
     else:
         generic = {"cube", "sphere", "cylinder", "cone", "primitive"}
         component_words = {str(c).lower().strip() for c in components}
-        if component_words <= generic:
+        component_text = " ".join(component_words)
+        aircraft_part_words = ("wing", "fuselage", "nose", "tail", "engine", "cockpit")
+        if component_words <= generic or (
+            is_aircraft_request(request) and not any(word in component_text for word in aircraft_part_words)
+        ):
             spec["components"] = default_components_for(request, spec)
     return spec
 
@@ -282,21 +446,27 @@ def derive_spec_from_scene_plan(request: str, scene_plan: dict) -> PrimitiveBuil
 def scene_plan_prompt(request: str) -> str:
     return f"""
 You are the production-designer intake assistant for a deterministic Blender studio harness.
-Turn the user's creative request into one strict JSON scene plan. Do not include markdown.
+Turn the user's creative request into one strict JSON asset/location graph. Do not include markdown.
 
 Schema:
 {{
-  "scene_type": "short_snake_case_scene_type",
+  "scene_type": "short_snake_case_asset_or_location_type",
   "style": "short visual style summary",
   "objects": [
     {{
       "id": "stable_snake_case_object_id",
       "label": "human readable object name",
-      "category": "seating|surface|storage|screen|lighting|bed|medical|plant|path|wall_item|machine|structure|unknown",
+      "category": "seating|surface|storage|screen|lighting|bed|medical|plant|path|wall_item|machine|structure|vehicle|vehicle_part|support|opening|roof|unknown",
       "count": 1,
       "size": "small|medium|large|wide|tall",
-      "placement": "center|left|right|front|rear_wall|back|corner|on_surface",
-      "mounting": "floor|wall|ceiling|surface",
+      "placement": "center|left|right|front|back|rear|side|around|top|bottom|on_surface|rear_wall|corner",
+      "mounting": "self|attached|surface|support|floor|wall|ceiling",
+      "shape": {{"primary_form": "short_snake_case_form", "corner_style": "sharp|rounded|beveled", "edge_profile": "sharp|soft_beveled|thin|thick"}},
+      "required_features": ["snake_case_feature"],
+      "source_phrases": ["exact prompt phrase"],
+      "materials": {{"primary": "wood|metal|glass|stone|fabric|unknown", "finish": "short finish phrase"}},
+      "style_details": ["short detail phrase"],
+      "parts": [{{"id": "part_id", "category": "surface|support|vehicle_part|unknown", "count": 1, "shape": {{}}}}],
       "orientation": {{"faces": "target_object_id"}}
     }}
   ],
@@ -307,8 +477,14 @@ Schema:
 
 Rules:
 - Every named object in the user request must appear as its own object.
-- Preserve quantities, sizes, mounting, placement, and orientation.
+- Preserve quantities, sizes, attachment/mounting, placement, and orientation.
+- Preserve meaningful modifiers as structured fields, not only in labels. Use shape, required_features, source_phrases, materials, style_details, and parts.
+- If the prompt says "rounded corners", include shape.corner_style="rounded", required_features containing "rounded_corners", and source_phrases containing "rounded corners" on the relevant object.
 - Relationship records may reference objects, but cannot replace object records.
+- Use the OEB orientation standard for every asset and location: +X is front, -X is rear/back, -Y is left, +Y is right, +Z is up, and -Z is down.
+- For standalone assets such as spaceships, vehicles, chairs, stools, beds, props, and characters, describe only the asset and its parts. Do not add a floor, wall, room, base plane, environment, or scene shell unless the user explicitly asks for a location or set.
+- For standalone assets, use mounting values such as self, attached, surface, or support. Reserve floor, wall, and ceiling for actual locations, rooms, buildings, or environmental sets.
+- Treat plain "plane" as an aircraft unless the request explicitly says geometric plane, floor plane, or ground plane.
 - Use primitive-friendly categories. Do not request external assets.
 - Use stable snake_case ids.
 - Output only valid JSON.
@@ -319,15 +495,21 @@ User request: {request}
 
 def repair_scene_plan_prompt(request: str, scene_plan: dict, named_objects: list[str]) -> str:
     return f"""
-You are repairing a scene plan for a deterministic Blender studio harness.
-Compare the original creative request to the parsed scene plan and return one corrected JSON scene plan. Do not include markdown.
+You are repairing an asset/location graph for a deterministic Blender studio harness.
+Compare the original creative request to the parsed graph and return one corrected JSON graph. Do not include markdown.
 
 Repair rules:
 - Every named object from the request must be represented in objects.
 - Preserve quantities such as two chairs or 3 trees.
 - Preserve size hints like large, small, wide, tall.
-- Preserve mounting and placement hints like rear wall, corner, on desk, background.
+- Preserve shape and style modifiers such as rounded corners, thin legs, brushed metal, tapered, curved, soft, and wide.
+- Move modifiers out of labels into structured fields: shape, required_features, source_phrases, materials, style_details, and parts.
+- If the request contains rounded corners, the repaired object must include shape.corner_style="rounded", required_features containing "rounded_corners", and source_phrases containing "rounded corners".
+- Preserve attachment/mounting and placement hints like attached, on surface, rear wall, corner, on desk, background.
 - Preserve relationships like facing, next to, left of, right of, mounted on.
+- Use the OEB orientation standard for every repaired object: +X is front, -X is rear/back, -Y is left, +Y is right, +Z is up, and -Z is down.
+- For standalone assets such as spaceships, vehicles, chairs, stools, beds, props, and characters, keep only the asset and its parts. Remove floors, walls, rooms, base planes, environment props, and scene shells unless the original request explicitly asks for a location or set.
+- For standalone assets, prefer mounting values such as self, attached, surface, or support. Reserve floor, wall, and ceiling for actual locations, rooms, buildings, or environmental sets.
 - Keep object ids stable when they are already good.
 - Output only valid JSON in the same schema.
 
@@ -356,7 +538,7 @@ def ollama_generate(config: StudioChatLLMConfig, prompt: str) -> dict:
         "stream": False,
         "format": "json",
     }
-    result = post_json(f"{config.ollama_url.rstrip('/')}/api/generate", payload, timeout=180)
+    result = post_json(f"{config.ollama_url.rstrip('/')}/api/generate", payload, timeout=360)
     raw_response = result["response"]
     return {
         "prompt": prompt,
@@ -383,6 +565,7 @@ def build_studio_chat_trace(request: str, config: StudioChatLLMConfig) -> dict:
             "repair_failed": True,
         }
 
+    repaired_scene_plan, detail_warnings = enrich_scene_plan_details(request, repaired_scene_plan)
     spec = derive_spec_from_scene_plan(request, repaired_scene_plan)
     return {
         "scene_plan_prompt": scene_trace["prompt"],
@@ -391,6 +574,7 @@ def build_studio_chat_trace(request: str, config: StudioChatLLMConfig) -> dict:
         "repair_prompt": repair_trace["prompt"],
         "repair_response": repair_trace["raw_response"],
         "repaired_scene_plan": ScenePlan.model_validate(repaired_scene_plan),
+        "detail_validation_warnings": detail_warnings,
         "llm_prompt": legacy_spec_prompt(request),
         "raw_response": scene_trace["raw_response"],
         "parsed_response": scene_plan,

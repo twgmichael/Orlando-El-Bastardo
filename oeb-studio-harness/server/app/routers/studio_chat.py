@@ -32,6 +32,7 @@ def _conversation_payload(body: StudioChatRequest, trace: dict) -> dict:
         "repair_response": trace["repair_response"],
         "scene_plan": trace["parsed_scene_plan"].model_dump(),
         "repaired_scene_plan": trace["repaired_scene_plan"].model_dump(),
+        "detail_validation_warnings": trace.get("detail_validation_warnings", []),
         "spec": trace["spec"].model_dump(),
         "priority": body.priority,
         "policy": body.policy,

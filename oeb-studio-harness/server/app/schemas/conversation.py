@@ -15,6 +15,12 @@ class SceneObject(BaseModel):
     size: Optional[str] = None
     placement: Optional[str] = None
     mounting: Optional[str] = None
+    shape: dict[str, Any] = Field(default_factory=dict)
+    required_features: list[str] = Field(default_factory=list)
+    source_phrases: list[str] = Field(default_factory=list)
+    materials: dict[str, Any] = Field(default_factory=dict)
+    style_details: list[str] = Field(default_factory=list)
+    parts: list[dict[str, Any]] = Field(default_factory=list)
     orientation: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -79,6 +85,7 @@ class ConversationJobRequest(BaseModel):
     repair_response: Optional[str] = None
     scene_plan: Optional[ScenePlan] = None
     repaired_scene_plan: Optional[ScenePlan] = None
+    detail_validation_warnings: list[str] = Field(default_factory=list)
     priority: int = 0
     policy: str = "run_anywhere"
 
