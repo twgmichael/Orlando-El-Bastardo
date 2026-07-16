@@ -82,6 +82,10 @@ be configurable per environment.
 - Do not hardcode local or docker-pi targets into the endpoint.
 - Keep the endpoint interface-agnostic so Open WebUI, CLI tools, dashboards,
   and future custom UIs can all use it.
+- Preserve object detail and prompt modifiers as structured scene-plan fields,
+  not only as label text. The builder-side schema home for this is
+  `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`; the broader canonical
+  schema overview is `docs/SCHEMA.md`.
 - Preserve the full prompt loop in job trace data:
   - original prompt
   - LLM prompt
@@ -106,6 +110,30 @@ The endpoint can either:
 The safest first implementation is to reuse the proven logic from
 `tools/studio_chat.py`, but move the durable behavior behind the API endpoint.
 The CLI can then become a thin client of `/api/v1/studio-chat`.
+
+## Detail Preservation Contract
+
+The chat endpoint should prompt and repair the local LLM so meaningful creative
+details pass through into structured fields. For example, "build a dining room
+table with rounded corners" should produce an object with fields such as:
+
+```json
+{
+  "label": "dining room table",
+  "category": "surface",
+  "shape": {
+    "primary_form": "rectangular_table",
+    "corner_style": "rounded"
+  },
+  "required_features": ["rounded_corners"],
+  "source_phrases": ["dining room table", "rounded corners"]
+}
+```
+
+Endpoint repair should compare the original prompt against the scene plan. If a
+prompt modifier only appears in a label, or disappears entirely, the repair pass
+should move it into `shape`, `required_features`, `materials`,
+`style_details`, or `source_phrases`.
 
 ## Next Build Step
 

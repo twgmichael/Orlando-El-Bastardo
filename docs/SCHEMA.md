@@ -44,6 +44,22 @@ discriminated union keyed on a `type` field.
 - Validate before export.
 - Use a canonical schema with exporter-specific target adapters.
 
+## Conversational asset-detail schema
+
+The newer conversational studio loop has a separate intermediate scene-plan
+schema before canonical production `SceneSpec`. Its current planning home is
+`docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`, with endpoint behavior
+tracked in `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md`.
+
+Important direction: natural-language modifiers must become structured fields.
+For example, "rounded corners" should pass through as `shape.corner_style:
+"rounded"` and/or `required_features: ["rounded_corners"]`, not only as part of
+an object label.
+
+Open consolidation need: merge the canonical schema discussion, studio-chat
+scene-plan schema, and primitive-builder schema notes into one coherent schema
+map so each layer has one clear purpose.
+
 ## Logical identity vs target bindings
 
 ```json

@@ -23,6 +23,12 @@ gaming-PC worker install.
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
 
+**Alpha development rule: forward-only.** We do not care about backwards
+compatibility while building the conversational studio loop. Prefer deleting or
+replacing obsolete transitional paths over preserving legacy behavior. Do not
+keep duplicate data flows, fallback schemas, or compatibility shims unless they
+directly serve the current forward architecture and are scheduled for removal.
+
 ---
 
 ## Current general priorities — conversation-first studio loop
@@ -39,6 +45,20 @@ visible shot.
      differentiators like `capital_letter_v`, keep `job_id` as the unique run
      key, and avoid extra LLM calls (see
      `docs/planning/CANONICAL-ID-SLUG-PLAN.md`).
+   - [ ] Finish strong asset/location orientation — enforce the OEB standard
+     end-to-end: `+X` front, `-X` rear/back, `-Y` left, `+Y` right, `+Z` up,
+     `-Z` down. The canonical planning doc is
+     `docs/planning/ASSET-LOCATION-ORIENTATION-STANDARD.md`; do not create a
+     duplicate `ASSET-ORIENTATION-STANDARD.md`. Current implementation work
+     has started in the primitive builder, scene-plan prompts, manifest
+     metadata, canonical camera definitions, and Docker pytest coverage.
+   - [ ] Simplify and consolidate schema discussion — unify `docs/SCHEMA.md`,
+     `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`, and
+     `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` so the canonical production
+     schema, conversational scene-plan schema, and primitive-builder contract
+     are clearly layered. Include structured detail pass-through for fields
+     such as `shape`, `required_features`, `source_phrases`, `materials`, and
+     `style_details`.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.

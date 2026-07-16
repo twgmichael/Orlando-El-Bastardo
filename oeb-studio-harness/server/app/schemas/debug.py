@@ -67,6 +67,7 @@ class DebugPromptLoop(BaseModel):
     repair_prompt: Optional[str]
     repair_response: Optional[str]
     repaired_scene_plan: Optional[dict]
+    detail_validation_warnings: list[str]
     primitive_spec: Optional[dict]
     script_file: Optional[str]
     script_args: list

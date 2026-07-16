@@ -4,6 +4,32 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-16 — Orientation standard implementation started for conversational asset builds
+
+Strong asset/location orientation is now in progress for the local
+conversational 3D pipeline. Decision confirmed: use one canonical planning doc,
+`docs/planning/ASSET-LOCATION-ORIENTATION-STANDARD.md`, covering both assets
+and locations; do not create a duplicate `ASSET-ORIENTATION-STANDARD.md`.
+
+Implementation progress:
+- Primitive builder now declares the OEB local axes: `+X` front, `-X`
+  rear/back, `-Y` left, `+Y` right, `+Z` up, `-Z` down.
+- Generic placement rules started moving from fuzzy scene/layout assumptions to
+  axis-aware composition for front/rear/left/right/top/bottom.
+- Vehicle primitive placement now uses the same standard for nose, tail, wings,
+  wheels, paired wing offsets, and action-view metadata.
+- Location shell placement started aligning with the same axes: rear wall is on
+  `-X`, not legacy Y-back.
+- Build manifests now include orientation standard metadata and canonical
+  camera-view definitions for action/front/rear/left/right/top/bottom.
+- Scene-plan and repair prompts now tell the local LLM the OEB orientation
+  standard explicitly.
+- Docker pytest coverage added for axis mapping, aircraft parts, paired wings,
+  location shells, camera metadata, and prompt contract.
+
+Verified in Docker: `docker exec oeb_studio_harness_local_api pytest` passed
+with 32 tests.
+
 ## 2026-07-14 — Harness fully wired: script_file + cwd + output_root; renders to OEB-PROJECT drive
 
 Pipeline render scripts now dispatch and complete as harness jobs. Renders

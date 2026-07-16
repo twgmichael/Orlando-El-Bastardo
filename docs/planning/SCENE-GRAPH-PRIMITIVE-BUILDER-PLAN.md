@@ -47,6 +47,12 @@ harness.
 
 Add a richer intermediate schema before the current primitive build spec.
 
+This is the current home for the conversational asset-detail schema discussion.
+Cross-reference: `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` covers where the
+local LLM produces and repairs this data, and `docs/SCHEMA.md` covers the
+broader canonical production schemas. These should eventually be consolidated
+so we do not maintain competing schema narratives.
+
 Example:
 
 ```json
@@ -61,6 +67,13 @@ Example:
       "count": 1,
       "size": "medium",
       "placement": "center",
+      "shape": {
+        "primary_form": "armchair",
+        "corner_style": "soft",
+        "edge_profile": "rounded"
+      },
+      "required_features": ["reclining_back"],
+      "source_phrases": ["reclining chair"],
       "orientation": {
         "faces": "television"
       }
@@ -101,6 +114,68 @@ Example:
   ]
 }
 ```
+
+## Detail And Modifier Pass-Through
+
+Creative modifiers must survive as structured data, not only as words embedded
+in labels. A prompt such as "build a dining room table with rounded corners"
+should not rely on `label: "dining_table_rounded_corners"` as the only carrier
+of the rounded-corner requirement.
+
+Add these fields to scene-plan objects:
+
+- `shape`: structured geometry intent such as `primary_form`, `corner_style`,
+  `edge_profile`, `profile`, `silhouette`, and simple proportion notes.
+- `required_features`: snake_case feature requirements that must be preserved
+  through repair and passed to the builder.
+- `source_phrases`: exact or near-exact prompt phrases that justify an object,
+  shape, material, count, placement, or relationship.
+- `materials`: material and finish hints when the prompt provides them.
+- `style_details`: visual style modifiers that affect the object but are not
+  core geometry.
+
+Example:
+
+```json
+{
+  "id": "dining_table",
+  "label": "dining room table",
+  "category": "surface",
+  "count": 1,
+  "size": "medium",
+  "placement": "center",
+  "mounting": "self",
+  "shape": {
+    "primary_form": "rectangular_table",
+    "corner_style": "rounded",
+    "edge_profile": "soft_beveled",
+    "top_thickness": "medium"
+  },
+  "required_features": ["rounded_corners"],
+  "source_phrases": ["dining room table", "rounded corners"],
+  "parts": [
+    {
+      "id": "tabletop",
+      "category": "surface",
+      "shape": {
+        "corner_style": "rounded"
+      }
+    },
+    {
+      "id": "legs",
+      "category": "support",
+      "count": 4
+    }
+  ]
+}
+```
+
+Repair rule: every meaningful adjective or modifier in the creative prompt must
+appear in a structured field, preferably `shape`, `required_features`,
+`materials`, `style_details`, or `source_phrases`. If the prompt contains
+"rounded corners" and no object has `shape.corner_style: "rounded"` or
+`required_features: ["rounded_corners"]`, the plan should be considered
+incomplete and repaired before job creation.
 
 ## Core Object Categories
 
@@ -166,6 +241,10 @@ Repair responsibilities:
 - Ensure every named object in the creative request appears in `objects`.
 - Preserve quantities such as "two chairs" or "3 trees".
 - Preserve size hints such as "large", "small", "wide", "tall".
+- Preserve shape and style modifiers such as "rounded corners", "thin legs",
+  "brushed metal", "tapered", "curved", "soft", and "wide".
+- Preserve exact source phrases for important modifiers so trace debugging can
+  show why a feature appeared.
 - Preserve mounting and placement hints such as "on wall", "in corner",
   "behind desk", and "on table".
 - Extract relationships such as "facing", "next to", "left of", and

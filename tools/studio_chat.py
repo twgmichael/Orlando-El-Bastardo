@@ -318,7 +318,7 @@ def ollama_generate(args, prompt: str) -> dict:
         "stream": False,
         "format": "json",
     }
-    result = post_json(f"{args.ollama_url.rstrip('/')}/api/generate", payload, timeout=180)
+    result = post_json(f"{args.ollama_url.rstrip('/')}/api/generate", payload, timeout=360)
     raw_response = result["response"]
     return {
         "prompt": prompt,
@@ -468,7 +468,7 @@ def main() -> int:
                 f"{args.harness_url.rstrip('/')}/api/v1/studio-chat",
                 {"prompt": args.request},
                 token=args.admin_token,
-                timeout=240,
+                timeout=480,
             )
         except urllib.error.HTTPError as exc:
             print(f"[studio_chat] ERROR: harness rejected studio chat ({exc.code}): {exc.read().decode()}", file=sys.stderr)

@@ -32,16 +32,21 @@ FIGHTER_COMPONENTS = [
     "crooked tail fin",
     "asymmetric greebles",
 ]
-MOTORCYCLE_COMPONENTS = [
+AIRCRAFT_COMPONENTS = [
+    "long aircraft fuselage",
+    "front nose cone",
+    "left wing",
+    "right wing",
+    "tail fin",
+    "rear engine",
+]
+TWO_WHEELED_VEHICLE_COMPONENTS = [
     "front wheel",
     "rear wheel",
-    "low motorcycle frame",
+    "low vehicle frame",
     "engine block",
-    "fuel tank",
     "single saddle seat",
-    "front fork",
     "handlebars",
-    "rear exhaust pipe",
 ]
 
 STATION_COMPONENTS = [
@@ -132,13 +137,21 @@ def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
     return any(word in tokens for word in words)
 
 
+def _is_aircraft_request(text: str) -> bool:
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    if tokens & {"aircraft", "airplane", "aeroplane", "jet", "biplane"}:
+        return True
+    surface_qualifiers = {"floor", "ground", "geometric", "geometry", "flat", "math", "mathematical"}
+    return "plane" in tokens and not (tokens & surface_qualifiers)
+
+
 def _infer_kind(creative_request: str) -> str:
     text = creative_request.lower()
     if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab", "garage", "hangar")):
         return "location"
-    if _text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not _text_has_any(text, ("room", "office")):
+    if _text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf")) and not _text_has_any(text, ("room", "office")):
         return "prop"
-    if _text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
+    if _is_aircraft_request(text) or _text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
         return "vehicle"
     return "asset"
 
@@ -152,8 +165,10 @@ def _default_components_for(creative_request: str) -> list[str]:
     station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
     if any(word in text for word in station_words):
         return STATION_COMPONENTS
-    if _text_has_any(text, ("motorcycle", "motorbike", "bike")):
-        return MOTORCYCLE_COMPONENTS
+    if _is_aircraft_request(text):
+        return AIRCRAFT_COMPONENTS
+    if _text_has_any(text, ("motorcycle", "motorbike", "bike")) and not _text_has_any(text, ("rack", "stand")):
+        return TWO_WHEELED_VEHICLE_COMPONENTS
     if _infer_kind(creative_request) == "vehicle":
         return FIGHTER_COMPONENTS
     return ["primary structure", "secondary feature", "detail element"]
@@ -174,6 +189,11 @@ def _normalize_spec_for_request(creative_request: str, spec: PrimitiveBuildSpec)
         spec.kind = inferred_kind
     if not spec.components:
         spec.components = _default_components_for(creative_request)
+    elif _is_aircraft_request(creative_request):
+        component_text = " ".join(spec.components).lower()
+        aircraft_part_words = ("wing", "fuselage", "nose", "tail", "engine", "cockpit")
+        if not any(word in component_text for word in aircraft_part_words):
+            spec.components = _default_components_for(creative_request)
     return spec
 
 
@@ -277,6 +297,7 @@ async def create_conversation_job(body: ConversationJobRequest, db: AsyncSession
         "repair_response": body.repair_response,
         "scene_plan": body.scene_plan.model_dump() if body.scene_plan else None,
         "repaired_scene_plan": body.repaired_scene_plan.model_dump() if body.repaired_scene_plan else None,
+        "detail_validation_warnings": body.detail_validation_warnings,
     }
     job = Job(
         title=payload["title"],

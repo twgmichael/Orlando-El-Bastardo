@@ -83,118 +83,65 @@ def torus(name, location, major_radius, minor_radius, mat, rotation=(0, 0, 0)):
     return obj
 
 
-def spec_text(spec):
-    parts = [
-        spec.get("canonical_id", ""),
-        spec.get("name", ""),
-        spec.get("kind", ""),
-        spec.get("style", ""),
-        " ".join(str(c) for c in spec.get("components", [])),
-    ]
-    return " ".join(parts).lower()
-
-
-def scene_plan_from_spec(spec):
-    return spec.get("repaired_scene_plan") or spec.get("scene_plan")
-
-
-def scene_plan_relationships(scene_plan):
-    relationships = {}
-    if not isinstance(scene_plan, dict):
-        return relationships
-    for rel in scene_plan.get("relationships", []) or []:
-        if not isinstance(rel, dict):
-            continue
-        subject = normalize_relation_id(rel.get("subject"))
-        relation = normalize_relation_id(rel.get("relation"))
-        target = normalize_relation_id(rel.get("target"))
-        if subject and relation and target:
-            relationships.setdefault(subject, []).append((relation, target))
-    return relationships
-
-
-def normalize_relation_id(value):
-    return "_".join(tokenize_name(str(value))) if value is not None else ""
-
-
-def scene_object_to_component(obj, relationships):
-    obj_id = normalize_relation_id(obj.get("id"))
-    parts = []
-    count = obj.get("count")
-    size = obj.get("size")
-    label = obj.get("label") or obj.get("id") or "object"
-    placement = obj.get("placement")
-    mounting = obj.get("mounting")
-    category = obj.get("category")
-    orientation = obj.get("orientation") or {}
-
-    if isinstance(count, int) and count > 1:
-        number_words = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
-        parts.append(number_words.get(count, str(count)))
-    if size:
-        parts.append(str(size))
-    parts.append(str(label))
-    if category and category != "unknown":
-        parts.append(str(category))
-    if placement:
-        parts.append(str(placement))
-    if mounting:
-        parts.append(str(mounting))
-    if isinstance(orientation, dict) and orientation.get("faces"):
-        parts.append(f"facing_{orientation['faces']}")
-
-    for relation, target in relationships.get(obj_id, []):
-        if relation in {"faces", "left_of", "right_of", "behind", "in_front_of", "near", "on_top_of", "mounted_on"}:
-            parts.append(f"{relation}_{target}")
-
-    return safe_object_name("_".join(parts), obj_id or "component")
-
-
-def scene_plan_components(spec):
-    scene_plan = scene_plan_from_spec(spec)
-    if not isinstance(scene_plan, dict):
-        return []
-    relationships = scene_plan_relationships(scene_plan)
-    components = []
-    for obj in scene_plan.get("objects", []) or []:
-        if isinstance(obj, dict):
-            components.append(scene_object_to_component(obj, relationships))
-    return components
-
-
-def wants_station(spec):
-    text = spec_text(spec)
-    station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
-    return any(word in text for word in station_words)
-
-
-def wants_office(spec):
-    text = spec_text(spec)
-    office_words = ("office", "desk", "chair", "lamp", "conference", "cubicle", "workspace")
-    return any(word in text for word in office_words)
-
-
-def wants_park(spec):
-    text = spec_text(spec)
-    park_words = ("park", "tree", "path", "trail", "bench", "grass", "garden")
-    return any(word in text for word in park_words)
-
-
-def wants_vehicle(spec):
-    text = spec_text(spec)
-    vehicle_words = ("ship", "spaceship", "fighter", "vehicle", "craft", "engine", "wing", "motorcycle", "motorbike", "bike", "wheel", "handlebar")
-    return any(word in text for word in vehicle_words)
-
-
-def wants_motorcycle(spec):
-    text = spec_text(spec)
-    motorcycle_words = ("motorcycle", "motorbike")
-    return any(word in text for word in motorcycle_words)
-
-
 def clear_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete()
+
+
+ASSET_LOCAL_AXES = {
+    "front_axis": "+X",
+    "rear_axis": "-X",
+    "left_axis": "-Y",
+    "right_axis": "+Y",
+    "up_axis": "+Z",
+    "down_axis": "-Z",
+}
+
+
+def origin_policy_for_kind(kind):
+    if kind in {"location", "set"}:
+        return "location_center_floor_origin"
+    if kind == "vehicle":
+        return "vehicle_centerline_midpoint"
+    return "asset_center_bottom_origin"
+
+
+def orientation_standard(spec=None):
+    kind = spec.get("kind") if isinstance(spec, dict) else None
+    return {
+        **ASSET_LOCAL_AXES,
+        "origin_policy": origin_policy_for_kind(kind),
+        "documentation": "docs/planning/ASSET-LOCATION-ORIENTATION-STANDARD.md",
+    }
+
+
+def axis_position_for_placement(placement, distance=1.0, z=0.35):
+    placement = str(placement or "").lower()
+    if placement in {"front", "in_front", "in_front_of"}:
+        return distance, 0, z
+    if placement in {"back", "rear", "behind", "rear_wall"}:
+        return -distance, 0, z
+    if placement == "left":
+        return 0, -distance, z
+    if placement == "right":
+        return 0, distance, z
+    if placement in {"top", "above", "upper"}:
+        return 0, 0, distance
+    if placement in {"bottom", "below", "under"}:
+        return 0, 0, -distance
+    return 0, 0, z
+
+
+def canonical_camera_views(target=(0, 0, 0.45), distance=6.4, ortho_scale=6.8):
+    return {
+        "action": {"location": (5.6, -6.4, 4.2), "target": target, "ortho_scale": ortho_scale},
+        "front": {"location": (distance, 0, target[2]), "target": target, "ortho_scale": ortho_scale},
+        "rear": {"location": (-distance, 0, target[2]), "target": target, "ortho_scale": ortho_scale},
+        "left": {"location": (0, -distance, target[2]), "target": target, "ortho_scale": ortho_scale},
+        "right": {"location": (0, distance, target[2]), "target": target, "ortho_scale": ortho_scale},
+        "top": {"location": (0, 0, distance), "target": target, "ortho_scale": ortho_scale},
+        "bottom": {"location": (0, 0, -distance), "target": target, "ortho_scale": ortho_scale},
+    }
 
 
 def add_preview_setup(camera_location=(5.2, -6.0, 4.0), target=(0, 0, 0.4), ortho_scale=6.0):
@@ -225,178 +172,6 @@ def parent_to_root(spec, objects):
     return root
 
 
-def make_fighter_scene(spec):
-    hull = material("bruised_red_hull", (0.45, 0.08, 0.06, 1))
-    dark = material("dark_canopy", (0.02, 0.05, 0.08, 0.75))
-    metal = material("burnt_metal", (0.22, 0.21, 0.19, 1))
-    glow = material("engine_glow", (0.1, 0.45, 1.0, 1))
-
-    objects = []
-    objects.append(cube("main_hull", (0, 0, 0), (3.2, 1.2, 0.55), hull))
-    nose = cube("wedge_nose", (1.95, 0, 0.05), (1.55, 0.85, 0.42), hull)
-    nose.rotation_euler[2] = 0.0
-    objects.append(nose)
-    objects.append(sphere("cockpit_canopy", (0.45, 0, 0.42), (0.58, 0.42, 0.24), dark))
-
-    left_wing = cube("left_swept_wing", (-0.2, 1.05, -0.06), (2.4, 1.0, 0.12), hull)
-    left_wing.rotation_euler[2] = -0.35
-    right_wing = cube("right_swept_wing", (-0.2, -1.05, -0.06), (2.4, 1.0, 0.12), hull)
-    right_wing.rotation_euler[2] = 0.35
-    objects.extend([left_wing, right_wing])
-
-    objects.append(cylinder("engine_left", (-1.85, 0.43, -0.02), 0.28, 0.85, metal, rotation=(0, 1.5708, 0)))
-    objects.append(cylinder("engine_right", (-1.85, -0.43, -0.02), 0.28, 0.85, metal, rotation=(0, 1.5708, 0)))
-    objects.append(cylinder("engine_glow_left", (-2.3, 0.43, -0.02), 0.2, 0.06, glow, rotation=(0, 1.5708, 0)))
-    objects.append(cylinder("engine_glow_right", (-2.3, -0.43, -0.02), 0.2, 0.06, glow, rotation=(0, 1.5708, 0)))
-
-    fin = cube("crooked_tail_fin", (-1.1, 0.18, 0.65), (0.18, 0.12, 1.0), hull)
-    fin.rotation_euler[0] = 0.18
-    fin.rotation_euler[2] = -0.28
-    objects.append(fin)
-
-    for idx, x in enumerate([-0.7, -0.15, 0.75]):
-        y = 0.68 if idx % 2 == 0 else -0.7
-        objects.append(cube(f"asymmetric_greeble_{idx + 1}", (x, y, 0.34), (0.42, 0.12, 0.12), metal))
-
-    add_preview_setup(ortho_scale=5.2)
-    return parent_to_root(spec, objects), "fighter"
-
-
-def make_station_scene(spec):
-    shell = material("station_shell_warm_white", (0.72, 0.70, 0.62, 1))
-    metal = material("station_dark_metal", (0.2, 0.22, 0.24, 1))
-    glass = material("large_blue_observation_window", (0.05, 0.45, 0.9, 0.85))
-    solar = material("deep_blue_solar_panels", (0.02, 0.06, 0.18, 1))
-    glow = material("soft_window_glow", (0.2, 0.65, 1.0, 1))
-
-    objects = []
-    objects.append(sphere("central_habitat_hub", (0, 0, 0), (0.9, 0.9, 0.7), shell))
-    objects.append(torus("outer_ring_module", (0, 0, 0), 1.65, 0.12, shell))
-    objects.append(torus("inner_service_ring", (0, 0, 0), 1.12, 0.06, metal))
-    objects.append(cylinder("large_observation_window", (0.93, 0, 0.02), 0.38, 0.05, glass, rotation=(0, 1.5708, 0)))
-    objects.append(cylinder("window_inner_glow", (0.97, 0, 0.02), 0.29, 0.03, glow, rotation=(0, 1.5708, 0)))
-
-    for idx, angle in enumerate((0, 1.5708, 3.1416, 4.7124)):
-        x = 1.34 if idx == 0 else -1.34 if idx == 2 else 0
-        y = 1.34 if idx == 1 else -1.34 if idx == 3 else 0
-        arm = cube(f"docking_arm_{idx + 1}", (x / 2, y / 2, 0), (1.25, 0.18, 0.18), metal)
-        arm.rotation_euler[2] = angle
-        objects.append(arm)
-        objects.append(cylinder(f"docking_port_{idx + 1}", (x, y, 0), 0.18, 0.28, metal, rotation=(1.5708, 0, angle)))
-
-    objects.append(cylinder("antenna_mast", (0, 0, 0.95), 0.035, 1.05, metal))
-    objects.append(sphere("antenna_tip", (0, 0, 1.55), (0.11, 0.11, 0.11), glow))
-
-    left_panel = cube("left_solar_array", (0, 2.35, 0.15), (1.7, 0.08, 0.62), solar)
-    right_panel = cube("right_solar_array", (0, -2.35, 0.15), (1.7, 0.08, 0.62), solar)
-    objects.extend([left_panel, right_panel])
-
-    for idx, x in enumerate((-0.42, 0, 0.42)):
-        objects.append(cube(f"window_band_{idx + 1}", (x, -0.92, 0.34), (0.22, 0.04, 0.1), glass))
-
-    add_preview_setup(camera_location=(5.4, -6.2, 4.0), target=(0, 0, 0.35), ortho_scale=5.8)
-    return parent_to_root(spec, objects), "station"
-
-
-def make_motorcycle_scene(spec):
-    frame = material("motorcycle_dark_frame", (0.04, 0.045, 0.05, 1))
-    tire = material("motorcycle_black_rubber", (0.01, 0.01, 0.012, 1))
-    metal = material("motorcycle_brushed_metal", (0.36, 0.36, 0.34, 1))
-    tank = material("motorcycle_deep_red_tank", (0.42, 0.04, 0.03, 1))
-    leather = material("motorcycle_black_saddle", (0.025, 0.02, 0.018, 1))
-    glow = material("motorcycle_warm_headlamp", (1.0, 0.78, 0.38, 1))
-
-    objects = []
-    objects.append(torus("front_tire", (1.25, 0, 0.48), 0.42, 0.055, tire, rotation=(1.5708, 0, 0)))
-    objects.append(torus("rear_tire", (-1.25, 0, 0.48), 0.42, 0.055, tire, rotation=(1.5708, 0, 0)))
-    objects.append(cylinder("front_hub", (1.25, 0, 0.48), 0.13, 0.16, metal, rotation=(1.5708, 0, 0)))
-    objects.append(cylinder("rear_hub", (-1.25, 0, 0.48), 0.13, 0.16, metal, rotation=(1.5708, 0, 0)))
-
-    lower_frame = cube("low_motorcycle_frame", (0, 0, 0.66), (1.75, 0.16, 0.14), frame)
-    lower_frame.rotation_euler[1] = 0.05
-    objects.append(lower_frame)
-    top_frame = cube("sloped_top_frame", (-0.1, 0, 0.94), (1.45, 0.12, 0.12), frame)
-    top_frame.rotation_euler[1] = -0.22
-    objects.append(top_frame)
-    front_fork = cylinder("front_fork", (0.98, 0, 0.88), 0.045, 0.98, metal, rotation=(0.22, 0, 0))
-    front_fork.rotation_euler[1] = -0.22
-    objects.append(front_fork)
-    rear_swingarm = cube("rear_swingarm", (-0.82, 0, 0.55), (0.88, 0.1, 0.08), metal)
-    rear_swingarm.rotation_euler[1] = 0.16
-    objects.append(rear_swingarm)
-
-    objects.append(cube("engine_block", (-0.25, 0, 0.58), (0.55, 0.36, 0.42), metal))
-    objects.append(sphere("fuel_tank", (0.28, 0, 1.08), (0.46, 0.26, 0.2), tank))
-    objects.append(cube("single_saddle_seat", (-0.58, 0, 1.02), (0.72, 0.34, 0.1), leather))
-    objects.append(cylinder("seat_support_post", (-0.58, 0, 0.82), 0.04, 0.32, metal))
-    objects.append(cylinder("handlebar_stem", (1.08, 0, 1.28), 0.035, 0.45, metal, rotation=(1.5708, 0, 0)))
-    objects.append(cylinder("wide_handlebars", (1.12, 0, 1.42), 0.035, 0.82, metal, rotation=(1.5708, 0, 0)))
-    objects.append(cylinder("rear_exhaust_pipe", (-0.62, -0.24, 0.48), 0.055, 1.25, metal, rotation=(0, 1.5708, 0)))
-    objects.append(sphere("round_headlamp", (1.52, 0, 1.02), (0.13, 0.13, 0.11), glow))
-
-    add_preview_setup(camera_location=(4.6, -6.0, 3.2), target=(0, 0, 0.78), ortho_scale=4.4)
-    return parent_to_root(spec, objects), "motorcycle"
-
-
-def make_office_scene(spec):
-    floor_mat = material("office_floor_neutral", (0.42, 0.4, 0.36, 1))
-    wall_mat = material("office_wall_soft_gray", (0.74, 0.74, 0.7, 1))
-    wood = material("desk_warm_wood", (0.45, 0.28, 0.14, 1))
-    dark = material("chair_dark_fabric", (0.06, 0.07, 0.08, 1))
-    glass = material("window_cool_blue", (0.18, 0.5, 0.85, 0.75))
-    lamp = material("lamp_warm_light", (1.0, 0.78, 0.35, 1))
-    metal = material("lamp_dark_metal", (0.18, 0.18, 0.17, 1))
-
-    objects = []
-    objects.append(cube("office_floor", (0, 0, -0.08), (5.8, 4.0, 0.12), floor_mat))
-    objects.append(cube("back_wall", (0, 1.9, 1.05), (5.8, 0.12, 2.2), wall_mat))
-    objects.append(cube("large_window", (-1.35, 1.82, 1.25), (1.45, 0.05, 0.9), glass))
-    objects.append(cube("desk_top", (0, 0.15, 0.72), (2.1, 0.9, 0.16), wood))
-    for idx, x in enumerate((-0.82, 0.82)):
-        for jdx, y in enumerate((-0.22, 0.5)):
-            objects.append(cylinder(f"desk_leg_{idx + 1}_{jdx + 1}", (x, y, 0.33), 0.045, 0.72, wood))
-
-    for idx, x in enumerate((-0.72, 0.72)):
-        objects.append(cube(f"chair_{idx + 1}_seat", (x, -1.0, 0.38), (0.58, 0.52, 0.14), dark))
-        objects.append(cube(f"chair_{idx + 1}_back", (x, -1.22, 0.82), (0.58, 0.12, 0.78), dark))
-        objects.append(cylinder(f"chair_{idx + 1}_post", (x, -1.0, 0.16), 0.045, 0.35, metal))
-
-    objects.append(cylinder("lamp_stem", (0.72, 0.32, 1.08), 0.035, 0.74, metal))
-    shade = cylinder("lamp_shade", (0.72, 0.32, 1.48), 0.18, 0.22, lamp)
-    shade.scale[0] = 1.2
-    objects.append(shade)
-
-    add_preview_setup(camera_location=(5.4, -6.2, 4.1), target=(0, 0, 0.55), ortho_scale=6.4)
-    return parent_to_root(spec, objects), "office"
-
-
-def make_park_scene(spec):
-    grass = material("park_grass", (0.16, 0.42, 0.14, 1))
-    path_mat = material("curving_path_sand", (0.58, 0.48, 0.34, 1))
-    bark = material("tree_bark", (0.28, 0.15, 0.07, 1))
-    leaves = material("tree_leaf_canopy", (0.08, 0.34, 0.11, 1))
-    bench_mat = material("bench_weathered_wood", (0.36, 0.21, 0.11, 1))
-
-    objects = []
-    objects.append(cube("park_ground", (0, 0, -0.06), (6.4, 4.2, 0.1), grass))
-    path = cube("walking_path", (0, -0.05, 0.01), (5.8, 0.65, 0.04), path_mat)
-    path.rotation_euler[2] = -0.18
-    objects.append(path)
-
-    tree_positions = [(-2.2, 1.15), (-1.35, -1.15), (1.55, 1.05), (2.25, -0.95)]
-    for idx, (x, y) in enumerate(tree_positions):
-        objects.append(cylinder(f"tree_{idx + 1}_trunk", (x, y, 0.45), 0.09, 0.95, bark))
-        objects.append(sphere(f"tree_{idx + 1}_canopy", (x, y, 1.12), (0.48, 0.48, 0.42), leaves))
-
-    objects.append(cube("park_bench_seat", (0.95, -1.18, 0.32), (1.0, 0.22, 0.12), bench_mat))
-    objects.append(cube("park_bench_back", (0.95, -1.36, 0.62), (1.0, 0.12, 0.48), bench_mat))
-    objects.append(cylinder("bench_left_leg", (0.55, -1.18, 0.15), 0.035, 0.32, bench_mat))
-    objects.append(cylinder("bench_right_leg", (1.35, -1.18, 0.15), 0.035, 0.32, bench_mat))
-
-    add_preview_setup(camera_location=(5.8, -6.6, 4.4), target=(0, 0, 0.45), ortho_scale=7.0)
-    return parent_to_root(spec, objects), "park"
-
-
 def safe_object_name(text, fallback):
     safe = "".join(ch if ch.isalnum() else "_" for ch in str(text).lower()).strip("_")
     return safe or fallback
@@ -416,6 +191,22 @@ def tokenize_name(name):
 
 def has_any(tokens, words):
     return any(word in tokens for word in words)
+
+
+def flatten_detail_values(value):
+    if isinstance(value, dict):
+        values = []
+        for nested in value.values():
+            values.extend(flatten_detail_values(nested))
+        return values
+    if isinstance(value, list):
+        values = []
+        for nested in value:
+            values.extend(flatten_detail_values(nested))
+        return values
+    if value is None:
+        return []
+    return [str(value)]
 
 
 def count_from_tokens(tokens):
@@ -446,13 +237,21 @@ def category_for_name(name, shape_hint):
         ("bed", ("bed", "bunk", "cot", "gurney", "examination", "exam", "stretcher", "sofa", "couch")),
         ("cabinet", ("dresser", "nightstand", "cabinet", "locker", "storage", "shelf", "bookshelf", "closet", "crate", "box")),
         ("lamp", ("lamp", "light", "lighting", "lantern", "sconce", "beacon")),
+        ("vehicle_seat", ("saddle",)),
         ("chair", ("chair", "stool", "seat", "seating", "bench")),
         ("monitor", ("monitor", "computer", "screen", "terminal", "display", "console", "control", "scanner", "sensor")),
         ("wall_panel", ("window", "mirror", "poster", "door", "panel", "sign", "gate", "barrier", "wall_item")),
         ("path", ("path", "road", "river", "walkway", "corridor", "trail", "track")),
+        ("vehicle_fuselage", ("fuselage", "airframe")),
+        ("vehicle_fuselage", ("body", "hull")),
+        ("vehicle_wing", ("wing", "wings")),
+        ("vehicle_nose", ("nose",)),
+        ("vehicle_tail", ("tail", "fin", "rudder", "stabilizer")),
+        ("vehicle_controls", ("handlebar", "handlebars", "steering", "controls", "yoke")),
+        ("vehicle_engine", ("engine", "motor", "thruster", "exhaust", "nozzle")),
         ("table", ("desk", "table", "counter", "workbench", "altar", "bar", "stall", "surface")),
         ("ring", ("ring", "wheel", "loop", "portal")),
-        ("cylinder", ("pipe", "column", "post", "tank", "barrel", "tube", "canister", "reactor")),
+        ("cylinder", ("pipe", "column", "post", "tank", "barrel", "tube", "canister", "reactor", "cannon", "gun")),
         ("sphere", ("globe", "ball", "orb", "rock", "boulder", "planet")),
         ("thin_slab", ("rug", "mat", "platform", "pad", "floor", "carpet", "canopy", "awning", "roof")),
         ("tall_block", ("tower", "pillar", "wardrobe", "machine", "kiosk", "vending", "booth", "pod", "structure")),
@@ -489,29 +288,163 @@ def component_position(name, idx):
     x = -2.1 + (idx % 4) * 1.4
     y = -0.9 + (idx // 4) * 1.1
     z = 0.35
+    tokens = tokenize_name(name)
 
     if "left" in name:
-        x = -1.25
+        y = -1.25
     if "right" in name:
-        x = 1.25
+        y = 1.25
     if "center" in name or "middle" in name:
         x = 0
+        y = 0
     if "behind" in name or "back" in name:
-        y = 1.15
+        x = -1.15
     if "front" in name:
-        y = -1.25
+        x = 1.25
+    if "front" in name and has_any(tokens, ("wheel", "tire", "handlebar", "handlebars", "fork")):
+        x = 1.25
+        y = 0
+    if "rear" in name and has_any(tokens, ("wheel", "tire", "engine", "exhaust")):
+        x = -1.25
+        y = 0
+    if has_any(tokens, ("frame", "chassis")):
+        x = 0
+        y = 0
+        z = 0.62
+    if has_any(tokens, ("engine", "motor")):
+        x = -0.2
+        y = 0
+        z = 0.46
+    if has_any(tokens, ("saddle", "seat")):
+        x = -0.45
+        y = 0
+        z = 0.9
+    if has_any(tokens, ("handlebar", "handlebars", "steering", "controls")):
+        x = 1.05
+        y = 0
+        z = 1.15
+    if has_any(tokens, ("fuselage", "airframe")):
+        x = 0
+        y = 0
+        z = 0.72
+    if "left" in name and has_any(tokens, ("wing", "wings")):
+        x = -0.05
+        y = -0.95
+        z = 0.58
+    if "right" in name and has_any(tokens, ("wing", "wings")):
+        x = -0.05
+        y = 0.95
+        z = 0.58
+    if has_any(tokens, ("nose",)):
+        x = 1.45
+        y = 0
+        z = 0.72
+    if has_any(tokens, ("tail", "fin", "rudder", "stabilizer")):
+        x = -1.45
+        y = 0
+        z = 1.0
     if "side" in name and "left" not in name and "right" not in name:
-        x = -1.8 if idx % 2 == 0 else 1.8
+        y = -1.8 if idx % 2 == 0 else 1.8
     if "on_desk" in name or "on_table" in name or "on_counter" in name:
         x = 0.35 if idx % 2 else -0.35
         y = 0.05
         z = 0.98
-    if "wall" in name or "window" in name:
-        y = 1.85
+    if "wall" in name:
+        x = -1.85
         z = 1.1
     if "overhead" in name or "ceiling" in name or "canopy" in name:
+        x = 0
         y = 0
         z = 1.65
+    return x, y, z
+
+
+def scene_object_name(obj, idx):
+    return safe_object_name(obj.get("id") or obj.get("label") or f"object_{idx + 1}", f"object_{idx + 1}")
+
+
+def scene_object_tokens(obj):
+    parts = [
+        str(obj.get("label") or ""),
+        str(obj.get("id") or ""),
+        str(obj.get("category") or ""),
+        str(obj.get("size") or ""),
+        str(obj.get("placement") or ""),
+        str(obj.get("mounting") or ""),
+    ]
+    orientation = obj.get("orientation")
+    if isinstance(orientation, dict):
+        parts.append(str(orientation.get("faces") or ""))
+    for key in ("shape", "required_features", "source_phrases", "materials", "style_details", "parts"):
+        parts.extend(flatten_detail_values(obj.get(key)))
+    return tokenize_name(" ".join(parts))
+
+
+def scene_object_category(obj):
+    label = str(obj.get("label") or obj.get("id") or "")
+    category = str(obj.get("category") or "")
+    tokens = scene_object_tokens(obj)
+    if category == "screen":
+        return "wall_panel" if has_any(tokens, ("window", "porthole")) else "monitor"
+    if category == "lighting":
+        return "lamp"
+    if category == "plant":
+        return "tree"
+    if category == "path":
+        return "path"
+    if category == "surface":
+        return "wall_panel" if has_any(tokens, ("panel", "plate")) else "table"
+    if category == "machine" and has_any(tokens, ("engine", "motor", "thruster", "exhaust", "nozzle")):
+        return "vehicle_engine"
+    return category_for_name(label, None)
+
+
+def scene_object_count(obj):
+    count = obj.get("count")
+    if isinstance(count, int):
+        return max(1, min(6, count))
+    return count_from_tokens(scene_object_tokens(obj))
+
+
+def scene_object_position(obj, idx, category):
+    label = str(obj.get("label") or obj.get("id") or "")
+    placement = str(obj.get("placement") or "")
+    mounting = str(obj.get("mounting") or "")
+    size = str(obj.get("size") or "")
+    text = "_".join(part for part in (size, label, placement, mounting) if part)
+    x, y, z = component_position(text, idx)
+    tokens = scene_object_tokens(obj)
+
+    if placement in {"left", "right", "front", "back", "rear", "rear_wall", "top", "bottom"}:
+        x, y, z = axis_position_for_placement(placement, distance=1.15, z=z)
+    elif placement in {"center", "middle"}:
+        x, y = 0, 0
+    elif placement == "corner":
+        x = -1.6
+        y = -1.15 if idx % 2 == 0 else 1.15
+
+    if mounting in {"wall", "ceiling"} or placement == "rear_wall":
+        x = -1.85 if mounting != "ceiling" else 0
+        y = 0 if mounting != "ceiling" else y
+        z = 1.15 if mounting != "ceiling" else 1.7
+    elif mounting == "surface":
+        z = max(z, 0.92)
+
+    if category == "vehicle_fuselage":
+        x, y, z = 0, 0, 0.72
+    elif category == "vehicle_wing":
+        x = -0.05
+        y = -0.95 if placement == "left" or (placement not in {"right", "left"} and idx % 2 == 0) else 0.95
+        z = 0.58
+    elif category == "vehicle_engine":
+        x = -1.25 if has_any(tokens, ("ship", "rocket", "rear", "engine", "thruster")) else x
+        y = 0 if has_any(tokens, ("ship", "rocket", "engine", "thruster")) else y
+        z = 0.62
+    elif category == "vehicle_nose":
+        x, y, z = 1.45, 0, 0.72
+    elif category == "vehicle_tail":
+        x, y, z = -1.45, 0, 1.0
+
     return x, y, z
 
 
@@ -523,13 +456,36 @@ def offset_position(base, copy_idx, total):
     return x + (copy_idx - (total - 1) / 2) * spread, y, z
 
 
-def make_table_like(name, x, y, z, mat):
-    top = cube(f"{name}_top", (x, y, 0.68), (1.35, 0.72, 0.14), mat["wood"])
+def offset_position_for_category(base, copy_idx, total, category):
+    if total == 1:
+        return base
+    x, y, z = base
+    if category == "vehicle_wing":
+        spread = 1.9
+        return x, y + (copy_idx - (total - 1) / 2) * spread, z
+    return offset_position(base, copy_idx, total)
+
+
+def object_has_detail(obj, words):
+    return has_any(scene_object_tokens(obj), words)
+
+
+def make_table_like(name, x, y, z, mat, rounded=False, thin_legs=False):
+    leg_radius = 0.024 if thin_legs else 0.035
+    if rounded:
+        top = [
+            cube(f"{name}_top_center", (x, y, 0.68), (1.05, 0.72, 0.14), mat["wood"]),
+            cube(f"{name}_top_mid", (x, y, 0.68), (1.35, 0.4, 0.14), mat["wood"]),
+        ]
+        for corner_idx, (cx, cy) in enumerate(((-0.52, -0.2), (-0.52, 0.2), (0.52, -0.2), (0.52, 0.2)), start=1):
+            top.append(cylinder(f"{name}_rounded_corner_{corner_idx}", (x + cx, y + cy, 0.68), 0.16, 0.14, mat["wood"]))
+    else:
+        top = [cube(f"{name}_top", (x, y, 0.68), (1.35, 0.72, 0.14), mat["wood"])]
     legs = []
     for lx in (-0.52, 0.52):
         for ly in (-0.25, 0.25):
-            legs.append(cylinder(f"{name}_leg_{len(legs) + 1}", (x + lx, y + ly, 0.34), 0.035, 0.68, mat["metal"]))
-    return [top, *legs]
+            legs.append(cylinder(f"{name}_leg_{len(legs) + 1}", (x + lx, y + ly, 0.34), leg_radius, 0.68, mat["metal"]))
+    return [*top, *legs]
 
 
 def make_chair(name, x, y, mat):
@@ -572,8 +528,46 @@ def make_lamp(name, x, y, z, mat):
     ]
 
 
+def make_vehicle_controls(name, x, y, z, mat):
+    return [
+        cylinder(f"{name}_stem", (x, y, z - 0.16), 0.03, 0.38, mat["metal"]),
+        cylinder(f"{name}_bar", (x, y, z + 0.08), 0.035, 0.78, mat["metal"], rotation=(1.5708, 0, 0)),
+    ]
+
+
+def make_vehicle_seat(name, x, y, z, mat):
+    return [
+        cube(f"{name}_pad", (x, y, z), (0.7, 0.34, 0.1), mat["dark"]),
+        cylinder(f"{name}_post", (x, y, z - 0.18), 0.035, 0.34, mat["metal"]),
+    ]
+
+
+def make_vehicle_fuselage(name, x, y, z, mat):
+    return [
+        cylinder(f"{name}_body", (x, y, z), 0.24, 2.7, mat["metal"], rotation=(0, 1.5708, 0)),
+        sphere(f"{name}_canopy", (x + 0.42, y, z + 0.26), (0.34, 0.22, 0.14), mat["glass"]),
+    ]
+
+
+def make_vehicle_wing(name, x, y, z, mat):
+    wing = cube(name, (x, y, z), (0.95, 1.35, 0.07), mat["neutral"])
+    wing.rotation_euler[2] = -0.16 if y > 0 else 0.16
+    return [wing]
+
+
+def make_vehicle_nose(name, x, y, z, mat):
+    nose = sphere(name, (x, y, z), (0.42, 0.23, 0.2), mat["metal"])
+    return [nose]
+
+
+def make_vehicle_tail(name, x, y, z, mat):
+    vertical = cube(f"{name}_vertical", (x, y, z), (0.14, 0.08, 0.72), mat["metal"])
+    vertical.rotation_euler[1] = -0.18
+    horizontal = cube(f"{name}_horizontal", (x + 0.05, y, z - 0.3), (0.58, 0.82, 0.07), mat["neutral"])
+    return [vertical, horizontal]
+
+
 def primitive_for_component(component, idx, mat):
-    raw_name = str(component).lower()
     name, shape_hint = semantic_name(component)
     safe_name = safe_object_name(name, f"component_{idx + 1}")
     tokens = tokenize_name(name)
@@ -583,7 +577,7 @@ def primitive_for_component(component, idx, mat):
     objects = []
 
     for copy_idx in range(count):
-        x, y, z = offset_position(base_position, copy_idx, count)
+        x, y, z = offset_position_for_category(base_position, copy_idx, count, category)
         suffix = f"_{copy_idx + 1}" if count > 1 else ""
         obj_name = f"{safe_name}{suffix}"
         mat_choice = material_for_category(category, tokens, mat)
@@ -607,10 +601,32 @@ def primitive_for_component(component, idx, mat):
             obj = cube(obj_name, (x, y, 0.04), (1.45, 0.38, 0.05), mat["path"])
             obj.rotation_euler[2] = -0.25
             objects.append(obj)
+        elif category == "vehicle_fuselage":
+            objects.extend(make_vehicle_fuselage(obj_name, x, y, z, mat))
+        elif category == "vehicle_wing":
+            objects.extend(make_vehicle_wing(obj_name, x, y, z, mat))
+        elif category == "vehicle_nose":
+            objects.extend(make_vehicle_nose(obj_name, x, y, z, mat))
+        elif category == "vehicle_tail":
+            objects.extend(make_vehicle_tail(obj_name, x, y, z, mat))
+        elif category == "vehicle_controls":
+            objects.extend(make_vehicle_controls(obj_name, x, y, z, mat))
+        elif category == "vehicle_seat":
+            objects.extend(make_vehicle_seat(obj_name, x, y, z, mat))
+        elif category == "vehicle_engine":
+            objects.append(cylinder(obj_name, (x, y, 0.72), 0.18, 0.58, mat["metal"], rotation=(0, 1.5708, 0)))
         elif category == "table":
-            objects.extend(make_table_like(obj_name, x, y, z, mat))
+            objects.extend(make_table_like(
+                obj_name,
+                x,
+                y,
+                z,
+                mat,
+                rounded=has_any(tokens, ("rounded", "rounded_corners")),
+                thin_legs=has_any(tokens, ("thin_legs", "thin")),
+            ))
         elif category == "ring":
-            objects.append(torus(obj_name, (x, y, 0.55), 0.34, 0.04, mat_choice))
+            objects.append(torus(obj_name, (x, y, 0.48), 0.34, 0.04, mat_choice, rotation=(1.5708, 0, 0)))
         elif category == "cylinder":
             radius = 0.14 if has_any(tokens, ("thin", "small", "pipe", "post")) else 0.22
             depth = 0.75 if has_any(tokens, ("short", "small")) else 1.0
@@ -620,7 +636,11 @@ def primitive_for_component(component, idx, mat):
             objects.append(sphere(obj_name, (x, y, 0.42), scale, mat_choice))
         elif category == "thin_slab":
             scale = (1.1, 0.7, 0.08) if not has_any(tokens, ("large", "big", "wide")) else (1.8, 1.0, 0.08)
+            if has_any(tokens, ("frame", "chassis")):
+                scale = (1.75, 0.16, 0.14)
             slab_z = z if has_any(tokens, ("overhead", "ceiling", "canopy", "awning", "roof")) else 0.06
+            if has_any(tokens, ("low", "frame", "chassis")):
+                slab_z = z
             objects.append(cube(obj_name, (x, y, slab_z), scale, mat_choice))
         elif category == "tall_block":
             objects.append(cube(obj_name, (x, y, 0.8), (0.45, 0.45, 1.45), mat_choice))
@@ -633,6 +653,83 @@ def primitive_for_component(component, idx, mat):
             objects.append(cube(obj_name, (x, y, scale[2] / 2), scale, mat_choice))
 
     return objects
+
+
+def scene_plan_objects(spec):
+    for key in ("repaired_scene_plan", "scene_plan"):
+        plan = spec.get(key)
+        if isinstance(plan, dict) and isinstance(plan.get("objects"), list) and plan["objects"]:
+            return [obj for obj in plan["objects"] if isinstance(obj, dict)]
+    return []
+
+
+def layout_items_for_spec(spec):
+    objects = scene_plan_objects(spec)
+    if objects:
+        return [{"source": "scene_object", "value": obj} for obj in objects]
+    components = spec.get("components")
+    if isinstance(components, list) and components:
+        return [{"source": "component", "value": component} for component in components]
+    raise ValueError("Primitive build spec must include scene objects or non-empty components")
+
+
+def components_for_layout(spec):
+    return [item["value"] for item in layout_items_for_spec(spec) if item["source"] == "component"]
+
+
+def primitive_for_scene_object(obj, idx, mat):
+    name = scene_object_name(obj, idx)
+    category = scene_object_category(obj)
+    tokens = scene_object_tokens(obj)
+    count = scene_object_count(obj)
+    base_position = scene_object_position(obj, idx, category)
+    objects = []
+
+    for copy_idx in range(count):
+        x, y, z = offset_position_for_category(base_position, copy_idx, count, category)
+        suffix = f"_{copy_idx + 1}" if count > 1 else ""
+        obj_name = f"{name}{suffix}"
+        mat_choice = material_for_category(category, tokens, mat)
+
+        if category == "vehicle_fuselage":
+            objects.extend(make_vehicle_fuselage(obj_name, x, y, z, mat))
+        elif category == "vehicle_wing":
+            objects.extend(make_vehicle_wing(obj_name, x, y, z, mat))
+        elif category == "vehicle_nose":
+            objects.extend(make_vehicle_nose(obj_name, x, y, z, mat))
+        elif category == "vehicle_tail":
+            objects.extend(make_vehicle_tail(obj_name, x, y, z, mat))
+        elif category == "vehicle_engine":
+            objects.append(cylinder(obj_name, (x, y, z), 0.18, 0.58, mat["metal"], rotation=(0, 1.5708, 0)))
+        elif category == "wall_panel":
+            objects.append(cube(obj_name, (x, y, z), (0.62, 0.05, 0.42), mat_choice))
+        elif category == "table":
+            objects.extend(make_table_like(
+                obj_name,
+                x,
+                y,
+                z,
+                mat,
+                rounded=object_has_detail(obj, ("rounded", "rounded_corners")),
+                thin_legs=object_has_detail(obj, ("thin_legs", "thin")),
+            ))
+        else:
+            objects.extend(primitive_for_component(" ".join(tokens) or name, idx, mat))
+
+    return objects
+
+
+def uses_location_shell(spec):
+    return spec.get("kind") in {"location", "set"}
+
+
+def layout_shell_descriptors(spec):
+    if not uses_location_shell(spec):
+        return []
+    return [
+        ("layout_floor", (0, 0, -0.08), (6.2, 3.8, 0.1), "neutral"),
+        ("layout_back_wall", (-3.1, 0, 1.0), (0.08, 3.8, 2.05), "light"),
+    ]
 
 
 def make_component_layout_scene(spec):
@@ -649,34 +746,28 @@ def make_component_layout_scene(spec):
         "soft": material("component_soft_surface", (0.72, 0.72, 0.68, 1)),
         "light": material("component_light_surface", (0.86, 0.86, 0.82, 1)),
     }
-    objects = []
-    if spec.get("kind") == "location" or any(word in spec_text(spec) for word in ("room", "bay", "office", "set", "park")):
-        objects.append(cube("layout_floor", (0, 0, -0.08), (6.2, 3.8, 0.1), mats["neutral"]))
-        objects.append(cube("layout_back_wall", (0, 1.92, 1.0), (6.2, 0.08, 2.05), mats["light"]))
-    else:
-        objects.append(cube("layout_base", (0, 0, -0.08), (6.2, 3.8, 0.1), mats["neutral"]))
-    components = scene_plan_components(spec) or spec.get("components") or ["primary mass", "secondary detail", "accent feature"]
-    for idx, component in enumerate(components[:10]):
-        objects.extend(primitive_for_component(component, idx, mats))
+    objects = [
+        cube(name, location, scale, mats[mat_key])
+        for name, location, scale, mat_key in layout_shell_descriptors(spec)
+    ]
+    layout_items = layout_items_for_spec(spec)
+    for idx, item in enumerate(layout_items[:10]):
+        if item["source"] == "scene_object":
+            objects.extend(primitive_for_scene_object(item["value"], idx, mats))
+        else:
+            objects.extend(primitive_for_component(item["value"], idx, mats))
 
-    add_preview_setup(camera_location=(5.6, -6.4, 4.2), target=(0, 0, 0.45), ortho_scale=6.8)
+    action_view = canonical_camera_views()["action"]
+    add_preview_setup(
+        camera_location=action_view["location"],
+        target=action_view["target"],
+        ortho_scale=action_view["ortho_scale"],
+    )
     return parent_to_root(spec, objects), "component_layout"
 
 
 def make_scene(spec):
     clear_scene()
-    if wants_motorcycle(spec):
-        return make_motorcycle_scene(spec)
-    if wants_office(spec):
-        return make_office_scene(spec)
-    if wants_park(spec):
-        return make_park_scene(spec)
-    if wants_station(spec):
-        return make_station_scene(spec)
-    if wants_vehicle(spec):
-        return make_fighter_scene(spec)
-    if scene_plan_components(spec) or spec.get("components"):
-        return make_component_layout_scene(spec)
     return make_component_layout_scene(spec)
 
 
@@ -710,6 +801,8 @@ def main():
         "components": spec.get("components", []),
         "scene_plan": spec.get("scene_plan"),
         "repaired_scene_plan": spec.get("repaired_scene_plan"),
+        "orientation_standard": orientation_standard(spec),
+        "canonical_camera_views": canonical_camera_views(),
         "variant": variant,
         "outputs": {
             "glb": str(output),
