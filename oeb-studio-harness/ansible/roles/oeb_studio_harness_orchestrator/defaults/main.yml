@@ -32,6 +32,14 @@ oeb_studio_harness_backup_retention_days: 14
 # Timezone
 oeb_studio_harness_timezone: America/New_York
 
+# Environment-specific application settings. Real staging values belong in
+# inventory/host_vars; this role refuses to deploy placeholder values.
+oeb_environment: staging-docker-pi
+oeb_studio_chat_ollama_url: "CONFIGURE_IN_INVENTORY"
+oeb_studio_chat_model: "oeb-qwen2.5-3b"
+oeb_studio_chat_harness_url: ""
+oeb_studio_chat_admin_token: ""
+
 # Local network CIDR for firewall allow rule — MUST be set in inventory
 oeb_studio_harness_local_network_cidr: "CONFIGURE_IN_INVENTORY"
 

@@ -1,7 +1,7 @@
 ---
 title: Conversation To Build Loop
 created: 2026-07-14T20:07:21-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-16T17:46:50-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -70,16 +70,18 @@ chat UI:
 Minimum behavior:
 
 - Accept one creative request as text.
-- Send it to the local Ollama model with a constrained prompt.
-- Return strict JSON matching a tiny intake schema.
-- Convert that JSON into a harness job payload.
-- Submit the job to `/api/v1/jobs`.
-- Print the job ID and local review URL.
+- Submit the prompt to the configured studio endpoint in `OEB_HARNESS_URL`.
+- Let that harness perform scene-plan intake, repair, primitive-spec creation,
+  and job submission.
+- Have an eligible worker claim the Blender-capable render job.
+- Print the job ID, review URL, trace URL, and canonical ID.
 
 Example:
 
 ```bash
-python tools/studio_chat.py "Build me a fast, beat-up pirate space fighter from primitive shapes."
+OEB_HARNESS_URL=<local or staging harness URL> \
+API_ADMIN_TOKEN=<matching harness admin token> \
+python3 tools/studio_chat.py "Build me a fast, beat-up pirate space fighter from primitive shapes."
 ```
 
 ## First job type: primitive asset build
