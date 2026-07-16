@@ -5,8 +5,11 @@ SESSION_NAME="${OEB_WORKER_SCREEN_SESSION:-oeb-worker}"
 HARNESS_URL="${OEB_HARNESS_URL:-http://127.0.0.1:8088}"
 ADMIN_TOKEN="${API_ADMIN_TOKEN:-local-admin-token}"
 
-if screen -ls | grep -q "[.]$SESSION_NAME[[:space:]]"; then
+sessions="$(screen -ls 2>/dev/null | awk -v name=".$SESSION_NAME" '$1 ~ name {print $1}' || true)"
+
+if [ -n "$sessions" ]; then
   echo "screen: running ($SESSION_NAME)"
+  echo "$sessions"
 else
   echo "screen: not running ($SESSION_NAME)"
 fi
