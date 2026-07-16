@@ -182,8 +182,14 @@ def wants_park(spec):
 
 def wants_vehicle(spec):
     text = spec_text(spec)
-    vehicle_words = ("ship", "spaceship", "fighter", "vehicle", "craft", "engine", "wing")
+    vehicle_words = ("ship", "spaceship", "fighter", "vehicle", "craft", "engine", "wing", "motorcycle", "motorbike", "bike", "wheel", "handlebar")
     return any(word in text for word in vehicle_words)
+
+
+def wants_motorcycle(spec):
+    text = spec_text(spec)
+    motorcycle_words = ("motorcycle", "motorbike")
+    return any(word in text for word in motorcycle_words)
 
 
 def clear_scene():
@@ -290,6 +296,46 @@ def make_station_scene(spec):
 
     add_preview_setup(camera_location=(5.4, -6.2, 4.0), target=(0, 0, 0.35), ortho_scale=5.8)
     return parent_to_root(spec, objects), "station"
+
+
+def make_motorcycle_scene(spec):
+    frame = material("motorcycle_dark_frame", (0.04, 0.045, 0.05, 1))
+    tire = material("motorcycle_black_rubber", (0.01, 0.01, 0.012, 1))
+    metal = material("motorcycle_brushed_metal", (0.36, 0.36, 0.34, 1))
+    tank = material("motorcycle_deep_red_tank", (0.42, 0.04, 0.03, 1))
+    leather = material("motorcycle_black_saddle", (0.025, 0.02, 0.018, 1))
+    glow = material("motorcycle_warm_headlamp", (1.0, 0.78, 0.38, 1))
+
+    objects = []
+    objects.append(torus("front_tire", (1.25, 0, 0.48), 0.42, 0.055, tire, rotation=(1.5708, 0, 0)))
+    objects.append(torus("rear_tire", (-1.25, 0, 0.48), 0.42, 0.055, tire, rotation=(1.5708, 0, 0)))
+    objects.append(cylinder("front_hub", (1.25, 0, 0.48), 0.13, 0.16, metal, rotation=(1.5708, 0, 0)))
+    objects.append(cylinder("rear_hub", (-1.25, 0, 0.48), 0.13, 0.16, metal, rotation=(1.5708, 0, 0)))
+
+    lower_frame = cube("low_motorcycle_frame", (0, 0, 0.66), (1.75, 0.16, 0.14), frame)
+    lower_frame.rotation_euler[1] = 0.05
+    objects.append(lower_frame)
+    top_frame = cube("sloped_top_frame", (-0.1, 0, 0.94), (1.45, 0.12, 0.12), frame)
+    top_frame.rotation_euler[1] = -0.22
+    objects.append(top_frame)
+    front_fork = cylinder("front_fork", (0.98, 0, 0.88), 0.045, 0.98, metal, rotation=(0.22, 0, 0))
+    front_fork.rotation_euler[1] = -0.22
+    objects.append(front_fork)
+    rear_swingarm = cube("rear_swingarm", (-0.82, 0, 0.55), (0.88, 0.1, 0.08), metal)
+    rear_swingarm.rotation_euler[1] = 0.16
+    objects.append(rear_swingarm)
+
+    objects.append(cube("engine_block", (-0.25, 0, 0.58), (0.55, 0.36, 0.42), metal))
+    objects.append(sphere("fuel_tank", (0.28, 0, 1.08), (0.46, 0.26, 0.2), tank))
+    objects.append(cube("single_saddle_seat", (-0.58, 0, 1.02), (0.72, 0.34, 0.1), leather))
+    objects.append(cylinder("seat_support_post", (-0.58, 0, 0.82), 0.04, 0.32, metal))
+    objects.append(cylinder("handlebar_stem", (1.08, 0, 1.28), 0.035, 0.45, metal, rotation=(1.5708, 0, 0)))
+    objects.append(cylinder("wide_handlebars", (1.12, 0, 1.42), 0.035, 0.82, metal, rotation=(1.5708, 0, 0)))
+    objects.append(cylinder("rear_exhaust_pipe", (-0.62, -0.24, 0.48), 0.055, 1.25, metal, rotation=(0, 1.5708, 0)))
+    objects.append(sphere("round_headlamp", (1.52, 0, 1.02), (0.13, 0.13, 0.11), glow))
+
+    add_preview_setup(camera_location=(4.6, -6.0, 3.2), target=(0, 0, 0.78), ortho_scale=4.4)
+    return parent_to_root(spec, objects), "motorcycle"
 
 
 def make_office_scene(spec):
@@ -619,8 +665,8 @@ def make_component_layout_scene(spec):
 
 def make_scene(spec):
     clear_scene()
-    if scene_plan_components(spec) or spec.get("components"):
-        return make_component_layout_scene(spec)
+    if wants_motorcycle(spec):
+        return make_motorcycle_scene(spec)
     if wants_office(spec):
         return make_office_scene(spec)
     if wants_park(spec):
@@ -629,6 +675,8 @@ def make_scene(spec):
         return make_station_scene(spec)
     if wants_vehicle(spec):
         return make_fighter_scene(spec)
+    if scene_plan_components(spec) or spec.get("components"):
+        return make_component_layout_scene(spec)
     return make_component_layout_scene(spec)
 
 

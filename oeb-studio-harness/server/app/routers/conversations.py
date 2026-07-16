@@ -32,6 +32,17 @@ FIGHTER_COMPONENTS = [
     "crooked tail fin",
     "asymmetric greebles",
 ]
+MOTORCYCLE_COMPONENTS = [
+    "front wheel",
+    "rear wheel",
+    "low motorcycle frame",
+    "engine block",
+    "fuel tank",
+    "single saddle seat",
+    "front fork",
+    "handlebars",
+    "rear exhaust pipe",
+]
 
 STATION_COMPONENTS = [
     "central habitat hub",
@@ -59,11 +70,61 @@ PARK_COMPONENTS = [
 ]
 
 
+SLUG_SKIP_WORDS = {
+    "a", "an", "the", "me", "make", "build", "create", "from", "with", "of",
+    "and", "that", "looks", "look", "like", "as", "one",
+}
+
+
+def _preserved_shape_phrase(text: str) -> str:
+    lowered = text.lower()
+    if match := re.search(r"\bcapital\s+letter\s+([a-z0-9])\b", lowered):
+        return f"capital_letter_{match.group(1)}"
+    if match := re.search(r"\bletter\s+([a-z0-9])\b", lowered):
+        return f"letter_{match.group(1)}"
+    if match := re.search(r"\bshaped\s+like\s+(?:a|an|the)?\s*([a-z0-9]+)\b", lowered):
+        shape = match.group(1)
+        return f"{shape}_shaped"
+    if match := re.search(r"\blooks?\s+like\s+(?:a|an|the)?\s*([a-z0-9]+)\b", lowered):
+        shape = match.group(1)
+        if shape not in SLUG_SKIP_WORDS:
+            return f"{shape}_shaped" if len(shape) == 1 else shape
+    return ""
+
+
+def _slug_kind_prefix(text: str) -> str:
+    if _text_has_any(text, ("ship", "spaceship", "fighter", "craft")):
+        return "ship"
+    return {
+        "vehicle": "vehicle",
+        "location": "location",
+        "prop": "prop",
+        "character": "character",
+        "set": "location",
+    }.get(_infer_kind(text), "asset")
+
+
 def _slugify_asset_id(text: str) -> str:
+    prefix = _slug_kind_prefix(text)
+    shape = _preserved_shape_phrase(text)
+    if shape:
+        return f"{prefix}_{shape}_A"
+
     words = re.findall(r"[a-z0-9]+", text.lower())
-    useful = [w for w in words if w not in {"a", "an", "the", "me", "make", "build", "from", "with"}]
+    prefix_object_words = {
+        "ship": {"ship", "spaceship", "fighter", "craft"},
+        "vehicle": {"vehicle"},
+        "location": {"location", "scene", "set"},
+        "prop": {"prop"},
+        "character": {"character", "char"},
+        "asset": {"asset"},
+    }.get(prefix, set())
+    useful = [
+        w for w in words
+        if w not in SLUG_SKIP_WORDS and w not in prefix_object_words
+    ]
     stem = "_".join(useful[:4]) or "primitive_asset"
-    return f"asset_{stem}_A"
+    return f"{prefix}_{stem}_A"
 
 
 def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
@@ -73,11 +134,11 @@ def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
 
 def _infer_kind(creative_request: str) -> str:
     text = creative_request.lower()
-    if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab")):
+    if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab", "garage", "hangar")):
         return "location"
     if _text_has_any(text, ("chair", "desk", "lamp", "table", "prop")) and not _text_has_any(text, ("room", "office")):
         return "prop"
-    if _text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck")):
+    if _text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
         return "vehicle"
     return "asset"
 
@@ -91,6 +152,8 @@ def _default_components_for(creative_request: str) -> list[str]:
     station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
     if any(word in text for word in station_words):
         return STATION_COMPONENTS
+    if _text_has_any(text, ("motorcycle", "motorbike", "bike")):
+        return MOTORCYCLE_COMPONENTS
     if _infer_kind(creative_request) == "vehicle":
         return FIGHTER_COMPONENTS
     return ["primary structure", "secondary feature", "detail element"]
@@ -98,9 +161,14 @@ def _default_components_for(creative_request: str) -> list[str]:
 
 def _normalize_spec_for_request(creative_request: str, spec: PrimitiveBuildSpec) -> PrimitiveBuildSpec:
     inferred_kind = _infer_kind(creative_request)
-    if spec.canonical_id.startswith("ship_") and inferred_kind != "vehicle":
+    shape = _preserved_shape_phrase(creative_request)
+    if (
+        (spec.canonical_id.startswith("ship_") and inferred_kind != "vehicle")
+        or (spec.canonical_id.startswith("asset_") and inferred_kind != "asset")
+        or (shape and shape not in spec.canonical_id)
+    ):
         spec.canonical_id = _slugify_asset_id(creative_request)
-    if spec.kind == "ship" and inferred_kind != "vehicle":
+    if spec.kind in {"asset", "ship"} and inferred_kind != "asset":
         spec.kind = inferred_kind
     if spec.kind not in {"asset", "location", "prop", "vehicle", "character", "set"}:
         spec.kind = inferred_kind
