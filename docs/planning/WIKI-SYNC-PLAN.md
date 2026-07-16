@@ -1,7 +1,7 @@
 ---
 title: Wiki Sync Plan
 created: 2026-07-11T19:12:29-04:00
-updated: 2026-07-16T11:56:04-04:00
+updated: 2026-07-16T12:09:51-04:00
 doc_type: plan
 production_area: publishing
 department: pipeline
@@ -45,6 +45,10 @@ the wiki is a generated artifact, never hand-edited.
   syntax — GitHub resolves it and it avoids `[[pipe]]` order ambiguity).
   Links are resolved by source path, not just basename; links to other repo
   files become absolute `blob/main` URLs.
+- Link curation warning: during rewrite, sync checks linked markdown source
+  metadata and warns when a generated page links to a document that will not
+  publish because it is `status: remove_next_cleanup`, `wiki: false`, or under
+  `docs/local/**`.
 - Generated `_Sidebar` (grouped: Design / Standards / Planning / Journal /
   Tracking) and `_Footer`; orphaned wiki pages pruned — the script owns
   the whole page set.
@@ -125,6 +129,8 @@ mirror is stateless — every run regenerates every page).
       generated and any previous generated page is pruned.
 - [x] `status: archived` remains publishable; archived means historical value,
       not deletion.
+- [x] Link rewrite warns when published pages point at tombstoned, local-only,
+      or otherwise non-published markdown docs.
 
 ## Full taxonomy pass — COMPLETED 2026-07-16
 
