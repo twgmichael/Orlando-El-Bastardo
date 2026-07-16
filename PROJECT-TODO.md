@@ -35,6 +35,10 @@ visible shot.
 
 1. **Conversation-to-job intake** — build the smallest usable chat entry point
    where a creative request becomes a structured harness job payload.
+   - [ ] Improve deterministic canonical-id slugging — preserve meaningful
+     differentiators like `capital_letter_v`, keep `job_id` as the unique run
+     key, and avoid extra LLM calls (see
+     `docs/planning/CANONICAL-ID-SLUG-PLAN.md`).
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.
