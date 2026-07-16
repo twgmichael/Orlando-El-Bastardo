@@ -1,3 +1,17 @@
+---
+title: Phases 4-5 (2026-07-06)
+created: 2026-07-06T09:13:12-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: progress_report
+production_area: pipeline
+department: production
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: Progress-2026-07-06-Phase-4-5
+wiki_order: 30
+---
 # Progress — 2026-07-06 — Phases 4 & 5: exporters, integration, LLM translator
 
 Two phases closed across 2026-07-05/06 (Phase 5 pending only the human

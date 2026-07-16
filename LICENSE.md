@@ -1,3 +1,16 @@
+---
+title: License
+created: 2026-07-05T14:16:48-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: operations
+department: production
+status: active
+canonical: true
+canonical_for: project_license
+wiki: false
+wiki_group: Operations
+---
 Required Notice: Copyright 2026 Michael Sweeney (Orlando El Bastardo)
 
 # PolyForm Noncommercial License 1.0.0

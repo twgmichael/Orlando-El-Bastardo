@@ -1,3 +1,18 @@
+---
+title: Flight Animation
+created: 2026-07-13T19:47:38-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: animation
+department: animation
+status: active
+canonical: true
+canonical_for: flight_animation_patterns
+wiki: true
+wiki_group: Design
+wiki_page: Flight-Animation
+wiki_order: 60
+---
 # Flight Animation — Techniques and Patterns
 
 Patterns discovered while building `tmp_jb100_space_action.py` and

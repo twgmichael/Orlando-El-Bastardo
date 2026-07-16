@@ -1,3 +1,18 @@
+---
+title: Local Worker Operations Fix Plan
+created: 2026-07-15T21:13:15-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: operations
+department: pipeline
+status: active
+canonical: true
+canonical_for: local_worker_operations
+wiki: true
+wiki_group: Planning
+wiki_page: Local-Worker-Operations-Fix-Plan
+wiki_order: 170
+---
 # Local Worker Operations Fix Plan
 
 Recorded 2026-07-15 after the first successful local prompt-to-Blender run.

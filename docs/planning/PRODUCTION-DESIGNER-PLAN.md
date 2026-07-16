@@ -1,3 +1,18 @@
+---
+title: Production Designer Plan
+created: 2026-07-11T21:32:45-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: sets
+department: art
+status: draft
+canonical: true
+canonical_for: production_designer_agent
+wiki: true
+wiki_group: Planning
+wiki_page: Production-Designer-Plan
+wiki_order: 80
+---
 # Production designer plan — a set-building worker agent
 
 Recorded 2026-07-11 (designed with the project owner). Status: **PLANNED,

@@ -1,3 +1,18 @@
+---
+title: Asset Location Orientation Standard
+created: 2026-07-16T08:09:14-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: standard
+production_area: assets
+department: pipeline
+status: active
+canonical: true
+canonical_for: asset_location_orientation
+wiki: true
+wiki_group: Standards
+wiki_page: Asset-Location-Orientation-Standard
+wiki_order: 70
+---
 # Asset And Location Orientation Standard
 
 Date: 2026-07-16

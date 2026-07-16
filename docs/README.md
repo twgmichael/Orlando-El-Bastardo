@@ -1,3 +1,18 @@
+---
+title: Home
+created: 2026-07-13T19:47:43-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: documentation
+department: production
+status: active
+canonical: true
+canonical_for: documentation_index
+wiki: true
+wiki_group: Home
+wiki_page: Home
+wiki_order: 0
+---
 # Orlando El Bastardo — Documentation
 
 3D animation orchestration pipeline. Human-authored content is compiled into
@@ -6,6 +21,10 @@ USD workflows. A local LLM translates approved source content into structured
 pipeline data — it does not generate pixels, fabricate imagery, or write story.
 
 ## Documents
+
+Public wiki publishing is controlled by front matter in each markdown file:
+`wiki: true`, `wiki_group`, `wiki_page`, and `wiki_order`. `docs/local/**`
+remains local-only and is always excluded from the wiki sync.
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — stack, processing pipeline, key principles
 - [SCHEMA.md](SCHEMA.md) — canonical objects, SceneSpec/ShotSpec/cue design, intent boundary

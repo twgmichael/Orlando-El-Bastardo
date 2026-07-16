@@ -1,3 +1,18 @@
+---
+title: Resources
+created: 2026-07-05T14:33:30-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: operations
+department: production
+status: active
+canonical: true
+canonical_for: resource_policy
+wiki: true
+wiki_group: Standards
+wiki_page: Resources
+wiki_order: 50
+---
 # Resources needed to get started
 
 ## Software (install on the primary machine)

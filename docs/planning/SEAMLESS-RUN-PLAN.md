@@ -1,3 +1,18 @@
+---
+title: Seamless Run Plan
+created: 2026-07-06T22:40:24-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: seamless_runs
+wiki: true
+wiki_group: Planning
+wiki_page: Seamless-Run-Plan
+wiki_order: 40
+---
 # Seamless runs — why prompts persist, and the plan to end them
 
 Discovery recorded 2026-07-06. Goal: script in → render out, zero permission

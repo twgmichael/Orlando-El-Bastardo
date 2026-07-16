@@ -1,3 +1,18 @@
+---
+title: Bar Scene
+created: 2026-07-03T21:44:09-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: design_record
+production_area: sets
+department: art
+status: active
+canonical: true
+canonical_for: bar_scene_integration_target
+wiki: true
+wiki_group: Design
+wiki_page: Bar-Scene
+wiki_order: 30
+---
 # First integration target — "Hero in a bar chatting with a bartender"
 
 Chosen because it exercises two-character dialogue, set loading, camera grammar,

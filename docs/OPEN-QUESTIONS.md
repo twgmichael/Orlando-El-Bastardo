@@ -1,3 +1,18 @@
+---
+title: Open Questions
+created: 2026-07-07T12:09:28-04:00
+updated: 2026-07-16T12:00:11-04:00
+doc_type: register
+production_area: operations
+department: production
+status: remove_next_cleanup
+canonical: true
+canonical_for: open_questions
+wiki: true
+wiki_group: Standards
+wiki_page: Open-Questions
+wiki_order: 40
+---
 # Open questions
 
 Unresolved design questions carried from the research phase. Resolve as they block
@@ -25,3 +40,10 @@ work; record the answer here and reflect it in SCHEMA.md / BAR-SCENE.md.
    now.** Dialogue is timing + markers only; adding viseme fields later is a
    minor-version schema bump. — With this, ALL original open questions are
    resolved.
+
+## Closure status
+
+Closed 2026-07-16. All six original research-phase questions have been
+answered and reflected in the project docs. This register is no longer an
+active source of truth and is marked `status: remove_next_cleanup` so the
+generated wiki page is pruned on the next wiki sync.

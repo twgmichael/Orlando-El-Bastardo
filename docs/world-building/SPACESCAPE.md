@@ -1,3 +1,18 @@
+---
+title: Spacescape
+created: 2026-07-13T16:07:33-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: design_record
+production_area: locations
+department: art
+status: active
+canonical: true
+canonical_for: spacescape_environment
+wiki: true
+wiki_group: Design
+wiki_page: Spacescape
+wiki_order: 50
+---
 # Spacescape / Starfield Environment
 
 Deep-space environment for JourneyBlaster and other space-set sequences.

@@ -1,3 +1,18 @@
+---
+title: JourneyBlaster
+created: 2026-07-13T19:47:00-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: design_record
+production_area: vehicles
+department: art
+status: active
+canonical: true
+canonical_for: journeyblaster_design
+wiki: true
+wiki_group: Design
+wiki_page: JourneyBlaster
+wiki_order: 40
+---
 # JourneyBlaster — ship design record (JB5K + JB100)
 
 Recorded 2026-07-13. The Yakara Starcraft sport-attack line, rebuilt from

@@ -1,3 +1,18 @@
+---
+title: Studio Chat Endpoint Plan
+created: 2026-07-15T15:04:43-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: studio_chat_endpoint
+wiki: true
+wiki_group: Planning
+wiki_page: Studio-Chat-Endpoint-Plan
+wiki_order: 150
+---
 # Studio Chat Endpoint Plan
 
 Recorded 2026-07-15. Status: **FIRST PASS BUILT**.

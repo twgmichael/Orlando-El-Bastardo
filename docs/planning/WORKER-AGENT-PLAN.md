@@ -1,3 +1,18 @@
+---
+title: Worker Agent Plan
+created: 2026-07-14T18:00:35-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: operations
+department: pipeline
+status: active
+canonical: true
+canonical_for: worker_agent
+wiki: true
+wiki_group: Planning
+wiki_page: Worker-Agent-Plan
+wiki_order: 90
+---
 # Worker agent plan — cross-platform harness workers + macOS menu bar
 
 Recorded 2026-07-14. Updated 2026-07-14 (script_file + cwd + output_root live).

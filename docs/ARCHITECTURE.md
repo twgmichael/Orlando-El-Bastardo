@@ -1,3 +1,18 @@
+---
+title: Architecture
+created: 2026-07-03T21:43:45-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: spec
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: pipeline_architecture
+wiki: true
+wiki_group: Design
+wiki_page: Architecture
+wiki_order: 10
+---
 # Architecture
 
 ## High-level stack

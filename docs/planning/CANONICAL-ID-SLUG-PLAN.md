@@ -1,3 +1,16 @@
+---
+title: Canonical ID Slug Plan
+created: 2026-07-15T22:46:06-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: assets
+department: pipeline
+status: draft
+canonical: true
+canonical_for: canonical_id_slugging
+wiki: false
+wiki_group: Planning
+---
 # Canonical ID Slug Plan
 
 Recorded 2026-07-15 after a studio-chat prompt produced a confusing canonical

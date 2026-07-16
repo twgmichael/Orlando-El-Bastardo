@@ -1,3 +1,15 @@
+---
+title: Pilot Teaser
+created: 2026-07-11T14:23:37-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: story
+department: story
+status: draft
+canonical: false
+wiki: false
+wiki_group: Operations
+---
                                TEASER
 
 INT. ORBITAL STATION LOUNGE - NIGHT

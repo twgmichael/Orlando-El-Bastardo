@@ -1,3 +1,16 @@
+---
+title: Orlando El Bastardo
+created: 2026-07-11T18:10:04-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: documentation
+department: production
+status: active
+canonical: true
+canonical_for: project_public_readme
+wiki: false
+wiki_group: Home
+---
 # Orlando-El-Bastardo
 
 Deterministic 3D animation pipeline: a local LLM translates story intent into

@@ -1,3 +1,18 @@
+---
+title: Documentation Taxonomy And Metadata
+created: 2026-07-16T08:30:18-04:00
+updated: 2026-07-16T11:56:04-04:00
+doc_type: standard
+production_area: documentation
+department: production
+status: active
+canonical: true
+canonical_for: documentation_taxonomy
+wiki: true
+wiki_group: Standards
+wiki_page: Documentation-Taxonomy-And-Metadata
+wiki_order: 80
+---
 # Documentation Taxonomy And Metadata
 
 Adopted: 2026-07-16
@@ -25,7 +40,7 @@ The wiki sync should read metadata instead of guessing from filenames whenever
 possible.
 
 `docs/local/**` remains deliberately excluded from git and public wiki sync, but
-local docs should still use the same metadata shape for consistency and sanity.
+local docs still use the same metadata shape for consistency and sanity.
 
 ## Front Matter Shape
 
@@ -34,6 +49,8 @@ Use YAML front matter at the top of markdown files:
 ```yaml
 ---
 title: Asset And Location Orientation Standard
+created: 2026-07-16T09:12:00-04:00
+updated: 2026-07-16T10:30:00-04:00
 doc_type: standard
 production_area: assets
 department: pipeline
@@ -58,6 +75,33 @@ Human-readable document title.
 Source context: common publishing, studio documentation, technical writing.
 
 OEB use: wiki page display title and document identity.
+
+Adopted: 2026-07-16
+
+### `created`
+
+Filesystem creation timestamp for the markdown document.
+
+OEB use: records when the local file was created, using the file birth time
+reported by the filesystem.
+
+Format: ISO 8601 local timestamp with offset.
+
+Example: `2026-07-16T09:12:00-04:00`
+
+Adopted: 2026-07-16
+
+### `updated`
+
+Filesystem modified timestamp for the markdown document.
+
+OEB use: records the file's updated time from the filesystem modified
+timestamp. When documentation front matter is restamped, the tooling preserves
+the file modified time so this field continues to match the source timestamp.
+
+Format: ISO 8601 local timestamp with offset.
+
+Example: `2026-07-16T10:30:00-04:00`
 
 Adopted: 2026-07-16
 
@@ -140,8 +184,17 @@ Allowed values:
 - `draft`
 - `active`
 - `approved`
-- `superseded`
 - `archived`
+- `superseded`
+- `remove_next_cleanup`
+
+OEB lifecycle meaning:
+
+- `active`: current source of truth, maintained.
+- `archived`: historically useful, no longer driving work.
+- `superseded`: replaced by a newer document; must include `superseded_by`.
+- `remove_next_cleanup`: no lasting value; do not publish to the wiki, and
+  prune any existing generated wiki page on the next sync.
 
 Adopted: 2026-07-16
 
@@ -174,6 +227,19 @@ Required when `canonical: true`.
 
 Adopted: 2026-07-16
 
+### `superseded_by`
+
+Source path or wiki target for the document that replaces this one.
+
+Required when `status: superseded`.
+
+OEB use: lets the wiki banner point readers from a historical document to the
+current source of truth.
+
+Example: `docs/planning/GOAL-REVIEW-AND-RECOMMENDATIONS-2026-07-16.md`
+
+Adopted: 2026-07-16
+
 ### `wiki`
 
 Whether this document should be published by the wiki sync.
@@ -184,6 +250,10 @@ Allowed values:
 - `false`
 
 OEB rule: `docs/local/**` should use `wiki: false`.
+
+OEB lifecycle rule: `status: remove_next_cleanup` overrides `wiki: true`.
+Such files are not published, and any matching generated wiki page is pruned
+because the wiki mirror owns the complete page set.
 
 Adopted: 2026-07-16
 
@@ -202,6 +272,30 @@ Allowed values:
 - `Tracking`
 
 Required when `wiki: true`.
+
+Adopted: 2026-07-16
+
+### `wiki_page`
+
+Stable GitHub wiki page name.
+
+OEB use: preserves public wiki URLs independently from source filenames and
+display titles. If omitted, tooling may derive a page name from `title`.
+
+Examples:
+
+- `Home`
+- `Asset-Location-Orientation-Standard`
+- `Journal-Log`
+
+Adopted: 2026-07-16
+
+### `wiki_order`
+
+Integer sort key within `wiki_group`.
+
+OEB use: keeps sidebar order metadata-driven instead of depending on a
+hard-coded script table. Lower numbers appear earlier.
 
 Adopted: 2026-07-16
 
@@ -337,19 +431,24 @@ exception is explicitly recorded.
 
 ## Wiki Sync Rules
 
-The wiki sync should eventually use document metadata as the routing contract.
+The wiki sync uses document metadata as the routing contract.
 
 Rules:
 
 - `wiki: true` means publish to the public wiki.
 - `wiki: false` means do not publish.
 - `wiki_group` controls sidebar group.
-- `title` controls display title unless a tool-specific override is added later.
-- `canonical: true` should be visible in generated wiki output.
+- `title` controls sidebar display title.
+- `created` and `updated` come from filesystem creation and modified
+  timestamps.
+- `wiki_page` controls the generated GitHub wiki filename. If omitted, the sync
+  may derive a page slug from `title`.
+- `wiki_order` controls sidebar order inside `wiki_group`.
+- `canonical: true` is visible in generated wiki output.
 - `canonical_for` is required when `canonical: true`.
-- Missing metadata should warn during migration.
-- After migration, missing required metadata should fail the sync for public docs.
+- Missing required metadata fails the sync for public docs.
 - `docs/local/**` must never publish, even if accidentally tagged otherwise.
+- Wiki output strips front matter before writing pages.
 
 ## Application Examples
 
@@ -358,6 +457,8 @@ Rules:
 ```yaml
 ---
 title: Asset And Location Orientation Standard
+created: 2026-07-16T09:12:00-04:00
+updated: 2026-07-16T10:30:00-04:00
 doc_type: standard
 production_area: assets
 department: pipeline
@@ -366,6 +467,8 @@ canonical: true
 canonical_for: asset_location_orientation
 wiki: true
 wiki_group: Standards
+wiki_page: Asset-Location-Orientation-Standard
+wiki_order: 70
 ---
 ```
 
@@ -374,6 +477,8 @@ wiki_group: Standards
 ```yaml
 ---
 title: JourneyBlaster Ship Design Record
+created: 2026-07-13T19:47:43-04:00
+updated: 2026-07-16T10:30:00-04:00
 doc_type: design_record
 production_area: vehicles
 department: art
@@ -382,6 +487,8 @@ canonical: true
 canonical_for: journeyblaster_design
 wiki: true
 wiki_group: Design
+wiki_page: JourneyBlaster
+wiki_order: 40
 ---
 ```
 
@@ -390,6 +497,8 @@ wiki_group: Design
 ```yaml
 ---
 title: Progress 2026-07-06 Phase 4 And 5
+created: 2026-07-06T17:24:00-04:00
+updated: 2026-07-16T10:30:00-04:00
 doc_type: progress_report
 production_area: pipeline
 department: production
@@ -397,6 +506,8 @@ status: archived
 canonical: false
 wiki: true
 wiki_group: Journal
+wiki_page: Progress-2026-07-06-Phase-4-5
+wiki_order: 30
 ---
 ```
 
@@ -405,6 +516,8 @@ wiki_group: Journal
 ```yaml
 ---
 title: Local Commands
+created: 2026-07-15T10:41:20-04:00
+updated: 2026-07-16T10:30:00-04:00
 doc_type: runbook
 production_area: operations
 department: pipeline
@@ -417,11 +530,23 @@ wiki_group: Operations
 
 ## Migration Plan
 
-1. Add this metadata format to new docs first.
-2. Tag public wiki docs incrementally.
-3. Tag `docs/local/**` for consistency with `wiki: false`.
-4. Update `tools/sync_wiki.py` to read front matter.
-5. Keep the current hard-coded page table only until metadata coverage is good
-   enough to replace it.
-6. Keep `docs/local/**` hard-excluded regardless of metadata.
+Completed 2026-07-16 for project-authored markdown:
 
+1. Public wiki docs carry full taxonomy front matter plus `wiki`, `wiki_group`,
+   `wiki_page`, and `wiki_order`.
+2. Local-only docs in `docs/local/**` carry the same taxonomy with
+   `wiki: false`.
+3. Root docs, fixture markdown, script markdown, and agent profile markdown are
+   tagged with the taxonomy and kept out of wiki sync unless explicitly routed.
+4. `tools/sync_wiki.py` reads front matter instead of a hard-coded page table.
+5. Generated wiki pages show document type, lifecycle status, and canonical
+   topic when applicable.
+6. `docs/local/**` remains hard-excluded regardless of metadata.
+7. Project-authored markdown front matter includes filesystem-sourced
+   `created` and `updated` stamps.
+
+Remaining migration work:
+
+1. Keep future project-authored markdown tagged when it is created.
+2. Promote or demote `wiki: true` only by changing front matter in the source
+   document.

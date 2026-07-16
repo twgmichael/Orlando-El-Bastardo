@@ -1,3 +1,18 @@
+---
+title: Provenance
+created: 2026-07-12T09:07:10-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: register
+production_area: assets
+department: production
+status: active
+canonical: true
+canonical_for: asset_provenance_register
+wiki: true
+wiki_group: Standards
+wiki_page: Provenance
+wiki_order: 20
+---
 # Asset provenance & license register
 
 Every acquired or salvaged asset gets an entry (acquisition policy:

@@ -1,3 +1,18 @@
+---
+title: Publishing Plan
+created: 2026-07-11T19:23:18-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: publishing
+department: production
+status: draft
+canonical: true
+canonical_for: publishing_plan
+wiki: true
+wiki_group: Planning
+wiki_page: Publishing-Plan
+wiki_order: 50
+---
 # Publishing plan — automatic YouTube upload of renders
 
 Recorded 2026-07-11 (decided with the project owner). Status: **PLANNED,
