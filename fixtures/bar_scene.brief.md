@@ -1,3 +1,15 @@
+---
+title: Bar Scene Brief Fixture
+created: 2026-07-06T07:46:56-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: story
+department: production
+status: active
+canonical: false
+wiki: false
+wiki_group: Operations
+---
 # Approved episode brief — bar scene intro (sc_bar_intro_001)
 
 This is APPROVED SOURCE MATERIAL. The translator LLM converts it to a

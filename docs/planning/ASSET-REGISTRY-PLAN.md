@@ -1,3 +1,18 @@
+---
+title: Asset Registry Plan
+created: 2026-07-14T19:24:07-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: assets
+department: pipeline
+status: draft
+canonical: true
+canonical_for: asset_registry
+wiki: true
+wiki_group: Planning
+wiki_page: Asset-Registry-Plan
+wiki_order: 120
+---
 # Asset Registry — Harness DB Plan
 
 Recorded 2026-07-14. Status: **PLANNED, not built.**

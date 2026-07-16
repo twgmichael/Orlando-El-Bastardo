@@ -1,3 +1,18 @@
+---
+title: Decisions
+created: 2026-07-11T14:58:00-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: decision_log
+production_area: operations
+department: production
+status: active
+canonical: true
+canonical_for: project_decisions
+wiki: true
+wiki_group: Standards
+wiki_page: Decisions
+wiki_order: 30
+---
 # Decisions (locked in research phase, 2026-07-03)
 
 | Decision | Result |

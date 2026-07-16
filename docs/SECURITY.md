@@ -1,3 +1,18 @@
+---
+title: Security
+created: 2026-07-14T19:48:29-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: standard
+production_area: security
+department: security
+status: approved
+canonical: true
+canonical_for: security_policy
+wiki: true
+wiki_group: Standards
+wiki_page: Security
+wiki_order: 60
+---
 # Security and Privacy Policy
 
 This repo is public. Everything committed is visible to the world. These rules

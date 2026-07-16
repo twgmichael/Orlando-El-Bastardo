@@ -1,3 +1,18 @@
+---
+title: Conversation To Build Loop
+created: 2026-07-14T20:07:21-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: conversation_to_build_loop
+wiki: true
+wiki_group: Planning
+wiki_page: Conversation-To-Build-Loop
+wiki_order: 130
+---
 # Conversation-to-Build Loop
 
 Recorded 2026-07-14. Status: **PARTIALLY BUILT — first vertical slice in progress.**

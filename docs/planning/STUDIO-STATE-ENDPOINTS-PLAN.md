@@ -1,3 +1,18 @@
+---
+title: Studio State Endpoints Plan
+created: 2026-07-15T12:33:18-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: studio_state_endpoints
+wiki: true
+wiki_group: Planning
+wiki_page: Studio-State-Endpoints-Plan
+wiki_order: 160
+---
 # Studio State Endpoints Plan
 
 Recorded 2026-07-15. Status: **FIRST PASS BUILT**.

@@ -1,8 +1,27 @@
+---
+title: Goal Review (2026-07-06, Archived)
+created: 2026-07-06T22:28:04-04:00
+updated: 2026-07-16T11:46:27-04:00
+doc_type: progress_report
+production_area: operations
+department: production
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: Goal-Review-2026-07-06
+wiki_order: 10
+---
 # Goal review & recommendations — 2026-07-06
 
 Context: honest assessment against the PROJECT GOAL — an end-to-end agent
 process with zero human engagement: script in → render out, no prompts, no
 blockers. Written at the author-tier model's preview expiry (handoff doc).
+
+Archived 2026-07-16: this review is preserved as the July 6 checkpoint. Its
+main blockers were later resolved by `tools/run_pipeline.py`, the July 11
+producer run, and the July 14 studio harness. The current goal review is
+`docs/planning/GOAL-REVIEW-AND-RECOMMENDATIONS-2026-07-16.md`.
 
 ## Verdict
 
@@ -81,3 +100,22 @@ profile changelogs, and the progress docs in docs/planning/ carry the full
 state. A fresh orchestrator session at any tier can resume from the
 repository alone — that was the design intent, and this review found it
 holding.
+
+## Outcome recorded 2026-07-16
+
+This review's recommendations are now historical:
+
+- `tools/run_pipeline.py` was built and proven on 2026-07-06: brief or intent
+  in, resolver, validator, Blender/Godot/USD exports, render, MP4, exit 0,
+  zero permission prompts.
+- `tools/producer.py` became the production front door on 2026-07-11:
+  screenplay in, rendered episode cut and NEEDED tickets out, zero prompts.
+- The studio harness became live on 2026-07-14: FastAPI control plane,
+  PostgreSQL, worker registration, Blender job dispatch, and worker output
+  routing.
+- The project goal has expanded from zero-engagement script-to-render runs to
+  a conversational 3D animation studio: creative prompt to structured job,
+  asset/scene generation, preview render, trace, and production artifact.
+- Public documentation should no longer depend on `.claude/agents` as public
+  project material; those files are local development guidance at the outer
+  project root.

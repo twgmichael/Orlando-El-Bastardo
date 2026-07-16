@@ -1,3 +1,15 @@
+---
+title: Orlando El Bastardo Episode 01 The Pilot
+created: 2026-07-12T00:38:24-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: reference
+production_area: story
+department: story
+status: draft
+canonical: false
+wiki: false
+wiki_group: Operations
+---
 # ORLANDO EL BASTARDO
 ## Episode 1: "THE PILOT"
 

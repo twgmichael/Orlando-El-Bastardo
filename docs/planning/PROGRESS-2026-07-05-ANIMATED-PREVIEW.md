@@ -1,3 +1,17 @@
+---
+title: Animated Preview (2026-07-05)
+created: 2026-07-05T14:33:35-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: progress_report
+production_area: animation
+department: production
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: Progress-2026-07-05-Animated-Preview
+wiki_order: 20
+---
 # Progress — 2026-07-05 — Animated preview (end-to-end motion render test)
 
 Session goal (set by the human): prove the process end-to-end by rendering an

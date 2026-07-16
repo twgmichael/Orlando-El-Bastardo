@@ -1,3 +1,18 @@
+---
+title: Studio Harness Ansible Spec
+created: 2026-07-14T18:58:41-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: spec
+production_area: operations
+department: pipeline
+status: active
+canonical: true
+canonical_for: studio_harness_ansible
+wiki: true
+wiki_group: Planning
+wiki_page: Studio-Harness-Ansible-Spec
+wiki_order: 110
+---
 # Studio Production Pipeline Harness — Ansible + Docker Implementation Spec
 
 Recorded 2026-07-13. Source: `studio-production-pipeline-harness-ansible-spec.json`.

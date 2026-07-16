@@ -1,3 +1,18 @@
+---
+title: Rigging
+created: 2026-07-06T19:37:01-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: standard
+production_area: rigging
+department: rigging
+status: approved
+canonical: true
+canonical_for: rigging_standard
+wiki: true
+wiki_group: Standards
+wiki_page: Rigging
+wiki_order: 10
+---
 # Rigging & retargeting standard — `oeb_humanoid_v1`
 
 DECIDED 2026-07-06 (human sign-off; closes OPEN-QUESTIONS #4). The canonical

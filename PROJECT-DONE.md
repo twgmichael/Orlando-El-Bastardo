@@ -1,6 +1,55 @@
+---
+title: Journal Log
+created: 2026-07-14T18:01:24-04:00
+updated: 2026-07-16T10:18:41-04:00
+doc_type: progress_report
+production_area: operations
+department: production
+status: active
+canonical: true
+canonical_for: project_journal
+wiki: true
+wiki_group: Tracking
+wiki_page: Journal-Log
+wiki_order: 20
+---
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-07-16 — Wiki sync moved to metadata-driven routing
+
+Documentation publishing now uses markdown front matter instead of the
+hard-coded `PAGES` table in `tools/sync_wiki.py`.
+
+- Public wiki docs carry `title`, `wiki`, `wiki_group`, `wiki_page`, and
+  `wiki_order` metadata.
+- All project-authored markdown now carries the core taxonomy:
+  `created`, `updated`, `doc_type`, `production_area`, `department`, `status`,
+  and `canonical`.
+- `created` and `updated` were sourced from filesystem creation and modified
+  timestamps, including ignored local docs under `docs/local/**`.
+- Canonical docs carry `canonical_for`; generated wiki pages show document
+  type, status, canonical topic, and lifecycle stamps when applicable.
+- Root docs, fixture markdown, script markdown, and agent profile markdown are
+  tagged with taxonomy metadata and kept out of wiki sync unless explicitly
+  routed.
+- The sibling local Docker README is also tagged as a local operations runbook
+  with `wiki: false`.
+- `tools/sync_wiki.py` discovers `wiki: true` pages, preserves existing public
+  wiki page names through `wiki_page`, and sorts sidebar entries by
+  `wiki_order`.
+- Front matter is stripped from generated wiki pages.
+- Link rewriting now resolves doc links by source path rather than only by
+  basename.
+- `docs/local/**` is hard-excluded even if a local file is accidentally tagged
+  `wiki: true`, and local docs are tagged with `wiki: false`.
+
+Verified: `python3 -m py_compile tools/sync_wiki.py` and
+`python3 tools/sync_wiki.py --wiki ../Orlando-El-Bastardo.wiki --dry-run`
+passed, generating 37 content pages plus `_Sidebar` and `_Footer`.
 
 ---
 

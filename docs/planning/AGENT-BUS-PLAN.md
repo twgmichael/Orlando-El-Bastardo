@@ -1,3 +1,18 @@
+---
+title: Agent Bus Plan
+created: 2026-07-11T21:49:46-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: operations
+department: pipeline
+status: draft
+canonical: true
+canonical_for: agent_bus
+wiki: true
+wiki_group: Planning
+wiki_page: Agent-Bus-Plan
+wiki_order: 70
+---
 # Agent bus plan — GitHub Issues/Project as the crew's coordination substrate
 
 Recorded 2026-07-11 (designed with the project owner). Status: **PLANNED,

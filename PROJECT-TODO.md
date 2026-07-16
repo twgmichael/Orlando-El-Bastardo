@@ -1,3 +1,18 @@
+---
+title: Roadmap
+created: 2026-07-14T18:01:04-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: register
+production_area: operations
+department: production
+status: active
+canonical: true
+canonical_for: project_roadmap
+wiki: true
+wiki_group: Tracking
+wiki_page: Roadmap
+wiki_order: 10
+---
 # PROJECT-TODO — Orlando El Bastardo
 
 3D animation orchestration pipeline. Deterministic, asset/rig-based. LLM is a

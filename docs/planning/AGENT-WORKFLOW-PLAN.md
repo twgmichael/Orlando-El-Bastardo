@@ -1,3 +1,18 @@
+---
+title: Agent Workflow Plan
+created: 2026-07-07T12:09:53-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: operations
+department: pipeline
+status: active
+canonical: true
+canonical_for: agent_workflow
+wiki: true
+wiki_group: Planning
+wiki_page: Agent-Workflow-Plan
+wiki_order: 10
+---
 # Agentic Workflow Plan — Orchestrator + Tiered Model Delegation
 
 Status: in progress, 2026-07-04. Steps 1–3 of §8 DONE: scaffolded, and all

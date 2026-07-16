@@ -1,3 +1,18 @@
+---
+title: Scene Graph Primitive Builder Plan
+created: 2026-07-15T09:25:43-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: assets
+department: pipeline
+status: active
+canonical: true
+canonical_for: scene_graph_primitive_builder
+wiki: true
+wiki_group: Planning
+wiki_page: Scene-Graph-Primitive-Builder-Plan
+wiki_order: 140
+---
 # Scene Graph Primitive Builder Plan
 
 Recorded 2026-07-15. Status: **PLANNED**.

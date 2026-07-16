@@ -1,3 +1,18 @@
+---
+title: Studio Harness Vision
+created: 2026-07-14T18:56:37-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: pipeline
+status: active
+canonical: true
+canonical_for: studio_harness_vision
+wiki: true
+wiki_group: Planning
+wiki_page: Studio-Harness-Vision
+wiki_order: 100
+---
 # Studio Production Pipeline Harness — Vision and Architecture
 
 Recorded 2026-07-13. Source: `studio-production-harness-project-summary.json`.

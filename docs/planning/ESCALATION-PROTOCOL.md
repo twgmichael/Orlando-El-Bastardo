@@ -1,3 +1,18 @@
+---
+title: Escalation Protocol
+created: 2026-07-07T12:09:57-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: runbook
+production_area: operations
+department: pipeline
+status: active
+canonical: true
+canonical_for: escalation_protocol
+wiki: true
+wiki_group: Planning
+wiki_page: Escalation-Protocol
+wiki_order: 30
+---
 # Escalation Protocol
 
 Status: active, 2026-07-04. Referenced by every profile in `.claude/agents/`.

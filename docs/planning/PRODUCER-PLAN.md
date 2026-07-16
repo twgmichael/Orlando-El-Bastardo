@@ -1,3 +1,18 @@
+---
+title: Producer Plan
+created: 2026-07-07T12:28:32-04:00
+updated: 2026-07-16T10:13:39-04:00
+doc_type: plan
+production_area: pipeline
+department: production
+status: active
+canonical: true
+canonical_for: producer_pipeline
+wiki: true
+wiki_group: Planning
+wiki_page: Producer-Plan
+wiki_order: 20
+---
 # The Producer — plan for script-to-render oversight (provided assets only)
 
 Recorded 2026-07-07 from session feedback + clarification. Status: PLANNED.
