@@ -19,6 +19,18 @@
     that: oeb_studio_harness_local_network_cidr != "CONFIGURE_IN_INVENTORY"
     fail_msg: "oeb_studio_harness_local_network_cidr must be set in inventory (e.g. 192.168.1.0/24)"  # sweep:ok — example format string
 
+- name: Assert environment-specific app config is configured
+  ansible.builtin.assert:
+    that:
+      - oeb_environment in ["staging-docker-pi", "production"]
+      - oeb_studio_chat_ollama_url is defined
+      - oeb_studio_chat_ollama_url | length > 0
+      - oeb_studio_chat_ollama_url != "CONFIGURE_IN_INVENTORY"
+      - "'host.docker.internal' not in oeb_studio_chat_ollama_url"
+      - "'127.0.0.1' not in oeb_studio_chat_ollama_url"
+      - "'localhost' not in oeb_studio_chat_ollama_url"
+    fail_msg: "Set staging/prod app config in inventory. OEB_STUDIO_CHAT_OLLAMA_URL must be a network-reachable LLM URL, not a local Docker address."
+
 - name: Assert secrets are defined
   ansible.builtin.assert:
     that:

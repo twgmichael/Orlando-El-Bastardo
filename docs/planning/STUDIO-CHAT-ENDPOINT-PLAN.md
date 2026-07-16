@@ -1,7 +1,7 @@
 ---
 title: Studio Chat Endpoint Plan
 created: 2026-07-15T15:04:43-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-16T17:46:50-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -19,17 +19,16 @@ Recorded 2026-07-15. Status: **FIRST PASS BUILT**.
 
 ## Context
 
-`tools/studio_chat.py` proved the first conversation-to-build workflow, but it
-is still a local command-line tool. That makes environment targeting too
-manual: the operator has to export `OEB_HARNESS_URL` and `API_ADMIN_TOKEN`
-correctly before each run.
+`tools/studio_chat.py` proved the first conversation-to-build workflow. It is
+environment-neutral: the caller chooses the target harness through
+`OEB_HARNESS_URL` or `--harness-url`.
 
 The studio needs a chat intake surface that works the same way in each
 environment:
 
 ```text
-http://localhost:8088/api/v1/studio-chat
-http://oeb-studio.docker-pi/api/v1/studio-chat
+local:             http://127.0.0.1:8088/api/v1/studio-chat
+staging-docker-pi: http://oeb-studio.docker-pi/api/v1/studio-chat
 ```
 
 The endpoint should let a creative prompt become a structured harness job
@@ -43,11 +42,12 @@ not be hardcoded to that environment.
 For example:
 
 - Local Docker can host `/api/v1/studio-chat` and submit jobs to the local
-  harness by default.
-- Local Docker can also be configured to submit jobs to docker-pi for testing.
-- docker-pi can host `/api/v1/studio-chat` and submit jobs to docker-pi by
-  default.
-- docker-pi could also target another harness if needed.
+  harness when `OEB_HARNESS_URL=http://127.0.0.1:8088`.
+- docker-pi can host `/api/v1/studio-chat` and submit jobs to the deployed
+  harness when `OEB_HARNESS_URL=http://oeb-studio.docker-pi`.
+- Either environment can be configured to target another harness if needed.
+- Worker selection is a harness/runtime concern: local workers claim local jobs;
+  staging workers claim staging jobs.
 
 This separates:
 
@@ -111,7 +111,39 @@ be configurable per environment.
   - job payload
 - Return both a human review URL and a chatbot/debug trace URL.
 - Keep environment targeting flexible enough to test local-to-local,
-  local-to-pi, pi-to-pi, and pi-to-local workflows.
+  local-to-pi, pi-to-pi, and pi-to-local workflows. The code must not prefer
+  one environment; the selected environment provides the URLs and tokens.
+
+## Acceptance Workflow
+
+Local harness test:
+
+```bash
+OEB_HARNESS_URL=http://127.0.0.1:8088 \
+API_ADMIN_TOKEN=local-admin-token \
+python3 tools/studio_chat.py "build a small rectangular table with rounded corners"
+```
+
+Staging docker-pi harness test:
+
+```bash
+OEB_HARNESS_URL=http://oeb-studio.docker-pi \
+API_ADMIN_TOKEN=<deployed harness admin token> \
+python3 tools/studio_chat.py "build a small rectangular table with rounded corners"
+```
+
+Expected path in either environment:
+
+1. `tools/studio_chat.py` calls `$OEB_HARNESS_URL/api/v1/studio-chat`.
+2. The selected harness records the prompt loop and creates a render job.
+3. An eligible worker claims the job.
+4. Blender renders the primitive asset.
+5. The response returns `job_id`, `review_url`, `trace_url`, and
+   `canonical_id`.
+
+The acceptance prompt should preserve detail-sensitive fields such as
+`rounded_corners`, source phrases, structured shape details, orientation
+metadata, and prop classification.
 
 ## Open Design Notes
 
