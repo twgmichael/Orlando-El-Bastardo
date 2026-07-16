@@ -56,6 +56,11 @@ class Page:
     superseded_by: str | None
 
 
+@dataclass(frozen=True)
+class SourceDoc:
+    metadata: dict
+
+
 def head_hash():
     return subprocess.run(["git", "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True,
@@ -137,7 +142,15 @@ def is_local_only(path):
     return os.path.normpath(path).startswith(os.path.normpath("docs/local") + os.sep)
 
 
-def load_pages():
+def load_source_docs():
+    docs = {}
+    for path in source_files():
+        metadata, body = split_front_matter(path)
+        docs[path] = SourceDoc(metadata=metadata)
+    return docs
+
+
+def load_pages(source_docs):
     pages = []
     skipped_publishable_local = []
     cleanup_tombstones = []
@@ -145,7 +158,7 @@ def load_pages():
     for path in source_files():
         metadata, body = split_front_matter(path)
         if is_local_only(path):
-            if metadata.get("wiki") is True:
+            if source_docs[path].metadata.get("wiki") is True:
                 skipped_publishable_local.append(path)
             continue
         if not metadata:
@@ -244,7 +257,25 @@ def resolve_target(src, target):
     return os.path.normpath(os.path.join(os.path.dirname(src), target))
 
 
-def rewrite_links(text, src, page_info):
+def unpublished_reason(path, metadata):
+    if is_local_only(path):
+        return "docs/local/** and will not publish"
+    if metadata.get("status") == "remove_next_cleanup":
+        return "remove_next_cleanup and will not publish"
+    if metadata.get("wiki") is False:
+        return "wiki: false and will not publish"
+    return None
+
+
+def warn_unpublished_link(src_label, target, reason, seen_warnings):
+    key = (src_label, target, reason)
+    if key in seen_warnings:
+        return
+    seen_warnings.add(key)
+    print(f"[sync_wiki] WARNING — {src_label} links to {target}, which is {reason}")
+
+
+def rewrite_links(text, src, src_label, page_info, source_docs, seen_warnings):
     """Doc-to-doc links → wiki page links (plain markdown, which GitHub
     wikis resolve — no [[pipe]] syntax ambiguity); other repo-file links →
     absolute blob URLs; external links untouched. A label that is just the
@@ -259,6 +290,10 @@ def rewrite_links(text, src, page_info):
             if label in (target, os.path.basename(target)):
                 label = display
             return f"[{label}]({page}{anchor})"
+        if resolved in source_docs:
+            reason = unpublished_reason(resolved, source_docs[resolved].metadata)
+            if reason:
+                warn_unpublished_link(src_label, resolved, reason, seen_warnings)
         clean = resolved if not resolved.startswith("..") else target.lstrip("./")
         return f"[{label}]({REPO_URL}/blob/main/{clean}{anchor})"
     return LINK_RE.sub(sub, text)
@@ -289,13 +324,22 @@ def main():
     if not os.path.isdir(os.path.join(wiki, ".git")):
         sys.exit(f"[sync_wiki] ERROR: {wiki} is not a git working tree")
 
-    pages = load_pages()
+    source_docs = load_source_docs()
+    pages = load_pages(source_docs)
     rev = head_hash()
     page_info = {page.src: (page.name, page.display) for page in pages}
     generated = set()
+    seen_warnings = set()
 
     for page in pages:
-        body = rewrite_links(page.body, page.src, page_info)
+        body = rewrite_links(
+            page.body,
+            page.src,
+            f"{page.name}.md",
+            page_info,
+            source_docs,
+            seen_warnings,
+        )
         metadata_line = (f"> Metadata: `{page.doc_type}` / `{page.status}`")
         if page.canonical:
             metadata_line += f" / canonical for `{page.canonical_for}`"
