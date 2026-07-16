@@ -7,11 +7,36 @@ WORKER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$WORKER_DIR/../.." && pwd)"
 LOG_FILE="${OEB_WORKER_LOG_FILE:-/tmp/oeb-harness-worker.log}"
 
+if [ -f "$WORKER_DIR/.env.local" ]; then
+  # shellcheck disable=SC1091
+  source "$WORKER_DIR/.env.local"
+fi
+
 export OEB_HARNESS_URL="${OEB_HARNESS_URL:-http://127.0.0.1:8088}"
 export OEB_ENROLLMENT_TOKEN="${OEB_ENROLLMENT_TOKEN:-local-worker-enrollment-token}"
-export OEB_OUTPUT_ROOT="${OEB_OUTPUT_ROOT:-/tmp/oeb-harness-worker-output}"
-export OEB_ARTIFACT_STORE_ROOT="${OEB_ARTIFACT_STORE_ROOT:-/tmp/oeb-harness-worker-artifacts}"
 export OEB_WORKSPACE_ROOT="${OEB_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+if [ -z "${OEB_OUTPUT_ROOT:-}" ]; then
+  echo "OEB_OUTPUT_ROOT is required." >&2
+  echo "Set it in the shell or in $WORKER_DIR/.env.local." >&2
+  exit 1
+fi
+
+export OEB_ARTIFACT_STORE_ROOT="${OEB_ARTIFACT_STORE_ROOT:-$OEB_OUTPUT_ROOT/oeb-studio-harness/artifacts}"
+
+case "$OEB_OUTPUT_ROOT" in
+  /tmp|/tmp/*|/private/tmp|/private/tmp/*)
+    echo "Refusing to use temporary storage for OEB_OUTPUT_ROOT: $OEB_OUTPUT_ROOT" >&2
+    echo "Mount OEB-PROJECT or set OEB_OUTPUT_ROOT to a durable project path." >&2
+    exit 1
+    ;;
+esac
+
+if [ ! -d "$OEB_OUTPUT_ROOT" ]; then
+  echo "OEB_OUTPUT_ROOT does not exist: $OEB_OUTPUT_ROOT" >&2
+  echo "Mount the project drive or set OEB_OUTPUT_ROOT to a durable project path." >&2
+  exit 1
+fi
 
 if ! command -v screen >/dev/null 2>&1; then
   echo "screen is required to run the local worker detached." >&2
@@ -26,8 +51,10 @@ fi
 
 mkdir -p "$(dirname "$LOG_FILE")" "$OEB_OUTPUT_ROOT" "$OEB_ARTIFACT_STORE_ROOT"
 
-if screen -ls | grep -q "[.]$SESSION_NAME[[:space:]]"; then
+existing_sessions="$(screen -ls 2>/dev/null | awk -v name=".$SESSION_NAME" '$1 ~ name {print $1}' || true)"
+if [ -n "$existing_sessions" ]; then
   echo "Worker screen session already running: $SESSION_NAME"
+  echo "$existing_sessions"
   exit 0
 fi
 
