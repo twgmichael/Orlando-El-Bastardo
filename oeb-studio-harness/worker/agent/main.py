@@ -5,7 +5,7 @@ import signal
 import sys
 from pathlib import Path
 
-from agent.config import load_config
+from agent.config import load_config, normalize_harness_url
 from agent.client import HarnessClient
 from agent.heartbeat import HeartbeatLoop
 from agent.job_runner import JobRunner
@@ -49,7 +49,7 @@ async def run(config_path: str) -> None:
 
     # Env overrides
     if url := os.environ.get(HARNESS_URL_ENV):
-        cfg.harness_url = url
+        cfg.harness_url = normalize_harness_url(url)
     if token := os.environ.get(ENROLLMENT_TOKEN_ENV):
         cfg.enrollment_token = token
 

@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 import os
 import re
+import shlex
 import yaml
 
 
@@ -46,6 +47,48 @@ class WorkerConfig(BaseModel):
 
 
 _ENV_DEFAULT_PATTERN = re.compile(r"\$\{([A-Z0-9_]+):-([^}]+)\}")
+_ENV_ASSIGNMENT_PATTERN = re.compile(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+
+
+def normalize_harness_url(value: str) -> str:
+    url = value.strip().rstrip("/")
+    if url and "://" not in url:
+        url = f"http://{url}"
+    return url
+
+
+def _parse_env_assignment(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    match = _ENV_ASSIGNMENT_PATTERN.match(stripped)
+    if not match:
+        return None
+    key, raw_value = match.groups()
+    try:
+        parts = shlex.split(raw_value, comments=True, posix=True)
+    except ValueError:
+        return key, raw_value.strip().strip("'\"")
+    return key, parts[0] if parts else ""
+
+
+def load_local_env(config_path: str) -> None:
+    path = Path(config_path)
+    candidates = [
+        Path.cwd() / ".env.local",
+        path.parent / ".env.local",
+        Path(__file__).resolve().parents[1] / ".env.local",
+    ]
+    for env_path in candidates:
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text().splitlines():
+            assignment = _parse_env_assignment(line)
+            if not assignment:
+                continue
+            key, value = assignment
+            os.environ.setdefault(key, value)
+        return
 
 
 def _expand_env_defaults(value):
@@ -61,10 +104,13 @@ def _expand_env_defaults(value):
 
 
 def load_config(config_path: str) -> WorkerConfig:
+    load_local_env(config_path)
     path = Path(config_path)
     with path.open() as f:
         data = yaml.safe_load(f)
     data = _expand_env_defaults(data)
+    if data.get("harness_url"):
+        data["harness_url"] = normalize_harness_url(data["harness_url"])
     workspace_root = data.get("workspace_root")
     if workspace_root:
         workspace_path = Path(workspace_root)

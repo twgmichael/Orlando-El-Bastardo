@@ -11,3 +11,5 @@ out
 .claude/settings.local.json
 docs/local/
 .secrets/
+.env.local
+**/.env.local

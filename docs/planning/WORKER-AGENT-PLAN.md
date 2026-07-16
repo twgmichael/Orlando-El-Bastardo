@@ -71,7 +71,7 @@ Config keys: `executable` (path or bare `blender`), `max_concurrent`,
 | Field | Required | Description |
 |---|---|---|
 | `blend_file` | yes | Path to a `.blend` file — `blender --background <file>` |
-| `output_path` | yes | Render output path (no `..`); supports `{output_root}` |
+| `output_path` | yes | Render output path (no `..`); supports `{output_root}` and `{job_id}` |
 | `frame` | no | Single frame to render (default: 1) |
 | `start_frame` / `end_frame` | no | Frame range (uses `--render-anim`) |
 | `engine` | no | Render engine, default `CYCLES` |
@@ -86,7 +86,7 @@ Config keys: `executable` (path or bare `blender`), `max_concurrent`,
 |---|---|---|
 | `script_file` | yes | Path to a `.py` script — `blender --background --python <file>` |
 | `cwd` | no | Working directory for the Blender process; use repo root for scripts that call `os.getcwd()` |
-| `script_args` | no | List of strings appended after `--`; `{output_root}` is substituted in each arg |
+| `script_args` | no | List of strings appended after `--`; `{output_root}` and `{job_id}` are substituted in each arg |
 | `output_path` | no | If given, artifacts are collected from this path after the script exits |
 | `_preview` | no | If true, artifact tagged `preview_render` instead of `final_render` |
 
@@ -118,8 +118,10 @@ Key config fields: `worker_id`, `platform`, `capabilities`, `resources`
 `heartbeat_interval_seconds`, `artifact_store_root`, `output_root`.
 
 `output_root` sets the base output path for renders on this machine. Job
-`script_args` can contain `{output_root}` which is substituted at runtime —
-keeps job payloads machine-agnostic. Example:
+payload paths and `script_args` can contain `{output_root}` and `{job_id}`,
+which are substituted at runtime. This keeps job payloads machine-agnostic
+and lets repeated canonical ids write into separate job-scoped directories.
+Example:
 - mac-mini: `/Volumes/OEB-PROJECT/OEB-PRODUCTION`
 - gaming-pc: `Z:/OEB-PROJECT/OEB-PRODUCTION`
 

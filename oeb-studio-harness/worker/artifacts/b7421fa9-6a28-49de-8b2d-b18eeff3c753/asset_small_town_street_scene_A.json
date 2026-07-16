@@ -1,0 +1,125 @@
+{
+  "canonical_id": "asset_small_town_street_scene_A",
+  "name": "Small Town Street",
+  "kind": "location",
+  "style": "dusty|industrial",
+  "creative_request": "Build a small town street scene with bar, bank and police station.",
+  "components": [
+    "medium_bar_center_floor_facing_bar",
+    "medium_bank_left_wall_facing_bank_wall",
+    "medium_police_station_right_wall_facing_police_wall"
+  ],
+  "scene_plan": {
+    "scene_type": "small_town_street",
+    "style": "dusty|industrial",
+    "objects": [
+      {
+        "id": "bar",
+        "label": "Bar",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "center",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "bar"
+        }
+      },
+      {
+        "id": "bank",
+        "label": "Bank",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "left",
+        "mounting": "wall",
+        "orientation": {
+          "faces": "bank_wall"
+        }
+      },
+      {
+        "id": "police_station",
+        "label": "Police Station",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "right",
+        "mounting": "wall",
+        "orientation": {
+          "faces": "police_wall"
+        }
+      }
+    ],
+    "relationships": [
+      {
+        "subject": "bar",
+        "relation": "next_to",
+        "target": "bank"
+      },
+      {
+        "subject": "bar",
+        "relation": "next_to",
+        "target": "police_station"
+      }
+    ]
+  },
+  "repaired_scene_plan": {
+    "scene_type": "small_town_street",
+    "style": "dusty|industrial",
+    "objects": [
+      {
+        "id": "bar",
+        "label": "Bar",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "center",
+        "mounting": "floor",
+        "orientation": {
+          "faces": "bar"
+        }
+      },
+      {
+        "id": "bank",
+        "label": "Bank",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "left",
+        "mounting": "wall",
+        "orientation": {
+          "faces": "bank_wall"
+        }
+      },
+      {
+        "id": "police_station",
+        "label": "Police Station",
+        "category": "structure",
+        "count": 1,
+        "size": "medium",
+        "placement": "right",
+        "mounting": "wall",
+        "orientation": {
+          "faces": "police_wall"
+        }
+      }
+    ],
+    "relationships": [
+      {
+        "subject": "bar",
+        "relation": "next_to",
+        "target": "bank"
+      },
+      {
+        "subject": "bar",
+        "relation": "next_to",
+        "target": "police_station"
+      }
+    ]
+  },
+  "variant": "component_layout",
+  "outputs": {
+    "glb": "renders/assets/locations/asset_small_town_street_scene_A.glb",
+    "preview": "renders/renders/asset_previews/asset_small_town_street_scene_A.png"
+  }
+}

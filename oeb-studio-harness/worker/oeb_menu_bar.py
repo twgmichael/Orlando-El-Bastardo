@@ -85,7 +85,7 @@ class OEBWorkerApp(rumps.App):
 
 
 def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
-    from agent.config import load_config
+    from agent.config import load_config, normalize_harness_url
     from agent.client import HarnessClient
     from agent.heartbeat import HeartbeatLoop
     from agent.job_runner import JobRunner
@@ -98,7 +98,7 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
         cfg = load_config(config_path)
 
         if url := os.environ.get("OEB_HARNESS_URL"):
-            cfg.harness_url = url
+            cfg.harness_url = normalize_harness_url(url)
         if token := os.environ.get("OEB_ENROLLMENT_TOKEN"):
             cfg.enrollment_token = token
 
@@ -159,7 +159,9 @@ def main() -> None:
         sys.exit(1)
 
     config_path = sys.argv[1]
-    harness_url = os.environ.get("OEB_HARNESS_URL", "http://localhost")
+    from agent.config import normalize_harness_url
+
+    harness_url = normalize_harness_url(os.environ.get("OEB_HARNESS_URL", "http://localhost"))
 
     app = OEBWorkerApp(harness_url=harness_url)
 
