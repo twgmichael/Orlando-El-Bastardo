@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, BigInteger, ForeignKey, Text
+from sqlalchemy import String, DateTime, BigInteger, ForeignKey, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
@@ -19,10 +19,12 @@ class Artifact(Base):
     artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)  # preview_render | final_render | export | log
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
+    public_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     provenance: Mapped[str] = mapped_column(String(32), default="inferred", nullable=False)
+    review_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )

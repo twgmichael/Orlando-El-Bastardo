@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.artifact import Artifact
 from app.models.job import Job, JobAttempt
@@ -25,6 +26,39 @@ def _view_from_artifact(asset_id: str, filename: str) -> str | None:
     else:
         view = stem.rsplit("_", 1)[-1]
     return view if view in ASSET_REVIEW_VIEWS else None
+
+
+def _artifact_file_path(artifact: Artifact) -> Path:
+    path = Path(artifact.storage_path)
+    if path.exists() and path.is_file():
+        return path
+
+    settings = get_settings()
+    artifacts_root = Path(settings.artifacts_root)
+    worker_prefix = settings.artifact_worker_path_prefix.strip()
+    server_prefix = (settings.artifact_server_path_prefix or settings.artifacts_root).strip()
+    if worker_prefix and server_prefix:
+        try:
+            relative = path.relative_to(worker_prefix)
+            mapped = Path(server_prefix) / relative
+            if mapped.exists() and mapped.is_file():
+                return mapped
+        except ValueError:
+            pass
+
+    # Workers may register their own mounted path, for example:
+    # /mnt/oeb-project/.../oeb-studio-harness/artifacts/{job_id}/file.png
+    # The API container can usually only see ARTIFACTS_ROOT. Preserve the tail
+    # under the job id when the worker/server mount prefixes differ.
+    parts = path.parts
+    job_id = str(artifact.job_id)
+    if job_id in parts:
+        job_index = parts.index(job_id)
+        mapped = artifacts_root.joinpath(*parts[job_index:])
+        if mapped.exists() and mapped.is_file():
+            return mapped
+
+    return artifacts_root / job_id / artifact.filename
 
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -77,7 +111,8 @@ async def review_asset(asset_id: str, request: Request, db: AsyncSession = Depen
     for artifact in artifacts:
         if not artifact.mime_type or not artifact.mime_type.startswith("image/"):
             continue
-        view = _view_from_artifact(asset_id, artifact.filename)
+        metadata = artifact.review_metadata or {}
+        view = metadata.get("view") or _view_from_artifact(asset_id, artifact.filename)
         if view:
             by_view[view] = artifact
 
@@ -102,7 +137,7 @@ async def review_artifact(artifact_id: uuid.UUID, db: AsyncSession = Depends(get
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
 
-    path = Path(artifact.storage_path)
+    path = _artifact_file_path(artifact)
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="Artifact file not available to this server")
 

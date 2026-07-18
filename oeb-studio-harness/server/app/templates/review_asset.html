@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Review {{ asset_id }}{% endblock %}
+
+{% block head %}
+{% if job.status in ["pending", "running"] %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>{{ asset_id }}</h1>
+    <p>{{ asset_path or "No source asset path recorded." }}</p>
+  </div>
+  <span class="badge status-{{ job.status }}">{{ job.status }}</span>
+</section>
+
+<section class="asset-review-meta">
+  <dl class="details">
+    <dt>Job</dt><dd class="mono small"><a href="/review/jobs/{{ job.id }}">{{ job.id }}</a></dd>
+    <dt>Quality</dt><dd class="mono small">{{ quality or "preview" }}</dd>
+    <dt>Worker</dt><dd class="mono small">{{ job.assigned_worker_id or "-" }}</dd>
+    <dt>Updated</dt><dd class="mono small">{{ job.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+  </dl>
+</section>
+
+{% if action %}
+<section>
+  <h2>Action</h2>
+  <a href="{{ action.public_url or '/review/artifacts/' ~ action.id }}">
+    <img class="asset-action-image" src="{{ action.public_url or '/review/artifacts/' ~ action.id }}" alt="{{ asset_id }} action render">
+  </a>
+</section>
+{% endif %}
+
+<section>
+  <h2>Angles</h2>
+  <div class="asset-angle-grid">
+    {% for view in angle_views %}
+    <figure class="asset-angle-tile">
+      {% if by_view.get(view) %}
+      {% set artifact = by_view.get(view) %}
+      <a href="{{ artifact.public_url or '/review/artifacts/' ~ artifact.id }}">
+        <img src="{{ artifact.public_url or '/review/artifacts/' ~ artifact.id }}" alt="{{ asset_id }} {{ view }} render">
+      </a>
+      <figcaption>{{ view }}</figcaption>
+      {% else %}
+      <div class="missing-render">{{ view }}</div>
+      <figcaption>{{ view }}</figcaption>
+      {% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+
+<section>
+  <h2>Recent Render Jobs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Updated</th>
+        <th>Status</th>
+        <th>Quality</th>
+        <th>Job</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for render_job in jobs %}
+      <tr>
+        <td class="mono small">{{ render_job.updated_at.strftime("%m-%d %H:%M:%S") }}</td>
+        <td><span class="badge status-{{ render_job.status }}">{{ render_job.status }}</span></td>
+        <td class="mono small">{{ render_job.payload.get("quality", "preview") }}</td>
+        <td class="mono small"><a href="/review/jobs/{{ render_job.id }}">{{ render_job.id }}</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

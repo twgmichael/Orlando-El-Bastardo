@@ -29,6 +29,7 @@ heartbeat_interval_seconds: 20
 # SanDisk Professional PRO-G40 2 TB mounted at a stable Linux path.
 # Keep this path stable even when the physical drive label changes.
 artifact_store_root: ${OEB_ARTIFACT_STORE_ROOT:-/mnt/oeb-project/OEB-PRODUCTION/oeb-studio-harness/artifacts}
+artifact_public_base_url: ${OEB_ARTIFACT_PUBLIC_BASE_URL:-http://oeb-studio.docker-pi}
 output_root: ${OEB_OUTPUT_ROOT:-/mnt/oeb-project/OEB-PRODUCTION}
 workspace_root: ${OEB_WORKSPACE_ROOT:-../../..}
 

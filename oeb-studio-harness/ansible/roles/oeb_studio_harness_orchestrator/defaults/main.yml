@@ -32,6 +32,11 @@ oeb_studio_harness_backup_retention_days: 14
 # Timezone
 oeb_studio_harness_timezone: America/New_York
 
+# Public review links and optional worker-to-server artifact path mapping.
+oeb_studio_harness_artifact_public_base_url: "http://oeb-studio.docker-pi"
+oeb_studio_harness_artifact_worker_path_prefix: ""
+oeb_studio_harness_artifact_server_path_prefix: "/srv/oeb-studio-harness/artifacts"
+
 # Environment-specific application settings. Real staging values belong in
 # inventory/host_vars; this role refuses to deploy placeholder values.
 oeb_environment: staging-docker-pi

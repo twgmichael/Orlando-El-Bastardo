@@ -1,5 +1,7 @@
 import logging
 from typing import Optional
+from pathlib import Path
+import json
 import httpx
 
 log = logging.getLogger(__name__)
@@ -149,9 +151,11 @@ class HarnessClient:
         artifact_type: str,
         filename: str,
         storage_path: str,
+        public_url: Optional[str] = None,
         size_bytes: Optional[int] = None,
         mime_type: Optional[str] = None,
         checksum_sha256: Optional[str] = None,
+        review_metadata: Optional[dict] = None,
         attempt_id: Optional[str] = None,
     ) -> dict:
         async with httpx.AsyncClient(verify=False) as c:
@@ -161,13 +165,50 @@ class HarnessClient:
                     "artifact_type": artifact_type,
                     "filename": filename,
                     "storage_path": storage_path,
+                    "public_url": public_url,
                     "size_bytes": size_bytes,
                     "mime_type": mime_type,
                     "checksum_sha256": checksum_sha256,
+                    "review_metadata": review_metadata or {},
                     "attempt_id": attempt_id,
                 },
                 headers=self._worker_headers(),
                 timeout=10,
             )
+            r.raise_for_status()
+            return r.json()
+
+    async def upload_artifact_file(
+        self,
+        job_id: str,
+        artifact_path: Path,
+        artifact_type: str,
+        filename: str,
+        mime_type: Optional[str] = None,
+        checksum_sha256: Optional[str] = None,
+        review_metadata: Optional[dict] = None,
+        provenance: str = "uploaded",
+    ) -> dict:
+        params = {
+            "artifact_type": artifact_type,
+            "filename": filename,
+            "provenance": provenance,
+        }
+        if mime_type:
+            params["mime_type"] = mime_type
+        if checksum_sha256:
+            params["checksum_sha256"] = checksum_sha256
+        if review_metadata:
+            params["review_metadata_json"] = json.dumps(review_metadata, separators=(",", ":"))
+
+        async with httpx.AsyncClient(verify=False) as c:
+            with artifact_path.open("rb") as f:
+                r = await c.post(
+                    f"{self._base}/api/v1/jobs/{job_id}/artifact-files",
+                    params=params,
+                    content=f,
+                    headers=self._worker_headers(),
+                    timeout=120,
+                )
             r.raise_for_status()
             return r.json()

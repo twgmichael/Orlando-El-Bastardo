@@ -7,7 +7,7 @@ from typing import Optional
 from agent.client import HarnessClient
 from agent.heartbeat import HeartbeatLoop
 from agent.registry import AdapterRegistry
-from agent.artifacts import copy_to_store, artifact_info
+from agent.artifacts import artifact_info
 from agent.config import WorkerConfig
 
 log = logging.getLogger(__name__)
@@ -115,29 +115,52 @@ class JobRunner:
 
         # Upload artifacts
         uploaded: list[dict] = []
+        result_summary = result.output_summary or {}
+        artifact_views = result_summary.get("artifact_views") or {}
+        is_asset_review = result_summary.get("job_type") == "asset.review_render"
         for artifact_path in result.artifacts:
             try:
-                stored = copy_to_store(
-                    Path(artifact_path),
-                    self._config.artifact_store_root,
-                    job_id,
-                )
-                info = artifact_info(stored)
-                reg = await self._client.register_artifact(
-                    job_id=job_id,
-                    artifact_type=result.artifact_type or "output",
-                    storage_path=str(stored),
-                    **info,
-                )
+                artifact_file = Path(artifact_path)
+                info = artifact_info(artifact_file)
+                review_metadata = {}
+                if is_asset_review:
+                    review_metadata = {
+                        "job_type": result_summary.get("job_type"),
+                        "asset_id": result_summary.get("asset_id"),
+                        "asset_path": result_summary.get("asset_path"),
+                        "quality": result_summary.get("quality"),
+                        "view": artifact_views.get(artifact_file.name),
+                    }
+                try:
+                    reg = await self._client.upload_artifact_file(
+                        job_id=job_id,
+                        artifact_type=result.artifact_type or "output",
+                        artifact_path=artifact_file,
+                        review_metadata=review_metadata,
+                        **info,
+                    )
+                except Exception:
+                    log.warning(
+                        "Artifact byte upload failed for %s; falling back to metadata registration",
+                        artifact_file,
+                        exc_info=True,
+                    )
+                    reg = await self._client.register_artifact(
+                        job_id=job_id,
+                        artifact_type=result.artifact_type or "output",
+                        storage_path=str(artifact_file),
+                        review_metadata=review_metadata,
+                        **info,
+                    )
                 uploaded.append(reg)
-                log.info("Registered artifact %s for job %s", stored.name, job_id)
+                log.info("Uploaded artifact %s for job %s", artifact_file.name, job_id)
             except Exception:
                 log.exception("Failed to register artifact %s", artifact_path)
 
         output_summary = {
             "adapter": adapter.name,
             "artifacts": [a["id"] for a in uploaded],
-            **(result.output_summary or {}),
+            **result_summary,
         }
         if output_summary.get("job_type") == "asset.review_render":
             public_base = (
@@ -146,14 +169,13 @@ class JobRunner:
                 or self._client.base_url
             ).rstrip("/")
             asset_id = output_summary.get("asset_id")
-            artifact_views = output_summary.get("artifact_views") or {}
             output_summary["gallery_url"] = f"{public_base}/review/assets/{asset_id}" if asset_id else None
             output_summary["artifact_urls"] = [
                 {
                     "id": a["id"],
                     "filename": a["filename"],
-                    "view": artifact_views.get(a["filename"]),
-                    "url": f"{public_base}/review/artifacts/{a['id']}",
+                    "view": (a.get("review_metadata") or {}).get("view") or artifact_views.get(a["filename"]),
+                    "url": a.get("public_url") or f"{public_base}/review/artifacts/{a['id']}",
                 }
                 for a in uploaded
             ]
