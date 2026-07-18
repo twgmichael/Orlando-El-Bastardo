@@ -12,6 +12,7 @@ from app.models.worker import WorkerCapability
 from app.models.audit import AuditEvent
 from app.models.user import ApiToken
 from app.schemas.job import (
+    AssetReviewRenderRequest,
     JobCreateRequest,
     JobSummary,
     ClaimResponse,
@@ -22,6 +23,61 @@ from app.schemas.job import (
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+@router.post("/asset-review-renders", response_model=JobSummary, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_admin)])
+async def create_asset_review_render_job(
+    body: AssetReviewRenderRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    required_capability = "blender.final_render" if body.quality == "final" else "blender.preview_render"
+    artifact_prefix = body.artifact_prefix or body.output_namespace or body.asset_id
+    output_path = body.output_path or "{output_root}/oeb-studio-harness/review-renders/{job_id}"
+    payload = {
+        "job_type": "asset.review_render",
+        "asset_path": body.asset_path,
+        "asset_id": body.asset_id,
+        "views": body.views,
+        "quality": body.quality,
+        "output_namespace": body.output_namespace,
+        "artifact_prefix": artifact_prefix,
+        "script_file": "{workspace_root}/tools/render_asset_review.py",
+        "cwd": "{workspace_root}",
+        "output_path": output_path,
+    }
+    for key in ("width", "height", "samples"):
+        value = getattr(body, key)
+        if value is not None:
+            payload[key] = value
+
+    job = Job(
+        title=f"Review render {body.asset_id}",
+        description=f"Render {body.asset_id} review views from {body.asset_path}",
+        required_capabilities=[required_capability],
+        policy="wait_for_preferred_worker" if body.preferred_worker_id else "run_anywhere",
+        preferred_worker_id=body.preferred_worker_id,
+        priority=body.priority,
+        payload=payload,
+        is_idempotent=True,
+    )
+    db.add(job)
+    db.add(AuditEvent(
+        event_type="job.asset_review_render.created",
+        actor_type="user",
+        actor_id="admin",
+        resource_type="job",
+        resource_id=str(job.id),
+        details={
+            "asset_id": body.asset_id,
+            "asset_path": body.asset_path,
+            "views": body.views,
+            "quality": body.quality,
+        },
+    ))
+    await db.commit()
+    await db.refresh(job)
+    return JobSummary.model_validate(job)
 
 
 @router.post("", response_model=JobSummary, status_code=status.HTTP_201_CREATED,

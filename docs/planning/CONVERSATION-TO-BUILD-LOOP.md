@@ -1,7 +1,7 @@
 ---
 title: Conversation To Build Loop
 created: 2026-07-14T20:07:21-04:00
-updated: 2026-07-16T17:46:50-04:00
+updated: 2026-07-16T19:16:39-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -15,7 +15,7 @@ wiki_order: 130
 ---
 # Conversation-to-Build Loop
 
-Recorded 2026-07-14. Status: **PARTIALLY BUILT — first vertical slice in progress.**
+Recorded 2026-07-14. Status: **FIRST VERTICAL SLICE VERIFIED IN LOCAL/STAGING FORM.**
 
 ## Goal
 
@@ -83,6 +83,18 @@ OEB_HARNESS_URL=<local or staging harness URL> \
 API_ADMIN_TOKEN=<matching harness admin token> \
 python3 tools/studio_chat.py "Build me a fast, beat-up pirate space fighter from primitive shapes."
 ```
+
+Environment selection is explicit. Local Docker and staging docker-pi use the
+same client and endpoint contract; only `OEB_HARNESS_URL`, tokens, and runtime
+environment values change.
+
+| Environment | Harness URL | Worker requirement |
+|---|---|---|
+| local Docker | `http://127.0.0.1:8088` | Worker polling local harness |
+| staging docker-pi | `http://oeb-studio.docker-pi` | Worker polling staging harness |
+
+The 2026-07-16 staging smoke test proved prompt-to-render with docker-pi as the
+control plane and a Mac worker producing PNG, GLB, and manifest artifacts.
 
 ## First job type: primitive asset build
 
@@ -223,4 +235,5 @@ rendered preview.
 - [x] Preview render artifact registration
 - [x] Job-specific review page at `/review/jobs/{job_id}`
 - [x] Chatbot response includes review URL
+- [x] Staging docker-pi prompt-to-render smoke test
 - [ ] Security sweep passes with no absolute local paths

@@ -1,0 +1,38 @@
+worker_id: macbook-air
+platform: macos-intel
+agent_version: "0.1.0"
+
+capabilities:
+  - blender.preview_render
+  - blender.command_line
+
+resources:
+  ram_gb: 8
+  cpu_type: Dual-Core Intel Core i5
+  gpu_type: Intel integrated
+  available_storage_gb: 65
+
+# MacBook Air 8,2. Keep serial numbers, UUIDs, and provisioning IDs out of
+# committed config. Use this worker for lightweight preview/build jobs.
+#
+# harness_url and enrollment_token are set via env vars:
+#   OEB_HARNESS_URL=http://oeb-studio.docker-pi
+#   OEB_ENROLLMENT_TOKEN=<from vault>
+# token_file stores the per-worker token after first registration.
+token_file: ~/.oeb-harness-worker-token-macbook-air
+
+poll_interval_seconds: 8
+heartbeat_interval_seconds: 30
+artifact_store_root: ${OEB_ARTIFACT_STORE_ROOT:-artifacts}
+output_root: ${OEB_OUTPUT_ROOT:-renders}
+workspace_root: ${OEB_WORKSPACE_ROOT:-../../..}
+
+adapters:
+  ollama:
+    base_url: http://localhost:11434
+    default_model: qwen2.5:3b
+    timeout_seconds: 300
+  blender:
+    executable: ${OEB_BLENDER_EXECUTABLE:-blender}
+    max_concurrent: 1
+    timeout_seconds: 1800

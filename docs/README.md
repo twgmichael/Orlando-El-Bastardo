@@ -1,7 +1,7 @@
 ---
 title: Home
 created: 2026-07-13T19:47:43-04:00
-updated: 2026-07-16T12:06:15-04:00
+updated: 2026-07-16T19:16:39-04:00
 doc_type: reference
 production_area: documentation
 department: production
@@ -15,12 +15,12 @@ wiki_order: 0
 ---
 # Orlando El Bastardo — Documentation
 
-Orlando El Bastardo is a deterministic 3D animation studio pipeline moving from
-screenplay-to-render automation into a conversational build loop: creative
-prompt, structured scene plan, validated job, visible review artifact, and
-traceable production output. Human-authored story remains the source. Local LLMs
-translate intent into constrained pipeline data; they do not generate pixels,
-fabricate imagery, or write final production files without validation.
+Orlando El Bastardo is a deterministic 3D animation studio pipeline with a
+working conversational build loop: creative prompt, structured scene plan,
+validated job, worker render, visible review artifact, and traceable production
+output. Human-authored story remains the source. Local LLMs translate intent
+into constrained pipeline data; they do not generate pixels, fabricate imagery,
+or write final production files without validation.
 
 ## Documentation Map
 
@@ -44,12 +44,12 @@ are not front-door reading unless they still serve the active production state.
 - [planning/ASSET-LOCATION-ORIENTATION-STANDARD.md](planning/ASSET-LOCATION-ORIENTATION-STANDARD.md) — OEB local axis standard for assets and locations
 - [planning/DOCUMENTATION-TAXONOMY-AND-METADATA.md](planning/DOCUMENTATION-TAXONOMY-AND-METADATA.md) — front matter taxonomy, lifecycle states, and wiki routing metadata
 - [planning/WIKI-SYNC-PLAN.md](planning/WIKI-SYNC-PLAN.md) — generated wiki publishing flow and lifecycle pruning rules
-- [planning/STUDIO-CHAT-ENDPOINT-PLAN.md](planning/STUDIO-CHAT-ENDPOINT-PLAN.md) — conversational prompt-to-job endpoint plan
+- [planning/STUDIO-CHAT-ENDPOINT-PLAN.md](planning/STUDIO-CHAT-ENDPOINT-PLAN.md) — environment-neutral conversational prompt-to-job endpoint plan
 - [planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md](planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md) — structured scene-plan and primitive-builder contract
 - [planning/ASSET-REGISTRY-PLAN.md](planning/ASSET-REGISTRY-PLAN.md) — lean registry for conversation grounding and pipeline lookup
-- [planning/CONVERSATION-TO-BUILD-LOOP.md](planning/CONVERSATION-TO-BUILD-LOOP.md) — conversational studio loop direction
+- [planning/CONVERSATION-TO-BUILD-LOOP.md](planning/CONVERSATION-TO-BUILD-LOOP.md) — prompt-to-render loop verified across local/staging configuration
 - [planning/STUDIO-HARNESS-VISION.md](planning/STUDIO-HARNESS-VISION.md) — studio harness product and operations vision
-- [planning/WORKER-AGENT-PLAN.md](planning/WORKER-AGENT-PLAN.md) — worker agent architecture and remaining install work
+- [planning/WORKER-AGENT-PLAN.md](planning/WORKER-AGENT-PLAN.md) — worker agent architecture, environment selection, and remaining install work
 - [planning/AGENT-BUS-PLAN.md](planning/AGENT-BUS-PLAN.md) — planned production issue bus
 - [planning/PUBLISHING-PLAN.md](planning/PUBLISHING-PLAN.md) — public publishing and render upload flow
 

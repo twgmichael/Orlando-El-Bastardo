@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-16T19:16:39-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -86,6 +86,13 @@ storytelling pipeline.
 
 ---
 
+## Planning Reference
+
+- Director role discovery and decisions:
+  `docs/planning/DIRECTOR-ROLE-PLAN.md`.
+
+---
+
 ## Carryover notes (updated 2026-07-05)
 
 - **Local LLM (Qwen2.5-3B-Instruct Q4) is CONFIRMED** (2026-07-06): passed
@@ -110,7 +117,8 @@ Harness spec: `docs/planning/studio-production-pipeline-harness-ansible-spec.jso
 Agent bus plan: `docs/planning/AGENT-BUS-PLAN.md` (PLANNED, not built).
 Worker plan: `docs/planning/WORKER-AGENT-PLAN.md`.
 Control plane on docker-pi-01 at `http://oeb-studio.docker-pi`; mac-mini
-worker running with menu bar app; first job submitted and claimed end-to-end.
+worker registered; local and staging harness targets are selected by
+environment; first docker-pi prompt-to-render job completed end-to-end.
 
 - [x] Install worker on Mac mini — DONE 2026-07-14 (menu bar running,
   worker registered, first job claimed)
@@ -120,11 +128,12 @@ worker running with menu bar app; first job submitted and claimed end-to-end.
 - [x] Add `output_root` per-worker config + `{output_root}` substitution —
   DONE 2026-07-14; renders write to OEB-PROJECT external drive
 - [x] Expose PostgreSQL port 5432 for direct SQL client access — DONE 2026-07-14
-- [ ] Install worker on gaming PC (`config-examples/gaming-pc.yml`)
+- [x] Add `oeb-studio.docker-pi` to the `traefik_domains` list in
+  project-pi-admin — DONE 2026-07-16
+- [x] Verify docker-pi studio chat to Mac worker render — DONE 2026-07-16
+- [ ] Bring up Linux gaming-PC worker from external SSD
+  (`config-examples/gaming-pc.yml`, `scripts/start-gaming-pc-worker.sh`)
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
-- [ ] Add `oeb-studio.docker-pi` to the `traefik_domains` list in
-  project-pi-admin as a committed entry (currently added manually; should be
-  declarative so it survives playbook reruns)
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
   - [ ] `tools/agent_bus.py` (file/claim/report/block/query verbs + payload schema)

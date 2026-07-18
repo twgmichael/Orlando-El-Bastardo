@@ -134,13 +134,33 @@ class JobRunner:
             except Exception:
                 log.exception("Failed to register artifact %s", artifact_path)
 
+        output_summary = {
+            "adapter": adapter.name,
+            "artifacts": [a["id"] for a in uploaded],
+            **(result.output_summary or {}),
+        }
+        if output_summary.get("job_type") == "asset.review_render":
+            public_base = (
+                self._config.artifact_public_base_url
+                or self._config.harness_url
+                or self._client.base_url
+            ).rstrip("/")
+            asset_id = output_summary.get("asset_id")
+            artifact_views = output_summary.get("artifact_views") or {}
+            output_summary["gallery_url"] = f"{public_base}/review/assets/{asset_id}" if asset_id else None
+            output_summary["artifact_urls"] = [
+                {
+                    "id": a["id"],
+                    "filename": a["filename"],
+                    "view": artifact_views.get(a["filename"]),
+                    "url": f"{public_base}/review/artifacts/{a['id']}",
+                }
+                for a in uploaded
+            ]
+
         await self._client.complete_job(
             job_id,
             log_output=result.log_output,
-            output_summary={
-                "adapter": adapter.name,
-                "artifacts": [a["id"] for a in uploaded],
-                **(result.output_summary or {}),
-            },
+            output_summary=output_summary,
         )
         log.info("Completed job %s", job_id)

@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-16T10:18:41-04:00
+updated: 2026-07-16T19:16:39-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -16,6 +16,36 @@ wiki_order: 20
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-07-16 — Local/staging environment split verified through docker-pi render
+
+The studio chat and worker path now supports local Docker and staging
+docker-pi as separate environments selected by configuration, not hardcoded
+application behavior.
+
+- `tools/studio_chat.py` remains environment-neutral: callers provide
+  `OEB_HARNESS_URL` and the matching admin token.
+- The harness config contract uses `OEB_ENVIRONMENT` plus
+  `OEB_STUDIO_CHAT_OLLAMA_URL`, `OEB_STUDIO_CHAT_MODEL`,
+  `OEB_STUDIO_CHAT_HARNESS_URL`, and `OEB_STUDIO_CHAT_ADMIN_TOKEN`.
+- Local Docker can use `host.docker.internal` for Ollama; staging docker-pi
+  must use a LAN-reachable LLM address.
+- The deployed docker-pi role now renders the studio-chat environment values
+  into `harness.env` and validates that staging/prod do not use local-only
+  hosts.
+- The docker-pi healthcheck now targets `/ready`, so Traefik `404` responses
+  no longer count as healthy.
+- `oeb-studio.docker-pi` is present in the project-pi-admin Traefik domains.
+- End-to-end smoke test succeeded: prompt submitted to docker-pi, docker-pi
+  reached the configured Mac Ollama service, created a harness job, the Mac
+  worker claimed it, Blender rendered it, and PNG/GLB/manifest artifacts were
+  registered.
+
+Validated with prompt: `Build a army tank.` Resulting job completed with
+registered preview, GLB, and manifest artifacts. The primitive tank visual is
+still crude, but the environment routing and render loop are proven.
 
 ---
 

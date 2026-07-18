@@ -14,6 +14,9 @@ BLENDER_CAPABILITIES = {
     "blender.command_line",
 }
 
+ASSET_REVIEW_JOB_TYPE = "asset.review_render"
+ASSET_REVIEW_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action")
+
 _PATH_TRAVERSAL = re.compile(r"\.\.")
 
 
@@ -64,6 +67,9 @@ class BlenderCLIAdapter(Adapter):
 
     def execute(self, job: dict) -> AdapterResult:
         payload = job.get("payload", {})
+        if payload.get("job_type") == ASSET_REVIEW_JOB_TYPE:
+            return self._execute_asset_review(payload, job.get("id", ""))
+
         blend_file = payload.get("blend_file")
         script_file = payload.get("script_file")
 
@@ -74,6 +80,73 @@ class BlenderCLIAdapter(Adapter):
         if script_file:
             return self._execute_script(payload, job.get("id", ""))
         return AdapterResult(success=False, error="payload requires blend_file or script_file")
+
+    def _execute_asset_review(self, payload: dict, job_id: str = "") -> AdapterResult:
+        asset_path = payload.get("asset_path")
+        asset_id = payload.get("asset_id")
+        if not asset_path:
+            return AdapterResult(success=False, error="asset.review_render payload requires asset_path")
+        if not asset_id:
+            return AdapterResult(success=False, error="asset.review_render payload requires asset_id")
+
+        quality = payload.get("quality") or "preview"
+        if quality not in {"preview", "final"}:
+            return AdapterResult(success=False, error="asset.review_render quality must be preview or final")
+
+        raw_views = payload.get("views") or ASSET_REVIEW_VIEWS
+        if isinstance(raw_views, str):
+            views = [v.strip() for v in raw_views.split(",") if v.strip()]
+        else:
+            views = [str(v).strip() for v in raw_views if str(v).strip()]
+        invalid_views = [v for v in views if v not in ASSET_REVIEW_VIEWS]
+        if invalid_views:
+            return AdapterResult(success=False, error=f"Unknown asset review views: {invalid_views}")
+
+        script_file = payload.get("script_file") or "{workspace_root}/tools/render_asset_review.py"
+        cwd = payload.get("cwd") or "{workspace_root}"
+        output_path = payload.get("output_path") or "{output_root}/oeb-studio-harness/review-renders/{job_id}"
+        artifact_prefix = payload.get("artifact_prefix") or payload.get("output_namespace") or asset_id
+
+        render_payload = {
+            **payload,
+            "script_file": script_file,
+            "cwd": cwd,
+            "output_path": output_path,
+            "factory_startup": True,
+            "artifact_type": "asset.review_render",
+            "script_args": [
+                "--asset", asset_path,
+                "--asset-id", asset_id,
+                "--views", ",".join(views),
+                "--quality", quality,
+                "--output-dir", output_path,
+                "--artifact-prefix", artifact_prefix,
+            ],
+            "artifact_paths": [
+                f"{output_path}/{artifact_prefix}_{view}.png"
+                for view in views
+            ],
+        }
+        for option in ("width", "height", "samples", "engine"):
+            if payload.get(option) is not None:
+                render_payload["script_args"].extend([f"--{option.replace('_', '-')}", str(payload[option])])
+
+        result = self._execute_script(render_payload, job_id=job_id)
+        if result.output_summary is None:
+            result.output_summary = {}
+        result.output_summary.update({
+            "job_type": ASSET_REVIEW_JOB_TYPE,
+            "asset_id": asset_id,
+            "asset_path": asset_path,
+            "views": views,
+            "quality": quality,
+            "artifact_prefix": artifact_prefix,
+            "artifact_views": {
+                f"{artifact_prefix}_{view}.png": view
+                for view in views
+            },
+        })
+        return result
 
     def _execute_blend(self, payload: dict, job_id: str = "") -> AdapterResult:
         blend_file = payload.get("blend_file")
@@ -154,9 +227,13 @@ class BlenderCLIAdapter(Adapter):
             return AdapterResult(success=False, error=f"script_file not found: {script}")
 
         if out:
-            out.parent.mkdir(parents=True, exist_ok=True)
+            target_dir = out if out.suffix == "" else out.parent
+            target_dir.mkdir(parents=True, exist_ok=True)
 
-        cmd = [self._cfg.executable, "--background", "--python", str(script)]
+        cmd = [self._cfg.executable, "--background"]
+        if payload.get("factory_startup"):
+            cmd.append("--factory-startup")
+        cmd += ["--python", str(script)]
         script_args = payload.get("script_args")
         if script_args:
             cmd += ["--"] + [self._resolve_path(str(a), job_id=job_id) for a in script_args]

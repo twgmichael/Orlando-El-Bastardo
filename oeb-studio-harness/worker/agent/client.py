@@ -20,6 +20,10 @@ class HarnessClient:
         self._worker_token = worker_token
         self._enrollment_token = enrollment_token
 
+    @property
+    def base_url(self) -> str:
+        return self._base
+
     def _worker_headers(self) -> dict:
         return {"Authorization": f"Bearer {self._worker_token}"}
 
