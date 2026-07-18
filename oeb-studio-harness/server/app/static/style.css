@@ -42,6 +42,19 @@ main { padding: 1.5rem; display: flex; flex-direction: column; gap: 2rem; }
 h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .75rem; }
 h2 small { font-size: 11px; margin-left: .5rem; }
 
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pager {
+  display: flex;
+  gap: .75rem;
+  font-size: 11px;
+}
+
 .summary-bar {
   display: flex;
   gap: 1rem;
@@ -163,6 +176,59 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
+}
+
+.asset-review-meta {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+}
+
+.asset-action-image {
+  display: block;
+  width: min(100%, 1280px);
+  max-height: 72vh;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.asset-angle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.asset-angle-tile {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.asset-angle-tile img,
+.missing-render {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+}
+
+.missing-render {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: rgba(107,114,128,.08);
+  text-transform: uppercase;
+}
+
+.asset-angle-tile figcaption {
+  border-top: 1px solid var(--border);
+  padding: .45rem .65rem;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 @media (max-width: 800px) {

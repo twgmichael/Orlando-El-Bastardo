@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     job_lease_seconds: int = Field(default=120, alias="JOB_LEASE_SECONDS")
 
     artifacts_root: str = Field(default="/srv/oeb-studio-harness/artifacts", alias="ARTIFACTS_ROOT")
+    artifact_public_base_url: str = Field(default="", alias="ARTIFACT_PUBLIC_BASE_URL")
+    artifact_worker_path_prefix: str = Field(default="", alias="ARTIFACT_WORKER_PATH_PREFIX")
+    artifact_server_path_prefix: str = Field(default="", alias="ARTIFACT_SERVER_PATH_PREFIX")
     asset_root: str = Field(default="assets", alias="OEB_ASSET_ROOT")
     oeb_config_path: str = Field(default="../../oeb.config.json", alias="OEB_CONFIG_PATH")
     studio_chat_harness_url: str = Field(default="", alias="OEB_STUDIO_CHAT_HARNESS_URL")

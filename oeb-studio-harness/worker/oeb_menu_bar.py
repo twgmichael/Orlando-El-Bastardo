@@ -38,7 +38,7 @@ class OEBWorkerApp(rumps.App):
         self._harness_url = harness_url
         self._state_queue: queue.Queue = queue.Queue()
 
-        self._status_item = rumps.MenuItem("Idle")
+        self._status_item = rumps.MenuItem("Starting worker...")
         self._open_item = rumps.MenuItem("Open Dashboard", callback=self._open_dashboard)
         self._quit_item = rumps.MenuItem("Quit", callback=self._quit)
 
@@ -60,6 +60,12 @@ class OEBWorkerApp(rumps.App):
     def notify_idle(self) -> None:
         self._state_queue.put(("idle",))
 
+    def notify_status(self, message: str) -> None:
+        self._state_queue.put(("status", message))
+
+    def notify_error(self, message: str) -> None:
+        self._state_queue.put(("error", message))
+
     # --- rumps timer: drain queue on main thread ---
 
     def _poll_state(self, _timer) -> None:
@@ -74,6 +80,14 @@ class OEBWorkerApp(rumps.App):
                 elif msg[0] == "idle":
                     self.icon = _ICON_IDLE
                     self._status_item.title = "Idle"
+                elif msg[0] == "status":
+                    _, message = msg
+                    self.icon = _ICON_IDLE
+                    self._status_item.title = message
+                elif msg[0] == "error":
+                    _, message = msg
+                    self.icon = _ICON_BUSY
+                    self._status_item.title = f"Worker issue: {message}"
         except queue.Empty:
             pass
 
@@ -114,6 +128,7 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
             retry_delay = 5
             while True:
                 try:
+                    app.notify_status(f"Registering {cfg.worker_id}...")
                     worker_token = await client.register(
                         worker_id=cfg.worker_id,
                         platform=cfg.platform,
@@ -123,11 +138,16 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
                     )
                     client.set_worker_token(worker_token)
                     _save_token(cfg, worker_token)
+                    app.notify_status(f"{cfg.worker_id} online")
                     break
                 except Exception as exc:
+                    app.notify_error(f"registration failed: {exc}")
                     logging.warning("Registration failed (%s) — retrying in %ds", exc, retry_delay)
                     await _asyncio.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, 60)
+        elif not worker_token:
+            app.notify_error("missing worker token/enrollment token")
+            return
 
         registry = AdapterRegistry()
         registry.register(OllamaAdapter(cfg.adapters.ollama))
@@ -143,6 +163,7 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
             cfg.heartbeat_interval_seconds,
             on_busy=app.notify_busy,
             on_idle=app.notify_idle,
+            on_error=app.notify_error,
         )
         runner = JobRunner(client, heartbeat, registry, cfg)
 
@@ -150,7 +171,11 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
         run_task = asyncio.create_task(runner.run())
         await asyncio.gather(hb_task, run_task)
 
-    asyncio.run(run())
+    try:
+        asyncio.run(run())
+    except Exception as exc:
+        logging.exception("Worker thread stopped")
+        app.notify_error(f"stopped: {exc}")
 
 
 def main() -> None:

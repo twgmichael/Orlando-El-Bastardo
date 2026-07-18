@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import case, func, select
 from pathlib import Path
 
 from app.database import get_db
@@ -13,10 +15,36 @@ from app.models.audit import AuditEvent
 router = APIRouter(tags=["dashboard"])
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+COMPLETED_PAGE_SIZE = 25
+
+
+def _job_review_url(job: Job) -> str:
+    payload = job.payload or {}
+    if payload.get("job_type") == "asset.review_render" and payload.get("asset_id"):
+        return f"/review/assets/{payload['asset_id']}"
+    return f"/review/jobs/{job.id}"
+
+
+templates.env.globals["job_review_url"] = _job_review_url
+
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
-    workers_result = await db.execute(select(Worker).order_by(Worker.status, Worker.id))
+async def dashboard(
+    request: Request,
+    completed_page: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    completed_page = max(completed_page, 0)
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(days=1)
+
+    worker_status_order = case(
+        (Worker.status == "busy", 0),
+        (Worker.status == "online", 1),
+        (Worker.status == "offline", 3),
+        else_=2,
+    )
+    workers_result = await db.execute(select(Worker).order_by(worker_status_order, Worker.id))
     workers = workers_result.scalars().all()
 
     caps_result = await db.execute(select(WorkerCapability))
@@ -24,10 +52,45 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     for c in caps_result.scalars().all():
         caps_by_worker.setdefault(c.worker_id, []).append(c.capability)
 
-    jobs_result = await db.execute(
-        select(Job).order_by(Job.status, Job.priority.desc(), Job.created_at.desc()).limit(50)
+    active_status_order = case(
+        (Job.status == "running", 0),
+        (Job.status == "pending", 1),
+        else_=2,
     )
-    jobs = jobs_result.scalars().all()
+    active_result = await db.execute(
+        select(Job)
+        .where(Job.status.in_(["pending", "running"]))
+        .order_by(active_status_order, Job.priority.desc(), Job.created_at.asc())
+    )
+    active_jobs = active_result.scalars().all()
+
+    if completed_page == 0:
+        completed_query = (
+            select(Job)
+            .where(Job.status == "completed", Job.updated_at >= recent_cutoff)
+            .order_by(Job.updated_at.desc())
+        )
+        completed_label = "last 24 hours"
+    else:
+        completed_query = (
+            select(Job)
+            .where(Job.status == "completed", Job.updated_at < recent_cutoff)
+            .order_by(Job.updated_at.desc())
+            .offset((completed_page - 1) * COMPLETED_PAGE_SIZE)
+            .limit(COMPLETED_PAGE_SIZE)
+        )
+        completed_label = f"archive page {completed_page}"
+
+    completed_result = await db.execute(completed_query)
+    completed_jobs = completed_result.scalars().all()
+
+    older_completed_count_result = await db.execute(
+        select(func.count()).where(Job.status == "completed", Job.updated_at < recent_cutoff)
+    )
+    older_completed_count = older_completed_count_result.scalar() or 0
+    has_next_completed_page = completed_page > 0 and (
+        completed_page * COMPLETED_PAGE_SIZE < older_completed_count
+    )
 
     counts_result = await db.execute(
         select(Job.status, func.count()).group_by(Job.status)
@@ -42,7 +105,12 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     return templates.TemplateResponse(request, "dashboard.html", {
         "workers": workers,
         "caps_by_worker": caps_by_worker,
-        "jobs": jobs,
+        "active_jobs": active_jobs,
+        "completed_jobs": completed_jobs,
+        "completed_label": completed_label,
+        "completed_page": completed_page,
+        "has_older_completed": older_completed_count > 0,
+        "has_next_completed_page": has_next_completed_page,
         "job_counts": job_counts,
         "audit_events": audit_events,
     })

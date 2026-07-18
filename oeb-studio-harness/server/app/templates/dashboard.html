@@ -57,8 +57,8 @@
 </section>
 
 <section>
-  <h2>Jobs <small>(last 50)</small></h2>
-  {% if jobs %}
+  <h2>Active Jobs <small>(pending and running)</small></h2>
+  {% if active_jobs %}
   <table>
     <thead>
       <tr>
@@ -71,9 +71,9 @@
       </tr>
     </thead>
     <tbody>
-      {% for j in jobs %}
+      {% for j in active_jobs %}
       <tr>
-        <td>{{ j.title }}</td>
+        <td><a href="{{ job_review_url(j) }}">{{ j.title }}</a></td>
         <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
         <td class="mono small">{{ j.policy }}</td>
         <td class="mono small">{{ j.assigned_worker_id or "—" }}</td>
@@ -84,7 +84,52 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty">No jobs yet.</p>
+  <p class="empty">No pending or running jobs.</p>
+  {% endif %}
+</section>
+
+<section>
+  <div class="section-heading">
+    <h2>Completed Jobs <small>({{ completed_label }})</small></h2>
+    <div class="pager">
+      {% if completed_page > 0 %}
+      <a href="/">Latest</a>
+      <a href="/?completed_page={{ completed_page - 1 }}">Newer</a>
+      {% endif %}
+      {% if completed_page == 0 and has_older_completed %}
+      <a href="/?completed_page=1">Previous Completed</a>
+      {% elif has_next_completed_page %}
+      <a href="/?completed_page={{ completed_page + 1 }}">Older</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if completed_jobs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Policy</th>
+        <th>Worker</th>
+        <th>Priority</th>
+        <th>Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in completed_jobs %}
+      <tr>
+        <td><a href="{{ job_review_url(j) }}">{{ j.title }}</a></td>
+        <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
+        <td class="mono small">{{ j.policy }}</td>
+        <td class="mono small">{{ j.assigned_worker_id or "—" }}</td>
+        <td>{{ j.priority }}</td>
+        <td class="mono small">{{ j.updated_at.strftime("%m-%d %H:%M") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No completed jobs in this window.</p>
   {% endif %}
 </section>
 
