@@ -34,8 +34,20 @@ header {
 }
 
 .logo { font-size: 15px; font-weight: 700; color: var(--accent); }
+.logo:hover { text-decoration: none; }
 .tagline { color: var(--muted); font-size: 11px; }
 .clock { margin-left: auto; color: var(--muted); }
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  background: rgba(22, 26, 32, .72);
+  font-size: 11px;
+}
 
 main { padding: 1.5rem; display: flex; flex-direction: column; gap: 2rem; }
 
@@ -207,6 +219,19 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
 }
 
+.lightbox-trigger {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.lightbox-trigger:hover img {
+  filter: brightness(1.08);
+}
+
 .asset-angle-tile img,
 .missing-render {
   display: block;
@@ -231,7 +256,75 @@ a:hover { text-decoration: underline; }
   text-transform: uppercase;
 }
 
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+}
+
+.lightbox[aria-hidden="true"] {
+  display: none;
+}
+
+.lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, .82);
+  cursor: zoom-out;
+}
+
+.lightbox-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  max-width: min(96vw, 1600px);
+  max-height: 94vh;
+}
+
+.lightbox-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.lightbox-close {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .35rem .6rem;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.lightbox-close:hover {
+  border-color: var(--accent);
+}
+
+.lightbox-panel img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(94vh - 2.5rem);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
 @media (max-width: 800px) {
   .review-grid { grid-template-columns: 1fr; }
   .review-hero { flex-direction: column; }
+  .breadcrumbs { padding-inline: 1rem; overflow-x: auto; }
+  .lightbox { padding: 1rem; }
 }

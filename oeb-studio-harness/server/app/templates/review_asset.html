@@ -8,6 +8,16 @@
 {% endif %}
 {% endblock %}
 
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Jobs</a>
+  <span>/</span>
+  <span>Review Assets</span>
+  <span>/</span>
+  <span>{{ asset_id }}</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 
 <section class="review-hero">
@@ -30,9 +40,7 @@
 {% if action %}
 <section>
   <h2>Action</h2>
-  <a href="{{ action.public_url or '/review/artifacts/' ~ action.id }}">
-    <img class="asset-action-image" src="{{ action.public_url or '/review/artifacts/' ~ action.id }}" alt="{{ asset_id }} action render">
-  </a>
+  <img class="asset-action-image" src="{{ action.public_url or '/review/artifacts/' ~ action.id }}" alt="{{ asset_id }} action render">
 </section>
 {% endif %}
 
@@ -43,9 +51,14 @@
     <figure class="asset-angle-tile">
       {% if by_view.get(view) %}
       {% set artifact = by_view.get(view) %}
-      <a href="{{ artifact.public_url or '/review/artifacts/' ~ artifact.id }}">
+      <button
+        class="lightbox-trigger"
+        type="button"
+        data-lightbox-src="{{ artifact.public_url or '/review/artifacts/' ~ artifact.id }}"
+        data-lightbox-title="{{ asset_id }} {{ view }}"
+        aria-label="Open {{ view }} render">
         <img src="{{ artifact.public_url or '/review/artifacts/' ~ artifact.id }}" alt="{{ asset_id }} {{ view }} render">
-      </a>
+      </button>
       <figcaption>{{ view }}</figcaption>
       {% else %}
       <div class="missing-render">{{ view }}</div>
@@ -80,4 +93,47 @@
   </table>
 </section>
 
+<div class="lightbox" id="asset-lightbox" aria-hidden="true">
+  <button class="lightbox-backdrop" type="button" aria-label="Close image preview"></button>
+  <div class="lightbox-panel" role="dialog" aria-modal="true" aria-label="Render preview">
+    <div class="lightbox-toolbar">
+      <span id="asset-lightbox-title"></span>
+      <button class="lightbox-close" type="button" aria-label="Close image preview">Close</button>
+    </div>
+    <img id="asset-lightbox-image" src="" alt="">
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const lightbox = document.getElementById("asset-lightbox");
+  const lightboxImage = document.getElementById("asset-lightbox-image");
+  const lightboxTitle = document.getElementById("asset-lightbox-title");
+  const closeButtons = lightbox.querySelectorAll(".lightbox-backdrop, .lightbox-close");
+
+  function closeLightbox() {
+    lightbox.setAttribute("aria-hidden", "true");
+    lightboxImage.removeAttribute("src");
+    lightboxImage.alt = "";
+  }
+
+  document.querySelectorAll(".lightbox-trigger").forEach((button) => {
+    button.addEventListener("click", () => {
+      const title = button.dataset.lightboxTitle || "Render preview";
+      lightboxImage.src = button.dataset.lightboxSrc;
+      lightboxImage.alt = title;
+      lightboxTitle.textContent = title;
+      lightbox.setAttribute("aria-hidden", "false");
+    });
+  });
+
+  closeButtons.forEach((button) => button.addEventListener("click", closeLightbox));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && lightbox.getAttribute("aria-hidden") === "false") {
+      closeLightbox();
+    }
+  });
+</script>
 {% endblock %}
