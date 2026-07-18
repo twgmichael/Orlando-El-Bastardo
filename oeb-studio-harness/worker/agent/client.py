@@ -184,6 +184,7 @@ class HarnessClient:
         artifact_path: Path,
         artifact_type: str,
         filename: str,
+        size_bytes: Optional[int] = None,
         mime_type: Optional[str] = None,
         checksum_sha256: Optional[str] = None,
         review_metadata: Optional[dict] = None,
@@ -202,13 +203,12 @@ class HarnessClient:
             params["review_metadata_json"] = json.dumps(review_metadata, separators=(",", ":"))
 
         async with httpx.AsyncClient(verify=False) as c:
-            with artifact_path.open("rb") as f:
-                r = await c.post(
-                    f"{self._base}/api/v1/jobs/{job_id}/artifact-files",
-                    params=params,
-                    content=f,
-                    headers=self._worker_headers(),
-                    timeout=120,
-                )
+            r = await c.post(
+                f"{self._base}/api/v1/jobs/{job_id}/artifact-files",
+                params=params,
+                content=artifact_path.read_bytes(),
+                headers=self._worker_headers(),
+                timeout=120,
+            )
             r.raise_for_status()
             return r.json()
