@@ -1,7 +1,7 @@
 ---
 title: Studio Chat Endpoint Plan
 created: 2026-07-15T15:04:43-04:00
-updated: 2026-07-16T17:46:50-04:00
+updated: 2026-07-16T19:16:39-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -15,7 +15,7 @@ wiki_order: 150
 ---
 # Studio Chat Endpoint Plan
 
-Recorded 2026-07-15. Status: **FIRST PASS BUILT**.
+Recorded 2026-07-15. Status: **FIRST PASS BUILT AND STAGING-SMOKE-TESTED**.
 
 ## Context
 
@@ -33,6 +33,11 @@ staging-docker-pi: http://oeb-studio.docker-pi/api/v1/studio-chat
 
 The endpoint should let a creative prompt become a structured harness job
 without the human repeatedly managing CLI syntax.
+
+As of 2026-07-16, the docker-pi staging path has been verified end to end:
+chat CLI -> deployed `/api/v1/studio-chat` -> configured LLM endpoint ->
+staging harness job queue -> Mac worker -> Blender primitive render ->
+registered PNG/GLB/manifest artifacts.
 
 ## Discovery
 
@@ -81,15 +86,16 @@ The endpoint should use environment/config settings rather than hardcoded
 targets:
 
 ```text
-OEB_HARNESS_URL
-API_ADMIN_TOKEN
-OEB_LLM_ENDPOINT
-OEB_LLM_MODEL
-OEB_STUDIO_CHAT_TARGET
+OEB_ENVIRONMENT
+OEB_STUDIO_CHAT_OLLAMA_URL
+OEB_STUDIO_CHAT_MODEL
+OEB_STUDIO_CHAT_HARNESS_URL
+OEB_STUDIO_CHAT_ADMIN_TOKEN
 ```
 
-The exact names can evolve, but the principle is fixed: endpoint routing must
-be configurable per environment.
+`OEB_STUDIO_CHAT_HARNESS_URL` is blank when the endpoint submits back to the
+same harness that received the request. Client tools still select the harness
+with `OEB_HARNESS_URL` and authenticate with `API_ADMIN_TOKEN`.
 
 ## Decisions
 
@@ -138,12 +144,23 @@ Expected path in either environment:
 2. The selected harness records the prompt loop and creates a render job.
 3. An eligible worker claims the job.
 4. Blender renders the primitive asset.
-5. The response returns `job_id`, `review_url`, `trace_url`, and
+5. The worker registers PNG/GLB/manifest artifacts.
+6. The response returns `job_id`, `review_url`, `trace_url`, and
    `canonical_id`.
 
 The acceptance prompt should preserve detail-sensitive fields such as
 `rounded_corners`, source phrases, structured shape details, orientation
 metadata, and prop classification.
+
+Operational notes:
+
+- A `502` mentioning `host.docker.internal` from staging means the deployed
+  harness is still using local Docker config.
+- A `502` mentioning a Mac-only hostname means docker-pi cannot resolve or
+  reach the LLM host from inside the container; use a network-reachable LLM
+  address in staging inventory.
+- A successful `job_id` with no artifacts means intake worked but no eligible
+  worker is online for the selected harness.
 
 ## Open Design Notes
 

@@ -1,8 +1,11 @@
 worker_id: gaming-pc
-platform: windows-x64
+platform: linux-x64
 agent_version: "0.1.0"
 
 capabilities:
+  - llm.scene_spec
+  - llm.blender_python
+  - llm.general
   - blender.final_render
   - blender.preview_render
   - blender.command_line
@@ -16,15 +19,18 @@ resources:
   available_storage_gb: 1000
 
 # harness_url and enrollment_token are set via env vars:
-#   OEB_HARNESS_URL=https://studio-orchestrator.local
+#   OEB_HARNESS_URL=http://oeb-studio.docker-pi
 #   OEB_ENROLLMENT_TOKEN=<from vault>
-token_file: C:/Users/studio/.oeb-harness-worker-token
+# token_file stores the per-worker token after first registration.
+token_file: ~/.oeb-harness-worker-token
 
 poll_interval_seconds: 5
 heartbeat_interval_seconds: 20
-# Artifacts written to the Mac mini SMB share, mounted here
-artifact_store_root: Z:/oeb-studio-harness/artifacts
-output_root: Z:/OEB-PROJECT/OEB-PRODUCTION
+# SanDisk Professional PRO-G40 2 TB mounted at a stable Linux path.
+# Keep this path stable even when the physical drive label changes.
+artifact_store_root: ${OEB_ARTIFACT_STORE_ROOT:-/mnt/oeb-project/OEB-PRODUCTION/oeb-studio-harness/artifacts}
+output_root: ${OEB_OUTPUT_ROOT:-/mnt/oeb-project/OEB-PRODUCTION}
+workspace_root: ${OEB_WORKSPACE_ROOT:-../../..}
 
 adapters:
   ollama:
@@ -32,6 +38,6 @@ adapters:
     default_model: qwen2.5-coder:32b
     timeout_seconds: 600
   blender:
-    executable: "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe"
+    executable: ${OEB_BLENDER_EXECUTABLE:-blender}
     max_concurrent: 1
     timeout_seconds: 7200

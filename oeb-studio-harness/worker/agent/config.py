@@ -42,6 +42,7 @@ class WorkerConfig(BaseModel):
     poll_interval_seconds: int = 5
     heartbeat_interval_seconds: int = 20
     artifact_store_root: str = "/srv/oeb-studio-harness/artifacts"
+    artifact_public_base_url: str = ""  # public harness base URL for review links; defaults to harness_url
     output_root: str = ""  # base path for render/file output; substituted into {output_root} in job script_args
     workspace_root: str = "."  # base path for repo-relative job scripts; substituted into {workspace_root}
 

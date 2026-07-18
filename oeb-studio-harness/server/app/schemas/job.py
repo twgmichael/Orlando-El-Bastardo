@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -15,6 +15,43 @@ class JobCreateRequest(BaseModel):
     priority: int = 0
     payload: dict = {}
     is_idempotent: bool = True
+
+
+ASSET_REVIEW_VIEWS = {"top", "bottom", "left", "right", "front", "back", "action"}
+
+
+class AssetReviewRenderRequest(BaseModel):
+    asset_path: str
+    asset_id: str
+    views: list[str] = Field(default_factory=lambda: [
+        "top", "bottom", "left", "right", "front", "back", "action"
+    ])
+    quality: str = "preview"
+    output_namespace: Optional[str] = None
+    artifact_prefix: Optional[str] = None
+    priority: int = 10
+    preferred_worker_id: Optional[str] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    samples: Optional[int] = None
+    output_path: Optional[str] = None
+
+    @field_validator("views")
+    @classmethod
+    def validate_views(cls, views: list[str]) -> list[str]:
+        if not views:
+            raise ValueError("views must contain at least one view")
+        invalid = [view for view in views if view not in ASSET_REVIEW_VIEWS]
+        if invalid:
+            raise ValueError(f"views contains unsupported values: {invalid}")
+        return views
+
+    @field_validator("quality")
+    @classmethod
+    def validate_quality(cls, quality: str) -> str:
+        if quality not in {"preview", "final"}:
+            raise ValueError("quality must be preview or final")
+        return quality
 
 
 class JobSummary(BaseModel):

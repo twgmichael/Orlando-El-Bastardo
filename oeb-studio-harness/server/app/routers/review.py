@@ -14,6 +14,18 @@ from app.models.job import Job, JobAttempt
 router = APIRouter(prefix="/review", tags=["review"])
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+ASSET_REVIEW_VIEWS = ("front", "back", "left", "right", "top", "bottom", "action")
+
+
+def _view_from_artifact(asset_id: str, filename: str) -> str | None:
+    stem = Path(filename).stem
+    prefix = f"{asset_id}_"
+    if stem.startswith(prefix):
+        view = stem[len(prefix):]
+    else:
+        view = stem.rsplit("_", 1)[-1]
+    return view if view in ASSET_REVIEW_VIEWS else None
+
 
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
 async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
@@ -36,6 +48,50 @@ async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Dep
         "job": job,
         "artifacts": artifacts,
         "attempts": attempts,
+    })
+
+
+@router.get("/assets/{asset_id}", response_class=HTMLResponse)
+async def review_asset(asset_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    jobs_result = await db.execute(
+        select(Job)
+        .where(
+            Job.payload["job_type"].as_string() == "asset.review_render",
+            Job.payload["asset_id"].as_string() == asset_id,
+        )
+        .order_by(Job.updated_at.desc())
+    )
+    jobs = jobs_result.scalars().all()
+    if not jobs:
+        raise HTTPException(status_code=404, detail="No review renders found for asset")
+
+    latest_job = jobs[0]
+    artifact_result = await db.execute(
+        select(Artifact)
+        .where(Artifact.job_id == latest_job.id)
+        .order_by(Artifact.created_at)
+    )
+    artifacts = artifact_result.scalars().all()
+
+    by_view: dict[str, Artifact] = {}
+    for artifact in artifacts:
+        if not artifact.mime_type or not artifact.mime_type.startswith("image/"):
+            continue
+        view = _view_from_artifact(asset_id, artifact.filename)
+        if view:
+            by_view[view] = artifact
+
+    angle_views = ["front", "back", "left", "right", "top", "bottom"]
+    action = by_view.get("action")
+    return templates.TemplateResponse(request, "review_asset.html", {
+        "asset_id": asset_id,
+        "job": latest_job,
+        "jobs": jobs[:10],
+        "asset_path": (latest_job.payload or {}).get("asset_path"),
+        "quality": (latest_job.payload or {}).get("quality"),
+        "angle_views": angle_views,
+        "by_view": by_view,
+        "action": action,
     })
 
 
