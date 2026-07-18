@@ -93,13 +93,13 @@
     <h2>Completed Jobs <small>({{ completed_label }})</small></h2>
     <div class="pager">
       {% if completed_page > 0 %}
-      <a href="/">Latest</a>
-      <a href="/?completed_page={{ completed_page - 1 }}">Newer</a>
+      <a href="/?audit_page={{ audit_page }}">Latest</a>
+      <a href="/?completed_page={{ completed_page - 1 }}&audit_page={{ audit_page }}">Newer</a>
       {% endif %}
       {% if completed_page == 0 and has_older_completed %}
-      <a href="/?completed_page=1">Previous Completed</a>
+      <a href="/?completed_page=1&audit_page={{ audit_page }}">Previous Completed</a>
       {% elif has_next_completed_page %}
-      <a href="/?completed_page={{ completed_page + 1 }}">Older</a>
+      <a href="/?completed_page={{ completed_page + 1 }}&audit_page={{ audit_page }}">Older</a>
       {% endif %}
     </div>
   </div>
@@ -134,7 +134,18 @@
 </section>
 
 <section>
-  <h2>Recent Audit Events</h2>
+  <div class="section-heading">
+    <h2>Recent Audit Events <small>{% if audit_page == 0 %}(latest 10){% else %}(page {{ audit_page + 1 }}){% endif %}</small></h2>
+    <div class="pager">
+      {% if audit_page > 0 %}
+      <a href="/?completed_page={{ completed_page }}">Latest</a>
+      <a href="/?completed_page={{ completed_page }}&audit_page={{ audit_page - 1 }}">Newer</a>
+      {% endif %}
+      {% if has_next_audit_page %}
+      <a href="/?completed_page={{ completed_page }}&audit_page={{ audit_page + 1 }}">Older</a>
+      {% endif %}
+    </div>
+  </div>
   {% if audit_events %}
   <table>
     <thead>

@@ -9,10 +9,11 @@
 </head>
 <body>
   <header>
-    <span class="logo">Studio Harness</span>
+    <a class="logo" href="/">Studio Harness</a>
     <span class="tagline">Orlando El Bastardo Production Pipeline</span>
     <span class="clock" id="clock"></span>
   </header>
+  {% block breadcrumbs %}{% endblock %}
   <main>
     {% block content %}{% endblock %}
   </main>
