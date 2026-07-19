@@ -283,8 +283,8 @@ Acceptance criteria:
 
 ### Milestone 2: Name-Based Submission
 
-- Add known-asset registry entries for Ventradi Cruiser, JB5k, and Ellipso
-  Flyer.
+- Add known-asset registry entries for Ventradi Cruiser, JB5k, JB100, and
+  Ellipso Flyer.
 - Allow submit helper and API to accept friendly names.
 - Return one gallery URL immediately after submission.
 
@@ -308,6 +308,7 @@ manual repair:
 ```text
 Render all views for Ventradi Cruiser.
 Render all views for JB5k.
+Render all views for JB100.
 Render all views for Ellipso Flyer.
 ```
 
@@ -318,3 +319,8 @@ Each request should end with:
 - All artifact rows using `provenance: uploaded`.
 - All artifact rows stored under docker-pi artifact storage.
 - A gallery page that immediately shows the action render and six-angle grid.
+
+2026-07-18 GPU proof: JB100 completed a seven-view final-quality
+`asset.review_render` on `render-pc-01` using Blender Cycles CUDA, 1280x960,
+96 samples. Follow-on scheduler work should request `gpu.cycles_render` for
+GPU-targeted final review renders so CPU-only final workers do not claim them.

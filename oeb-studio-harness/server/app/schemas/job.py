@@ -36,6 +36,7 @@ class AssetReviewRenderRequest(BaseModel):
     height: Optional[int] = None
     samples: Optional[int] = None
     output_path: Optional[str] = None
+    require_gpu_cycles: bool = False
 
     @field_validator("views")
     @classmethod

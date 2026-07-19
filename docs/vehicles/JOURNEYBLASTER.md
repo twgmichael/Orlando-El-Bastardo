@@ -42,6 +42,11 @@ original 1995 Infini-D designs; Tier 1 provenance.
   `tmp_jb100_barrel_roll.py`.
 - Library gap: no sci-fi chairs exist in any CC0 pack (House Interior's
   four wooden dining chairs + stool only).
+- Harness proof: on 2026-07-18, `render-pc-01` completed a full JB100
+  final review render through the studio harness: seven views
+  (top/bottom/left/right/front/back/action), Cycles CUDA on the GTX 1660
+  SUPER, 1280x960, 96 samples, with all PNG artifacts uploaded to the review
+  gallery.
 
 ## Decisions (owner canon)
 
@@ -80,3 +85,7 @@ remembering: silent no-op patches (fixed — all script edits assert the
 match before writing) and the two-character salvage GLB leaking the
 green bartender into review rigs (fixed — strip everything not parented
 to the hero).
+
+Operational note: Ubuntu's packaged Blender did not expose CUDA/OptiX for the
+PC worker. `render-pc-01` uses the official Blender Linux binary under
+`/opt/blender` through the `oeb-blender-headless` wrapper.
