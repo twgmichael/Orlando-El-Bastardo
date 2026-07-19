@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     worker_heartbeat_seconds: int = Field(default=20, alias="WORKER_HEARTBEAT_SECONDS")
     worker_timeout_seconds: int = Field(default=75, alias="WORKER_TIMEOUT_SECONDS")
     job_lease_seconds: int = Field(default=120, alias="JOB_LEASE_SECONDS")
+    review_render_retention_days: int = Field(default=7, alias="REVIEW_RENDER_RETENTION_DAYS")
+    review_render_prune_interval_seconds: int = Field(
+        default=86400,
+        alias="REVIEW_RENDER_PRUNE_INTERVAL_SECONDS",
+    )
 
     artifacts_root: str = Field(default="/srv/oeb-studio-harness/artifacts", alias="ARTIFACTS_ROOT")
     artifact_public_base_url: str = Field(default="", alias="ARTIFACT_PUBLIC_BASE_URL")

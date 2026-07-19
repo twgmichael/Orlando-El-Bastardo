@@ -260,12 +260,17 @@ button:hover {
 
 .asset-action-image {
   display: block;
-  width: min(100%, 1280px);
-  max-height: 72vh;
+  width: min(100%, 640px);
+  max-height: 36vh;
   object-fit: contain;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface);
+}
+
+.asset-action-trigger {
+  width: auto;
+  max-width: min(100%, 640px);
 }
 
 .asset-angle-grid {
@@ -359,7 +364,8 @@ button:hover {
   text-transform: uppercase;
 }
 
-.lightbox-close {
+.lightbox-close,
+.lightbox-nav {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: .35rem .6rem;
@@ -370,7 +376,8 @@ button:hover {
   cursor: pointer;
 }
 
-.lightbox-close:hover {
+.lightbox-close:hover,
+.lightbox-nav:hover {
   border-color: var(--accent);
 }
 
