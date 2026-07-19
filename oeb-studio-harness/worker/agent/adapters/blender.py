@@ -2,6 +2,7 @@ import logging
 import re
 import shlex
 import subprocess
+import time
 from pathlib import Path
 from agent.adapters.base import Adapter, AdapterResult
 from agent.config import BlenderAdapterConfig
@@ -238,7 +239,9 @@ class BlenderCLIAdapter(Adapter):
         if script_args:
             cmd += ["--"] + [self._resolve_path(str(a), job_id=job_id) for a in script_args]
 
+        started = time.monotonic()
         log_output, returncode = self._run(cmd, cwd=cwd)
+        elapsed_seconds = time.monotonic() - started
         if returncode != 0:
             return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
 
@@ -265,6 +268,7 @@ class BlenderCLIAdapter(Adapter):
                 )
                 if frames_dir.exists():
                     frame_count = len(list(frames_dir.glob("*.png")))
+            seconds_per_frame = elapsed_seconds / frame_count if frame_count else None
             output_summary.update({
                 "job_type": "scene.render",
                 "scene_name": payload.get("scene_name"),
@@ -273,10 +277,25 @@ class BlenderCLIAdapter(Adapter):
                 "mode": payload.get("mode"),
                 "output_path": str(out) if out else None,
                 "frame_count": frame_count,
+                "elapsed_seconds": round(elapsed_seconds, 3),
+                "seconds_per_frame": round(seconds_per_frame, 3) if seconds_per_frame else None,
+                "timing": {
+                    "elapsed_seconds": round(elapsed_seconds, 3),
+                    "frames": frame_count,
+                    "seconds_per_frame": round(seconds_per_frame, 3) if seconds_per_frame else None,
+                    "quality": payload.get("quality"),
+                    "width": payload.get("width"),
+                    "height": payload.get("height"),
+                },
                 "progress": {
+                    "phase": "complete",
+                    "quality": payload.get("quality"),
                     "frames_rendered": frame_count,
                     "total_frames": payload.get("expected_frames"),
                     "percent": 100 if frame_count and payload.get("expected_frames") and frame_count >= int(payload["expected_frames"]) else None,
+                    "seconds_per_frame": round(seconds_per_frame, 3) if seconds_per_frame else None,
+                    "eta_seconds": 0,
+                    "estimate_source": "current_render" if seconds_per_frame else "insufficient_data",
                 },
             })
         return AdapterResult(

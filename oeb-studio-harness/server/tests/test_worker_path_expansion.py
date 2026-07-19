@@ -1,7 +1,16 @@
 import pytest
+import sys
+from types import ModuleType
+from types import SimpleNamespace
 
 from agent.adapters.blender import BlenderCLIAdapter
 from agent.config import BlenderAdapterConfig
+
+client_stub = ModuleType("agent.client")
+client_stub.HarnessClient = object
+sys.modules.setdefault("agent.client", client_stub)
+
+from agent.job_runner import JobRunner
 
 
 def test_blender_adapter_expands_output_workspace_and_job_placeholders():
@@ -138,3 +147,77 @@ def test_blender_adapter_routes_scene_render(tmp_path, monkeypatch):
     assert result.output_summary["job_type"] == "scene.render"
     assert result.output_summary["scene_name"] == "JB100-pirate-escape"
     assert result.output_summary["frame_count"] == 3
+    assert result.output_summary["timing"]["frames"] == 3
+    assert result.output_summary["progress"]["phase"] == "complete"
+
+
+def test_job_runner_reports_scene_render_progress(tmp_path):
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    for frame in range(1, 7):
+        (frames_dir / f"frame_{frame:04d}.png").write_bytes(b"png")
+
+    runner = JobRunner(
+        client=None,
+        heartbeat=None,
+        registry=None,
+        config=SimpleNamespace(
+            output_root=str(tmp_path),
+            workspace_root=str(tmp_path),
+        ),
+    )
+
+    progress = runner._scene_render_progress({
+        "id": "job-789",
+        "created_at": "2026-07-19T20:00:00+00:00",
+        "payload": {
+            "job_type": "scene.render",
+            "quality": "final",
+            "frames_dir": str(frames_dir),
+            "output_path": str(tmp_path / "out.mp4"),
+            "expected_frames": 24,
+        },
+    })
+
+    assert progress["phase"] == "rendering_frames"
+    assert progress["frames_rendered"] == 6
+    assert progress["total_frames"] == 24
+    assert progress["percent"] == 25
+    assert progress["estimate_source"] == "current_render"
+    assert progress["latest_frame_path"].endswith("frame_0006.png")
+
+
+def test_job_runner_reports_final_render_with_no_early_frames(tmp_path):
+    runner = JobRunner(
+        client=None,
+        heartbeat=None,
+        registry=None,
+        config=SimpleNamespace(
+            output_root=str(tmp_path),
+            workspace_root=str(tmp_path),
+        ),
+    )
+
+    progress = runner._scene_render_progress({
+        "id": "job-790",
+        "created_at": "2020-01-01T00:00:00+00:00",
+        "payload": {
+            "job_type": "scene.render",
+            "quality": "final",
+            "frames_dir": str(tmp_path / "missing_frames"),
+            "output_path": str(tmp_path / "out.mp4"),
+            "initial_progress": {
+                "estimate_source": "insufficient_data",
+                "message": "No prior preview timing available; ETA will start after final frames land.",
+            },
+        },
+    })
+
+    assert progress["phase"] == "starting"
+    assert progress["frames_rendered"] == 0
+    assert progress["total_frames"] is None
+    assert progress["percent"] is None
+    assert progress["eta_seconds"] is None
+    assert progress["estimate_source"] == "insufficient_data"
+    assert progress["message"].startswith("No prior preview timing")
+    assert progress["warning"].startswith("No rendered frames yet")

@@ -151,6 +151,11 @@ GPU-accelerated review-render jobs completed end-to-end.
   `Safe to turn off screen.` / `DO NOT TURN OFF PC.` warning,
   worker/job/GPU status, and a slideshow of the five newest local render
   images from its output root
+- [x] Enhance first-class scene renders with draft/preview/final progress —
+  add `draft` quality, ETA seeded from preview timing, phase-aware progress,
+  stale-frame warnings, and intermittent `scene.progress_frame` uploads for
+  long renders. See
+  `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth

@@ -85,6 +85,7 @@ class JobRunner:
 
         async def renew_loop():
             lease_seconds = self._config.heartbeat_interval_seconds * 2
+            last_progress_frame_uploaded = 0
             while True:
                 await asyncio.sleep(lease_seconds * LEASE_RENEW_THRESHOLD)
                 try:
@@ -92,6 +93,11 @@ class JobRunner:
                     progress = self._scene_render_progress(job)
                     if progress:
                         await self._client.report_progress(job_id, progress)
+                        last_progress_frame_uploaded = await self._upload_scene_progress_frame(
+                            job,
+                            progress,
+                            last_progress_frame_uploaded,
+                        )
                     log.debug("Renewed lease for job %s", job_id)
                 except Exception:
                     log.warning("Lease renewal failed for job %s", job_id, exc_info=True)
@@ -142,6 +148,7 @@ class JobRunner:
                         "scene_name": result_summary.get("scene_name") or payload.get("scene_name"),
                         "script_path": payload.get("script_path"),
                         "quality": result_summary.get("quality") or payload.get("quality"),
+                        "phase": "complete",
                     }
                 try:
                     reg = await self._client.upload_artifact_file(
@@ -270,13 +277,126 @@ class JobRunner:
         else:
             return None
 
-        frames_rendered = len(list(frames_dir.glob("*.png"))) if frames_dir.exists() else 0
+        frame_paths = sorted(frames_dir.glob("*.png")) if frames_dir.exists() else []
+        frames_rendered = len(frame_paths)
         total_frames = payload.get("expected_frames")
+        now = datetime.now(timezone.utc)
+        created_at = self._parse_datetime(job.get("created_at")) or now
+        elapsed_seconds = max(0.0, (now - created_at).total_seconds())
+        latest_frame = frame_paths[-1] if frame_paths else None
+        last_frame_at = None
+        seconds_since_last_frame = None
+        if latest_frame:
+            last_frame_at_dt = datetime.fromtimestamp(latest_frame.stat().st_mtime, tz=timezone.utc)
+            last_frame_at = last_frame_at_dt.isoformat()
+            seconds_since_last_frame = max(0.0, (now - last_frame_at_dt).total_seconds())
+
+        phase = "rendering_frames" if frames_rendered else "starting"
+        output_path = self._resolve_payload_path(str(payload["output_path"]), job_id) if payload.get("output_path") else None
+        if output_path and output_path.exists():
+            phase = "encoding_video" if frames_rendered else "starting"
+
+        seconds_per_frame = elapsed_seconds / frames_rendered if frames_rendered else None
+        eta_seconds = None
+        message = None
+        estimate_source = "current_render" if seconds_per_frame else "insufficient_data"
+        if seconds_per_frame and total_frames:
+            remaining_frames = max(0, int(total_frames) - frames_rendered)
+            eta_seconds = round(remaining_frames * seconds_per_frame)
+        elif not frames_rendered:
+            initial = payload.get("initial_progress") if isinstance(payload.get("initial_progress"), dict) else {}
+            eta_seconds = initial.get("eta_seconds")
+            estimate_source = initial.get("estimate_source") or estimate_source
+            message = initial.get("message")
+        warning = None
+        start_warning_seconds = int(payload.get("progress_start_warning_seconds") or 300)
+        stale_frame_seconds = int(payload.get("progress_stale_frame_seconds") or 300)
+        if not frames_rendered and elapsed_seconds >= start_warning_seconds:
+            warning = (
+                "No rendered frames yet; this may be a long final-render startup, "
+                "or the job may be stalled before frame output begins."
+            )
+        elif seconds_since_last_frame is not None and seconds_since_last_frame >= stale_frame_seconds:
+            warning = "No new frame has landed recently; render progress may be stalled."
+
         progress = {
+            "phase": phase,
+            "quality": payload.get("quality"),
             "frames_rendered": frames_rendered,
             "frames_dir": str(frames_dir),
+            "elapsed_seconds": round(elapsed_seconds, 1),
+            "seconds_per_frame": round(seconds_per_frame, 3) if seconds_per_frame else None,
+            "eta_seconds": eta_seconds,
+            "estimate_source": estimate_source,
+            "last_frame_at": last_frame_at,
+            "seconds_since_last_frame": round(seconds_since_last_frame, 1) if seconds_since_last_frame is not None else None,
+            "latest_frame_path": str(latest_frame) if latest_frame else None,
+            "message": message,
+            "warning": warning,
         }
         if total_frames:
             progress["total_frames"] = int(total_frames)
             progress["percent"] = min(100, round(frames_rendered * 100 / int(total_frames), 1))
+        else:
+            progress["total_frames"] = None
+            progress["percent"] = None
         return progress
+
+    def _parse_datetime(self, raw: str | None) -> datetime | None:
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    async def _upload_scene_progress_frame(
+        self,
+        job: dict,
+        progress: dict,
+        last_uploaded_frame: int,
+    ) -> int:
+        payload = job.get("payload") or {}
+        if payload.get("job_type") != "scene.render":
+            return last_uploaded_frame
+        frames_rendered = int(progress.get("frames_rendered") or 0)
+        latest_frame_path = progress.get("latest_frame_path")
+        if not frames_rendered or not latest_frame_path:
+            return last_uploaded_frame
+
+        interval = int(payload.get("progress_frame_interval") or 24)
+        should_upload = frames_rendered == 1 or frames_rendered - last_uploaded_frame >= interval
+        if not should_upload:
+            return last_uploaded_frame
+
+        frame_path = Path(latest_frame_path)
+        if not frame_path.exists():
+            return last_uploaded_frame
+
+        try:
+            info = artifact_info(frame_path)
+            await self._client.upload_artifact_file(
+                job_id=job["id"],
+                artifact_type="scene.progress_frame",
+                artifact_path=frame_path,
+                review_metadata={
+                    "job_type": "scene.render",
+                    "scene_name": payload.get("scene_name"),
+                    "script_path": payload.get("script_path"),
+                    "quality": payload.get("quality"),
+                    "frame": frames_rendered,
+                    "total_frames": progress.get("total_frames"),
+                    "percent": progress.get("percent"),
+                    "phase": progress.get("phase"),
+                },
+                **info,
+            )
+            return frames_rendered
+        except Exception:
+            log.warning(
+                "Scene progress-frame upload failed for job %s frame %s",
+                job.get("id"),
+                frames_rendered,
+                exc_info=True,
+            )
+            return last_uploaded_frame

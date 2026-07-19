@@ -89,6 +89,11 @@ async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Dep
         select(Artifact).where(Artifact.job_id == job_id).order_by(Artifact.created_at)
     )
     artifacts = artifact_result.scalars().all()
+    progress_frames = [
+        artifact for artifact in artifacts
+        if artifact.artifact_type == "scene.progress_frame"
+    ]
+    latest_progress_frame = progress_frames[-1] if progress_frames else None
 
     attempt_result = await db.execute(
         select(JobAttempt).where(JobAttempt.job_id == job_id).order_by(JobAttempt.attempt_number.desc())
@@ -99,6 +104,7 @@ async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Dep
         "job": job,
         "artifacts": artifacts,
         "attempts": attempts,
+        "latest_progress_frame": latest_progress_frame,
     })
 
 
