@@ -7,10 +7,17 @@ import uuid
 from app.database import get_db
 from app.auth import require_admin, require_worker, require_admin_or_worker
 from app.config import get_settings
+from app.models.artifact import Artifact
 from app.models.job import Job, JobAttempt, JobLease
 from app.models.worker import WorkerCapability
 from app.models.audit import AuditEvent
 from app.models.user import ApiToken
+from app.services.asset_review import (
+    asset_review_gallery_url,
+    create_asset_review_render_job as create_review_render_job_record,
+    missing_uploaded_views,
+    resolve_review_asset,
+)
 from app.schemas.job import (
     AssetReviewRenderRequest,
     JobCreateRequest,
@@ -31,50 +38,27 @@ async def create_asset_review_render_job(
     body: AssetReviewRenderRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    required_capability = "blender.final_render" if body.quality == "final" else "blender.preview_render"
-    artifact_prefix = body.artifact_prefix or body.output_namespace or body.asset_id
-    output_path = body.output_path or "{output_root}/oeb-studio-harness/review-renders/{job_id}"
-    payload = {
-        "job_type": "asset.review_render",
-        "asset_path": body.asset_path,
-        "asset_id": body.asset_id,
-        "views": body.views,
-        "quality": body.quality,
-        "output_namespace": body.output_namespace,
-        "artifact_prefix": artifact_prefix,
-        "script_file": "{workspace_root}/tools/render_asset_review.py",
-        "cwd": "{workspace_root}",
-        "output_path": output_path,
-    }
-    for key in ("width", "height", "samples"):
-        value = getattr(body, key)
-        if value is not None:
-            payload[key] = value
-
-    job = Job(
-        title=f"Review render {body.asset_id}",
-        description=f"Render {body.asset_id} review views from {body.asset_path}",
-        required_capabilities=[required_capability],
-        policy="wait_for_preferred_worker" if body.preferred_worker_id else "run_anywhere",
-        preferred_worker_id=body.preferred_worker_id,
-        priority=body.priority,
-        payload=payload,
-        is_idempotent=True,
+    asset = await resolve_review_asset(
+        db,
+        asset_query=body.asset_name,
+        asset_id=body.asset_id,
+        asset_path=body.asset_path,
     )
-    db.add(job)
-    db.add(AuditEvent(
-        event_type="job.asset_review_render.created",
-        actor_type="user",
+    job = await create_review_render_job_record(
+        db,
+        asset=asset,
+        views=body.views,
+        quality=body.quality,
+        output_namespace=body.output_namespace,
+        artifact_prefix=body.artifact_prefix,
+        priority=body.priority,
+        preferred_worker_id=body.preferred_worker_id,
+        width=body.width,
+        height=body.height,
+        samples=body.samples,
+        output_path=body.output_path,
         actor_id="admin",
-        resource_type="job",
-        resource_id=str(job.id),
-        details={
-            "asset_id": body.asset_id,
-            "asset_path": body.asset_path,
-            "views": body.views,
-            "quality": body.quality,
-        },
-    ))
+    )
     await db.commit()
     await db.refresh(job)
     return JobSummary.model_validate(job)
@@ -350,6 +334,32 @@ async def complete_job(
         attempt.log_output = body.log_output
         attempt.output_summary = body.output_summary
 
+    if (job.payload or {}).get("job_type") == "asset.review_render":
+        artifacts_result = await db.execute(select(Artifact).where(Artifact.job_id == job_id))
+        missing_views = missing_uploaded_views(job, artifacts_result.scalars().all())
+        if missing_views:
+            summary = dict(body.output_summary or {})
+            summary["gallery_ready"] = False
+            summary["missing_views"] = missing_views
+            if (job.payload or {}).get("asset_id"):
+                summary["gallery_url"] = asset_review_gallery_url((job.payload or {})["asset_id"])
+            if attempt:
+                attempt.status = "failed"
+                attempt.output_summary = summary
+            job.status = "failed"
+            job.updated_at = now
+            db.add(AuditEvent(
+                event_type="job.asset_review_render.gallery_not_ready",
+                actor_type="worker",
+                actor_id=token.worker_id,
+                resource_type="job",
+                resource_id=str(job_id),
+                details={"missing_views": missing_views},
+            ))
+            await db.commit()
+            await db.refresh(job)
+            return JobSummary.model_validate(job)
+
     job.status = "completed"
     job.updated_at = now
 
@@ -403,8 +413,10 @@ async def fail_job(
         attempt.log_output = body.log_output
         attempt.output_summary = {"reason": body.reason}
 
-    # Return idempotent jobs to queue; leave non-idempotent as failed
-    if job.is_idempotent:
+    # Return ordinary idempotent jobs to the queue. Review renders have a strict
+    # upload contract, so artifact failures must remain visible as failed jobs.
+    is_asset_review = (job.payload or {}).get("job_type") == "asset.review_render"
+    if job.is_idempotent and not is_asset_review:
         job.status = "pending"
         job.assigned_worker_id = None
     else:
@@ -417,7 +429,7 @@ async def fail_job(
         actor_id=token.worker_id,
         resource_type="job",
         resource_id=str(job_id),
-        details={"reason": body.reason, "requeued": job.is_idempotent},
+        details={"reason": body.reason, "requeued": job.is_idempotent and not is_asset_review},
     ))
 
     await db.commit()

@@ -21,8 +21,9 @@ ASSET_REVIEW_VIEWS = {"top", "bottom", "left", "right", "front", "back", "action
 
 
 class AssetReviewRenderRequest(BaseModel):
-    asset_path: str
-    asset_id: str
+    asset_path: Optional[str] = None
+    asset_id: Optional[str] = None
+    asset_name: Optional[str] = None
     views: list[str] = Field(default_factory=lambda: [
         "top", "bottom", "left", "right", "front", "back", "action"
     ])

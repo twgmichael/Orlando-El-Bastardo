@@ -118,6 +118,7 @@ class JobRunner:
         result_summary = result.output_summary or {}
         artifact_views = result_summary.get("artifact_views") or {}
         is_asset_review = result_summary.get("job_type") == "asset.review_render"
+        requested_views = set((payload or {}).get("views") or result_summary.get("views") or [])
         for artifact_path in result.artifacts:
             try:
                 artifact_file = Path(artifact_path)
@@ -140,6 +141,15 @@ class JobRunner:
                         **info,
                     )
                 except Exception:
+                    if is_asset_review:
+                        reason = f"Review render artifact byte upload failed for {artifact_file.name}"
+                        log.exception("%s; failing job %s", reason, job_id)
+                        await self._client.fail_job(
+                            job_id,
+                            reason=reason,
+                            log_output=result.log_output,
+                        )
+                        return
                     log.warning(
                         "Artifact byte upload failed for %s; falling back to metadata registration",
                         artifact_file,
@@ -156,6 +166,13 @@ class JobRunner:
                 log.info("Uploaded artifact %s for job %s", artifact_file.name, job_id)
             except Exception:
                 log.exception("Failed to register artifact %s", artifact_path)
+                if is_asset_review:
+                    await self._client.fail_job(
+                        job_id,
+                        reason=f"Review render artifact registration failed for {artifact_path}",
+                        log_output=result.log_output,
+                    )
+                    return
 
         output_summary = {
             "adapter": adapter.name,
@@ -163,6 +180,23 @@ class JobRunner:
             **result_summary,
         }
         if output_summary.get("job_type") == "asset.review_render":
+            if requested_views:
+                uploaded_views = {
+                    (a.get("review_metadata") or {}).get("view") or artifact_views.get(a["filename"])
+                    for a in uploaded
+                    if a.get("provenance") == "uploaded"
+                }
+                missing_views = sorted(view for view in requested_views if view not in uploaded_views)
+                output_summary["missing_views"] = missing_views
+                output_summary["gallery_ready"] = not missing_views
+                if missing_views:
+                    await self._client.fail_job(
+                        job_id,
+                        reason=f"Review render missing uploaded views: {', '.join(missing_views)}",
+                        log_output=result.log_output,
+                    )
+                    return
+
             public_base = (
                 self._config.artifact_public_base_url
                 or self._config.harness_url
@@ -180,9 +214,9 @@ class JobRunner:
                 for a in uploaded
             ]
 
-        await self._client.complete_job(
+        completed_job = await self._client.complete_job(
             job_id,
             log_output=result.log_output,
             output_summary=output_summary,
         )
-        log.info("Completed job %s", job_id)
+        log.info("Completed job %s with server status %s", job_id, completed_job.get("status"))

@@ -3,7 +3,7 @@
 {% block title %}Review {{ asset_id }}{% endblock %}
 
 {% block head %}
-{% if job.status in ["pending", "running"] %}
+{% if job and job.status in ["pending", "running"] %}
 <meta http-equiv="refresh" content="10">
 {% endif %}
 {% endblock %}
@@ -12,7 +12,7 @@
 <nav class="breadcrumbs" aria-label="Breadcrumb">
   <a href="/">Jobs</a>
   <span>/</span>
-  <span>Review Assets</span>
+  <a href="/review/assets">Review Assets</a>
   <span>/</span>
   <span>{{ asset_id }}</span>
 </nav>
@@ -22,12 +22,36 @@
 
 <section class="review-hero">
   <div>
-    <h1>{{ asset_id }}</h1>
+    <h1>{{ asset_name or asset_id }}</h1>
     <p>{{ asset_path or "No source asset path recorded." }}</p>
   </div>
+  {% if job %}
   <span class="badge status-{{ job.status }}">{{ job.status }}</span>
+  {% else %}
+  <span class="badge status-pending">not rendered</span>
+  {% endif %}
 </section>
 
+<section class="render-request-bar">
+  <form method="post" action="/review/assets/{{ asset_id }}/renders">
+    <label>
+      Quality
+      <select name="quality">
+        <option value="preview" {% if quality == "preview" %}selected{% endif %}>preview</option>
+        <option value="final" {% if quality == "final" %}selected{% endif %}>final</option>
+      </select>
+    </label>
+    <input type="hidden" name="priority" value="10">
+    <button type="submit">Render all views</button>
+  </form>
+  {% if gallery_ready %}
+  <span class="ready-note">Gallery ready</span>
+  {% elif missing_views %}
+  <span class="missing-note">Missing {{ missing_views|join(", ") }}</span>
+  {% endif %}
+</section>
+
+{% if job %}
 <section class="asset-review-meta">
   <dl class="details">
     <dt>Job</dt><dd class="mono small"><a href="/review/jobs/{{ job.id }}">{{ job.id }}</a></dd>
@@ -36,6 +60,7 @@
     <dt>Updated</dt><dd class="mono small">{{ job.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
   </dl>
 </section>
+{% endif %}
 
 {% if action %}
 <section>
@@ -71,6 +96,7 @@
 
 <section>
   <h2>Recent Render Jobs</h2>
+  {% if jobs %}
   <table>
     <thead>
       <tr>
@@ -91,6 +117,9 @@
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+  <p class="empty">No render jobs yet.</p>
+  {% endif %}
 </section>
 
 <div class="lightbox" id="asset-lightbox" aria-hidden="true">

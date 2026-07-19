@@ -2,7 +2,7 @@ from pathlib import Path
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,11 +11,20 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.artifact import Artifact
 from app.models.job import Job, JobAttempt
+from app.services.asset_review import (
+    ANGLE_VIEWS,
+    REVIEW_VIEWS,
+    create_asset_review_render_job,
+    image_artifacts_by_view,
+    list_review_assets,
+    missing_uploaded_views,
+    resolve_review_asset,
+)
 
 router = APIRouter(prefix="/review", tags=["review"])
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
-ASSET_REVIEW_VIEWS = ("front", "back", "left", "right", "top", "bottom", "action")
+ASSET_REVIEW_VIEWS = tuple(REVIEW_VIEWS)
 
 
 def _view_from_artifact(asset_id: str, filename: str) -> str | None:
@@ -61,6 +70,14 @@ def _artifact_file_path(artifact: Artifact) -> Path:
     return artifacts_root / job_id / artifact.filename
 
 
+@router.get("/assets", response_class=HTMLResponse)
+async def review_assets(request: Request, db: AsyncSession = Depends(get_db)):
+    assets = await list_review_assets(db)
+    return templates.TemplateResponse(request, "review_assets.html", {
+        "assets": assets,
+    })
+
+
 @router.get("/jobs/{job_id}", response_class=HTMLResponse)
 async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
     job_result = await db.execute(select(Job).where(Job.id == job_id))
@@ -87,47 +104,75 @@ async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Dep
 
 @router.get("/assets/{asset_id}", response_class=HTMLResponse)
 async def review_asset(asset_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    asset = await resolve_review_asset(db, asset_id=asset_id)
     jobs_result = await db.execute(
         select(Job)
         .where(
             Job.payload["job_type"].as_string() == "asset.review_render",
-            Job.payload["asset_id"].as_string() == asset_id,
+            Job.payload["asset_id"].as_string() == asset.asset_id,
         )
         .order_by(Job.updated_at.desc())
     )
     jobs = jobs_result.scalars().all()
-    if not jobs:
-        raise HTTPException(status_code=404, detail="No review renders found for asset")
-
-    latest_job = jobs[0]
-    artifact_result = await db.execute(
-        select(Artifact)
-        .where(Artifact.job_id == latest_job.id)
-        .order_by(Artifact.created_at)
-    )
-    artifacts = artifact_result.scalars().all()
-
+    latest_job = jobs[0] if jobs else None
+    artifacts: list[Artifact] = []
     by_view: dict[str, Artifact] = {}
-    for artifact in artifacts:
-        if not artifact.mime_type or not artifact.mime_type.startswith("image/"):
-            continue
-        metadata = artifact.review_metadata or {}
-        view = metadata.get("view") or _view_from_artifact(asset_id, artifact.filename)
-        if view:
-            by_view[view] = artifact
+    missing_views: list[str] = list(REVIEW_VIEWS)
+    gallery_ready = False
 
-    angle_views = ["front", "back", "left", "right", "top", "bottom"]
+    if latest_job:
+        artifact_result = await db.execute(
+            select(Artifact)
+            .where(Artifact.job_id == latest_job.id)
+            .order_by(Artifact.created_at)
+        )
+        artifacts = artifact_result.scalars().all()
+        by_view = image_artifacts_by_view(asset.asset_id, artifacts)
+        missing_views = missing_uploaded_views(latest_job, artifacts)
+        gallery_ready = latest_job.status == "completed" and not missing_views
+
     action = by_view.get("action")
     return templates.TemplateResponse(request, "review_asset.html", {
-        "asset_id": asset_id,
+        "asset_id": asset.asset_id,
+        "asset_name": asset.name,
         "job": latest_job,
         "jobs": jobs[:10],
-        "asset_path": (latest_job.payload or {}).get("asset_path"),
-        "quality": (latest_job.payload or {}).get("quality"),
-        "angle_views": angle_views,
+        "asset_path": (latest_job.payload or {}).get("asset_path") if latest_job else asset.asset_path,
+        "quality": (latest_job.payload or {}).get("quality") if latest_job else "preview",
+        "angle_views": list(ANGLE_VIEWS),
         "by_view": by_view,
         "action": action,
+        "missing_views": missing_views,
+        "gallery_ready": gallery_ready,
     })
+
+
+@router.post("/assets/{asset_id}/renders")
+async def submit_review_asset_render(asset_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    form = await request.form()
+    asset = await resolve_review_asset(db, asset_id=asset_id)
+    quality = str(form.get("quality") or "preview")
+    if quality not in {"preview", "final"}:
+        raise HTTPException(status_code=422, detail="quality must be preview or final")
+    try:
+        priority = int(form.get("priority") or 10)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="priority must be an integer") from exc
+    preferred_worker_id = str(form.get("preferred_worker_id") or "").strip() or None
+    job = await create_asset_review_render_job(
+        db,
+        asset=asset,
+        views=REVIEW_VIEWS,
+        quality=quality,
+        priority=priority,
+        preferred_worker_id=preferred_worker_id,
+        actor_id="review-ui",
+    )
+    await db.commit()
+    return RedirectResponse(
+        url=f"/review/assets/{asset.asset_id}?submitted_job={job.id}",
+        status_code=303,
+    )
 
 
 @router.get("/artifacts/{artifact_id}")

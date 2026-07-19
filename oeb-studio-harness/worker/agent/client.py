@@ -120,7 +120,7 @@ class HarnessClient:
         job_id: str,
         log_output: Optional[str] = None,
         output_summary: Optional[dict] = None,
-    ) -> None:
+    ) -> dict:
         async with httpx.AsyncClient(verify=False) as c:
             r = await c.post(
                 f"{self._base}/api/v1/jobs/{job_id}/complete",
@@ -129,6 +129,7 @@ class HarnessClient:
                 timeout=10,
             )
             r.raise_for_status()
+            return r.json()
 
     async def fail_job(
         self,
