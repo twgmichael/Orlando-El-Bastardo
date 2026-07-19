@@ -54,7 +54,7 @@ No API keys, tokens, passwords, or private key material. Secrets live in:
 
 Pi IP addresses, internal hostnames, Ansible vault names, and private role
 names stay in `docs/local/` (gitignored) and Ansible inventory (not
-committed). Public docs use role names only (orchestrator, mac-mini worker,
+committed). Public docs use role names only (orchestrator, render-mac-01 worker,
 gaming-pc worker).
 
 ---

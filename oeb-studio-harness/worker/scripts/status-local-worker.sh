@@ -2,6 +2,14 @@
 set -euo pipefail
 
 SESSION_NAME="${OEB_WORKER_SCREEN_SESSION:-oeb-worker}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -f "$WORKER_DIR/.env.local" ]; then
+  # shellcheck disable=SC1091
+  source "$WORKER_DIR/.env.local"
+fi
+
 HARNESS_URL="${OEB_HARNESS_URL:-http://127.0.0.1:8088}"
 ADMIN_TOKEN="${API_ADMIN_TOKEN:-local-admin-token}"
 

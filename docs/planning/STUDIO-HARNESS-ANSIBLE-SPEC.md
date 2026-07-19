@@ -273,7 +273,7 @@ through ad hoc SSH commands.
 **Registration payload example:**
 ```json
 {
-  "worker_id": "mac-mini",
+  "worker_id": "render-mac-01",
   "platform": "macos-arm64",
   "agent_version": "0.1.0",
   "capabilities": [

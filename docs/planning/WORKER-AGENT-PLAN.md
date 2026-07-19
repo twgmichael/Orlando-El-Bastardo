@@ -18,10 +18,10 @@ wiki_order: 90
 Recorded 2026-07-14. Updated 2026-07-16 (local/staging environment split
 verified).
 Status: **RUNNING** — control plane at `http://oeb-studio.docker-pi`;
-mac-mini worker registered; pipeline render scripts dispatched end-to-end;
+`render-mac-01` worker registered; pipeline render scripts dispatched end-to-end;
 renders writing to OEB-PROJECT external drive. The worker must be launched
 against the same harness environment as the queued job.
-Gaming-PC worker install pending.
+First Linux PC render worker is running; additional workers remain planned.
 Companion docs: AGENT-BUS-PLAN.md (GitHub Issues coordination substrate),
 studio-production-pipeline-harness-ansible-spec.json (full system spec),
 WORKER-AGENT-PLAN.md (this doc).
@@ -132,7 +132,7 @@ the `traefik_domains` list in host vars.
 
 Template configs:
 
-- `config-examples/mac-mini.yml` — `qwen2.5-coder:14b`, artifact store at
+- `config-examples/render-mac-01.yml` — `qwen2.5-coder:14b`, artifact store at
   the configured `OEB_ARTIFACT_STORE_ROOT`, `blender` on PATH
 - `config-examples/macbook-air.yml` — Intel MacBook Air 8,2 lightweight
   preview/build worker, project storage on external drive, no LLM capability
@@ -176,7 +176,7 @@ worker process is polling the staging `OEB_HARNESS_URL`.
 pip install -r requirements.txt
 
 # copy and edit a config
-cp config-examples/mac-mini.yml my-config.yml   # or gaming-pc.yml
+cp config-examples/render-mac-01.yml my-config.yml   # or gaming-pc.yml
 
 # set secrets (never commit these)
 export OEB_HARNESS_URL=http://oeb-studio.docker-pi
@@ -456,7 +456,7 @@ recording what the box is in human terms.
 
 | Machine | Worker ID | Notable capabilities | Status |
 |---|---|---|---|
-| Mac mini (M-series) | `render-mac-01` | llm.*, vision.*, blender.preview | Running; rename from `mac-mini` planned |
+| Mac mini (M-series) | `render-mac-01` | llm.*, vision.*, blender.preview | Running |
 | MacBook Air (Intel) | `render-mac-02` | blender.preview, blender.command_line | Planned |
 | First PC tower | `render-pc-01` | blender.final_render, gpu.cycles_render, gpu.texture_bake, llm.* | Running Linux worker; GTX 1660 SUPER verified |
 | Additional PC tower | `render-pc-02` | blender.final_render, gpu.cycles_render, gpu.texture_bake | Planned Linux worker |
@@ -480,7 +480,8 @@ recording what the box is in human terms.
   DONE 2026-07-18; JB100 smoke and seven-view final render completed with
   uploaded PNG artifacts
 - [ ] Add `render-pc-02` as second Linux render worker
-- [ ] Rename existing worker identities to the `render-{pc,mac}-NN` convention
+- [x] Rename existing Mac mini worker identity to `render-mac-01` —
+  DONE 2026-07-19
 - [ ] Add `pyproject.toml` for clean `pip install -e .`
 - [x] Add `oeb-studio.docker-pi` to `traefik_domains` in host vars —
   DONE 2026-07-16

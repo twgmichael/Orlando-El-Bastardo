@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$WORKER_DIR/../.." && pwd)"
 LOG_FILE="${OEB_WORKER_LOG_FILE:-/tmp/oeb-harness-worker.log}"
+WORKER_CONFIG="${OEB_WORKER_CONFIG:-config-examples/render-mac-01.yml}"
 
 if [ -f "$WORKER_DIR/.env.local" ]; then
   # shellcheck disable=SC1091
@@ -49,6 +50,11 @@ if [ ! -x "$WORKER_DIR/.venv/bin/python" ]; then
   exit 1
 fi
 
+if [ ! -f "$WORKER_DIR/$WORKER_CONFIG" ]; then
+  echo "Worker config not found: $WORKER_DIR/$WORKER_CONFIG" >&2
+  exit 1
+fi
+
 mkdir -p "$(dirname "$LOG_FILE")" "$OEB_OUTPUT_ROOT" "$OEB_ARTIFACT_STORE_ROOT"
 
 existing_sessions="$(screen -ls 2>/dev/null | awk -v name=".$SESSION_NAME" '$1 ~ name {print $1}' || true)"
@@ -66,11 +72,13 @@ screen -dmS "$SESSION_NAME" bash -lc "
   export OEB_ARTIFACT_STORE_ROOT='$OEB_ARTIFACT_STORE_ROOT'
   export OEB_WORKSPACE_ROOT='$OEB_WORKSPACE_ROOT'
   export PYTHONPATH=.
-  exec .venv/bin/python -u -m agent.main config-examples/mac-mini.yml >> '$LOG_FILE' 2>&1
+  echo \"\$(date '+%Y-%m-%d %H:%M:%S') starting OEB worker with $WORKER_CONFIG\" >> '$LOG_FILE'
+  exec .venv/bin/python -u -m agent.main '$WORKER_CONFIG' >> '$LOG_FILE' 2>&1
 "
 
 echo "Started local worker in screen session: $SESSION_NAME"
 echo "Harness: $OEB_HARNESS_URL"
+echo "Config: $WORKER_CONFIG"
 echo "Output root: $OEB_OUTPUT_ROOT"
 echo "Artifact root: $OEB_ARTIFACT_STORE_ROOT"
 echo "Log: $LOG_FILE"
