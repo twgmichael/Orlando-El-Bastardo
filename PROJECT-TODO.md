@@ -147,9 +147,10 @@ GPU-accelerated review-render jobs completed end-to-end.
   render image artifacts prune after 7 days while preserving latest active
   asset galleries
 - [x] Add boot-time render PC warning/status kiosk — DONE 2026-07-19;
-  `render-pc-01` now starts a no-login X/`surf` kiosk with DO NOT POWER OFF
-  warning, worker/job/GPU status, and a slideshow of the five newest local
-  render images from its output root
+  `render-pc-01` now starts a no-login X/`surf` kiosk with the
+  `Safe to turn off screen.` / `DO NOT TURN OFF PC.` warning,
+  worker/job/GPU status, and a slideshow of the five newest local render
+  images from its output root
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth

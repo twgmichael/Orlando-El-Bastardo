@@ -222,7 +222,8 @@ The first deployed instance is `render-pc-01`.
 - Starts at boot before desktop login through `oeb-render-kiosk.service`.
 - Runs a minimal Xorg/Openbox session and the non-snap `surf` browser.
 - Serves a local page from `127.0.0.1:8765`; nothing is exposed on the LAN.
-- Displays `OEB Studio - <worker-id>` and `DO NOT POWER OFF`.
+- Displays `OEB Studio - <worker-id>`, `Safe to turn off screen.`, and
+  `DO NOT TURN OFF PC.`.
 - Shows harness worker status, worker service state, current running job when
   assigned, and NVIDIA GPU temperature/utilization/VRAM.
 - Scans the worker's local output root and cycles through the five newest
