@@ -1,7 +1,7 @@
 ---
 title: Worker Agent Plan
 created: 2026-07-14T18:00:35-04:00
-updated: 2026-07-16T19:16:39-04:00
+updated: 2026-07-19T03:45:00-04:00
 doc_type: plan
 production_area: operations
 department: pipeline
@@ -15,13 +15,15 @@ wiki_order: 90
 ---
 # Worker agent plan — cross-platform harness workers + macOS menu bar
 
-Recorded 2026-07-14. Updated 2026-07-16 (local/staging environment split
-verified).
+Recorded 2026-07-14. Updated 2026-07-19 (`render-pc-01` GPU worker proven,
+Mac mini renamed to `render-mac-01`, and the first render-PC monitor kiosk
+installed).
 Status: **RUNNING** — control plane at `http://oeb-studio.docker-pi`;
 `render-mac-01` worker registered; pipeline render scripts dispatched end-to-end;
 renders writing to OEB-PROJECT external drive. The worker must be launched
 against the same harness environment as the queued job.
-First Linux PC render worker is running; additional workers remain planned.
+First Linux PC render worker is running and has completed real GPU/CUDA review
+renders through the harness; additional workers remain planned.
 Companion docs: AGENT-BUS-PLAN.md (GitHub Issues coordination substrate),
 studio-production-pipeline-harness-ansible-spec.json (full system spec),
 WORKER-AGENT-PLAN.md (this doc).
@@ -77,7 +79,7 @@ on `payload._preview`. Capabilities declared:
 - `blender.final_render`
 - `blender.preview_render`
 - `blender.command_line`
-- `gpu.cycles_render` (gaming PC only)
+- `gpu.cycles_render` (Linux GPU render workers)
 - `gpu.texture_bake` (gaming PC only)
 
 Config keys: `executable` (path or bare `blender`), `max_concurrent`,
@@ -211,6 +213,26 @@ Prerequisites per machine:
 
 Pending: `pyproject.toml` for clean `pip install -e .` instead of bare
 `requirements.txt`.
+
+## Render PC monitor kiosk
+
+Linux render PCs can run a local warning/status kiosk on the attached monitor.
+The first deployed instance is `render-pc-01`.
+
+- Starts at boot before desktop login through `oeb-render-kiosk.service`.
+- Runs a minimal Xorg/Openbox session and the non-snap `surf` browser.
+- Serves a local page from `127.0.0.1:8765`; nothing is exposed on the LAN.
+- Displays `OEB Studio - <worker-id>` and `DO NOT POWER OFF`.
+- Shows harness worker status, worker service state, current running job when
+  assigned, and NVIDIA GPU temperature/utilization/VRAM.
+- Scans the worker's local output root and cycles through the five newest
+  local render images.
+- Disables X sleep/DPMS blanking while periodically drawing a black overlay
+  for burn-in relief.
+
+This kiosk is managed from `project-pi-admin` in the `oeb_render_worker` role
+so future `render-pc-02`, `render-pc-03`, ... machines can inherit the same
+warning/status display.
 
 ## Environment Smoke Test
 
@@ -382,6 +404,20 @@ Designed for the Mac mini, which doubles as a desktop workstation. Surfaces
 worker state in the macOS menu bar so the operator can see at a glance
 whether a job is running without opening a terminal or browser.
 
+Current launch target:
+
+```bash
+cd "<repo-root>/oeb-studio-harness/worker"
+source .env.local
+export PYTHONPATH=.
+.venv/bin/python oeb_menu_bar.py config-examples/render-mac-01.yml
+```
+
+Use `.venv/bin/python` or `python3`; do not rely on a bare `python` shim on
+this Mac. The menu bar app is the preferred Mac mini entry point. The
+`start-local-worker.sh` screen launcher remains useful for headless local
+worker runs.
+
 **Architecture:**
 - Main thread: `rumps` app (AppKit `NSStatusBar` — required by macOS)
 - Daemon thread: asyncio event loop running the full worker
@@ -482,9 +518,31 @@ recording what the box is in human terms.
 - [ ] Add `render-pc-02` as second Linux render worker
 - [x] Rename existing Mac mini worker identity to `render-mac-01` —
   DONE 2026-07-19
+- [x] Restore the OEB macOS menu bar worker under `render-mac-01` —
+  DONE 2026-07-19
 - [ ] Add `pyproject.toml` for clean `pip install -e .`
 - [x] Add `oeb-studio.docker-pi` to `traefik_domains` in host vars —
   DONE 2026-07-16
 - [ ] Wire worker into the agent bus once AGENT-BUS-PLAN.md is actioned
 - [ ] Gate `gpu.cycles_render` advertising on a Blender CUDA probe, not only
   `nvidia-smi`
+
+## 2026-07-19 Status Snapshot
+
+Live staging workers:
+
+| Worker | Platform | Status | Proof |
+|---|---|---|---|
+| `render-mac-01` | macOS ARM64 | Online | Menu bar worker restored; LLM/vision/preview capabilities registered |
+| `render-pc-01` | Linux x64 | Online | JB100 GPU smoke and seven-view final render completed with uploaded artifacts |
+
+Important operational findings:
+
+- The Mac mini worker identity is now `render-mac-01`; stale `mac-mini`
+  harness DB records were migrated and removed from the staging worker list.
+- Worker token files should be worker-specific. The Mac token lives at
+  `~/.oeb-harness-worker-token-render-mac-01`.
+- The official Blender Linux binary is required for NVIDIA CUDA/OptiX on
+  `render-pc-01`; the Ubuntu package did not expose the needed GPU devices.
+- Final review renders that must use the PC GPU should request
+  `gpu.cycles_render`.

@@ -2,6 +2,11 @@
 
 Date: 2026-07-18
 
+Updated: 2026-07-19. Status: **IMPLEMENTED for the main operator flow**.
+Ventradi Cruiser, JB5k, Ellipso Flyer, and JB100 all resolve through the review
+asset path. JB100 final-quality GPU review renders completed on `render-pc-01`,
+and the live gallery supports action-plus-angle lightbox navigation.
+
 ## Context
 
 During the first existing-model review render runs for Ventradi Cruiser, JB5k,
@@ -302,7 +307,7 @@ Acceptance criteria:
 
 ## Success Criteria
 
-The streamlined flow is complete when all three requests below work without
+The streamlined flow is complete when all four requests below work without
 manual repair:
 
 ```text
@@ -324,3 +329,14 @@ Each request should end with:
 `asset.review_render` on `render-pc-01` using Blender Cycles CUDA, 1280x960,
 96 samples. Follow-on scheduler work should request `gpu.cycles_render` for
 GPU-targeted final review renders so CPU-only final workers do not claim them.
+
+2026-07-19 gallery/retention update:
+
+- The review lightbox now includes the action render and the six angle renders,
+  with Back/Forward buttons and left/right keyboard navigation.
+- The inline action preview is reduced to half-size while preserving full-size
+  inspection in the lightbox.
+- Review render image artifacts older than 7 days are pruned by the harness
+  maintenance loop.
+- The latest completed render set for each active review asset is protected, so
+  active galleries keep their action and angle images.

@@ -1,7 +1,7 @@
 ---
 title: JourneyBlaster
 created: 2026-07-13T19:47:00-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-19T03:10:00-04:00
 doc_type: design_record
 production_area: vehicles
 department: art
@@ -47,6 +47,9 @@ original 1995 Infini-D designs; Tier 1 provenance.
   (top/bottom/left/right/front/back/action), Cycles CUDA on the GTX 1660
   SUPER, 1280x960, 96 samples, with all PNG artifacts uploaded to the review
   gallery.
+- Review status: JB100 now resolves as `prop_jb100_A` on the live staging
+  gallery at `http://oeb-studio.docker-pi/review/assets/prop_jb100_A`.
+  The action render and six angle renders can be inspected as one lightbox set.
 
 ## Decisions (owner canon)
 

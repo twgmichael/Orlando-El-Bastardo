@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-16T19:16:39-04:00
+updated: 2026-07-19T03:45:00-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -18,6 +18,95 @@ wiki_order: 20
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
 
 ---
+
+## 2026-07-19 — render-pc-01 boot kiosk installed
+
+The first Linux render PC now warns humans at the attached monitor and shows
+live studio worker state without requiring a desktop login.
+
+- Added an Ansible-managed `oeb-render-kiosk.service` to the
+  `oeb_render_worker` role.
+- The service starts at boot before login, launches Xorg/Openbox plus the
+  non-snap `surf` browser, and points it at a local Python status/slideshow
+  server on `127.0.0.1:8765`.
+- The page shows `OEB Studio - render-pc-01` and `DO NOT POWER OFF`, worker
+  online/offline status, worker service state, current job, GPU temperature,
+  utilization, VRAM, and the five newest local render images from the
+  configured worker output root.
+- X screen sleep/DPMS blanking is disabled so the warning stays visible, while
+  the page briefly blanks itself every 15 minutes for burn-in relief.
+- Deployed to `render-pc-01` and verified service/processes live, API status
+  returning worker online/GPU telemetry, and JB100 image route returning
+  `200 image/png`.
+
+---
+
+## 2026-07-18/19 — First Linux GPU worker proven, JB100 final renders shipped, worker names normalized
+
+Huge studio-harness milestone: the first Linux PC render/LLM worker is online,
+named, automated, and proven with real Blender GPU work from the production
+harness.
+
+Render worker bring-up:
+- Installed Ubuntu Server 26.04 on the SanDisk external SSD for
+  `render-pc-01`.
+- Added project-pi-admin Ansible automation for Linux render workers:
+  source sync, `/home/oeb-project`, Python worker runtime, Ollama,
+  `oeb-worker-render-pc-01.service`, and advertised render/LLM capabilities.
+- Added the `nvidia_render_runtime` role and repaired stale NVIDIA package
+  conflicts.
+- Verified hardware and runtime: GTX 1660 SUPER, 6 GB VRAM, NVIDIA
+  595.71.05, CUDA 13.2.
+- Discovered Ubuntu's packaged Blender did not expose CUDA/OptiX, then
+  installed the official Blender 5.0.1 Linux binary under `/opt/blender` and
+  added the `oeb-blender-headless` wrapper through `xvfb`.
+
+Harness proof:
+- JB100 GPU smoke test completed through the real harness on `render-pc-01`
+  using Cycles GPU/CUDA.
+- JB100 final review render completed through the real harness: seven views
+  (top, bottom, left, right, front, back, action), 1280x960, 96 samples, all
+  PNG artifacts uploaded and visible in the review gallery.
+- `prop_jb100_A` / JourneyBlaster 100 is now a known review asset and resolves
+  on the staging gallery:
+  `http://oeb-studio.docker-pi/review/assets/prop_jb100_A`.
+- `asset.review_render` jobs can optionally require `gpu.cycles_render`, so
+  final GPU-targeted renders do not get claimed by CPU-only final workers.
+
+Review gallery and retention:
+- Review asset lightbox now cycles through the action render plus all angle
+  renders with Back/Forward buttons and left/right keyboard controls.
+- Action render preview is half-size on the page while still opening full-size
+  in the lightbox.
+- Added review render artifact pruning: image artifacts older than 7 days are
+  removed, while the latest completed render set for each active review asset
+  is preserved.
+- Deployed the updated harness to docker-pi and verified the live JB100 review
+  page and health check.
+
+Worker identity cleanup:
+- Renamed the Mac mini worker from `mac-mini` to `render-mac-01` to match the
+  `render-{mac,pc}-NN` convention.
+- Migrated staging harness DB worker records, capabilities, tokens, jobs,
+  attempts, artifacts, and audit references from `mac-mini` to
+  `render-mac-01`.
+- Restored the OEB macOS menu bar worker with `render-mac-01` online.
+- Verified dashboard worker state: `render-mac-01` and `render-pc-01` both
+  online.
+
+Validation:
+- Focused Docker harness tests passed after gallery/prune changes.
+- Full local Docker harness suite passed: 52 tests.
+- docker-pi deployment completed via project-pi-admin Ansible with healthcheck
+  passing.
+
+Open follow-ups left intentionally:
+- Gate `gpu.cycles_render` capability advertising on a Blender CUDA probe, not
+  only `nvidia-smi`.
+- Add a formal GPU smoke-test script/tool instead of scratch payloads.
+- Decide how quickly to move review assets from fallback known entries into the
+  DB asset registry seed path.
+- Add `pyproject.toml` for cleaner worker installs.
 
 ## 2026-07-16 — Local/staging environment split verified through docker-pi render
 
