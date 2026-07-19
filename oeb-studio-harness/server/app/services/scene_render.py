@@ -4,10 +4,11 @@ import re
 from pathlib import PurePosixPath
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.audit import AuditEvent
-from app.models.job import Job
+from app.models.job import Job, JobAttempt
 
 SCENE_RENDER_JOB_TYPE = "scene.render"
 
@@ -40,6 +41,84 @@ def normalize_scene_script_path(script_path: str) -> str:
     return path.as_posix()
 
 
+async def latest_preview_timing(
+    db: AsyncSession,
+    *,
+    scene_name: str,
+    script_path: str,
+) -> dict | None:
+    result = await db.execute(
+        select(JobAttempt)
+        .join(Job, JobAttempt.job_id == Job.id)
+        .where(
+            Job.status == "completed",
+            Job.payload["job_type"].as_string() == SCENE_RENDER_JOB_TYPE,
+            Job.payload["quality"].as_string() == "preview",
+            Job.payload["script_path"].as_string() == script_path,
+        )
+        .order_by(Job.updated_at.desc())
+        .limit(10)
+    )
+    for attempt in result.scalars().all():
+        summary = attempt.output_summary if isinstance(attempt.output_summary, dict) else {}
+        if summary.get("scene_name") not in {scene_name, None}:
+            continue
+        timing = summary.get("timing") if isinstance(summary.get("timing"), dict) else {}
+        seconds_per_frame = timing.get("seconds_per_frame") or summary.get("seconds_per_frame")
+        if seconds_per_frame:
+            return {
+                "seconds_per_frame": float(seconds_per_frame),
+                "source_job_id": str(attempt.job_id),
+                "source_attempt_id": str(attempt.id),
+            }
+    return None
+
+
+async def initial_scene_progress(
+    db: AsyncSession,
+    *,
+    scene_name: str,
+    script_path: str,
+    quality: str,
+    expected_frames: int | None,
+) -> dict:
+    progress = {
+        "phase": "queued",
+        "quality": quality,
+        "frames_rendered": 0,
+        "total_frames": expected_frames,
+        "percent": 0 if expected_frames else None,
+        "eta_seconds": None,
+        "estimate_source": "not_needed" if quality == "draft" else "insufficient_data",
+    }
+    if quality != "final":
+        return progress
+
+    if not expected_frames:
+        progress["message"] = (
+            "Final render queued without an expected frame count; progress will report frames, "
+            "but percent and ETA will remain unavailable until timing can be inferred."
+        )
+        return progress
+
+    if not hasattr(db, "execute"):
+        progress["message"] = "No prior preview timing available; ETA will start after final frames land."
+        return progress
+
+    timing = await latest_preview_timing(db, scene_name=scene_name, script_path=script_path)
+    if not timing:
+        progress["message"] = "No prior preview timing available; ETA will start after final frames land."
+        return progress
+
+    progress.update({
+        "eta_seconds": round(expected_frames * timing["seconds_per_frame"]),
+        "seconds_per_frame": timing["seconds_per_frame"],
+        "estimate_source": "previous_preview",
+        "estimate_source_job_id": timing["source_job_id"],
+    })
+    return progress
+
+
 async def create_scene_render_job(
     db: AsyncSession,
     *,
@@ -57,10 +136,17 @@ async def create_scene_render_job(
 ) -> Job:
     normalized_script_path = normalize_scene_script_path(script_path)
     scene_slug = slug_scene_name(scene_name)
-    render_mode = mode or "preview"
+    render_mode = mode or ("blocking" if quality == "draft" else "preview")
     required_capabilities = ["blender.final_render" if quality == "final" else "blender.preview_render"]
     if require_gpu_cycles:
         required_capabilities.append("gpu.cycles_render")
+    initial_progress = await initial_scene_progress(
+        db,
+        scene_name=scene_name,
+        script_path=normalized_script_path,
+        quality=quality,
+        expected_frames=expected_frames,
+    )
 
     output_path = (
         "{output_root}/oeb-studio-harness/scene-renders/"
@@ -93,9 +179,11 @@ async def create_scene_render_job(
         "output_path": output_path,
         "frames_dir": frames_dir,
         "artifact_paths": [output_path],
-        "artifact_type": "scene.final_render" if quality == "final" else "scene.preview_render",
+        "artifact_type": "scene.final_render" if quality == "final" else f"scene.{quality}_render",
         "script_args": script_args,
         "require_gpu_cycles": require_gpu_cycles,
+        "initial_progress": initial_progress,
+        "progress_frame_interval": 24,
     }
     if width is not None:
         payload["width"] = width

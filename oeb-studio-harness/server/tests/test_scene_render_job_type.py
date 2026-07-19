@@ -67,6 +67,8 @@ async def test_scene_render_final_job_prefers_requested_worker_and_gpu():
         job.payload["output_path"],
     ]
     assert job.payload["expected_frames"] == 360
+    assert job.payload["initial_progress"]["estimate_source"] == "insufficient_data"
+    assert job.payload["initial_progress"]["message"].startswith("No prior preview timing")
     assert not job.is_idempotent
 
 
@@ -93,3 +95,35 @@ async def test_scene_render_preview_runs_anywhere():
     assert job.preferred_worker_id is None
     assert job.payload["artifact_type"] == "scene.preview_render"
     assert job.payload["mode"] == "blocking"
+
+
+@pytest.mark.anyio
+async def test_scene_render_draft_uses_preview_worker_and_blocking_mode():
+    async def flush():
+        return None
+
+    db = SimpleNamespace(
+        add=lambda value: None,
+        flush=flush,
+    )
+
+    job = await scene_render.create_scene_render_job(
+        db,
+        scene_name="Fast Blocking Pass",
+        script_path="tools/blocking_pass.py",
+        quality="draft",
+        expected_frames=120,
+    )
+
+    assert job.required_capabilities == ["blender.preview_render"]
+    assert job.payload["mode"] == "blocking"
+    assert job.payload["artifact_type"] == "scene.draft_render"
+    assert job.payload["initial_progress"] == {
+        "phase": "queued",
+        "quality": "draft",
+        "frames_rendered": 0,
+        "total_frames": 120,
+        "percent": 0,
+        "eta_seconds": None,
+        "estimate_source": "not_needed",
+    }

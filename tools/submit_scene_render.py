@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scene-name", required=True)
     parser.add_argument("--script", "--script-path", dest="script_path", required=True)
-    parser.add_argument("--quality", choices=("preview", "final"), default="preview")
+    parser.add_argument("--quality", choices=("draft", "preview", "final"), default="preview")
     parser.add_argument("--mode", choices=("preview", "blocking"))
     parser.add_argument("--width", type=int)
     parser.add_argument("--height", type=int)

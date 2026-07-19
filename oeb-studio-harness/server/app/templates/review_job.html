@@ -41,9 +41,27 @@
     <h2>Progress</h2>
     {% set progress = attempts[0].output_summary.get("progress") %}
     <dl class="details">
+      {% if progress.get("phase") %}
+      <dt>Phase</dt><dd class="mono small">{{ progress.get("phase") }}</dd>
+      {% endif %}
       <dt>Frames</dt><dd class="mono small">{{ progress.get("frames_rendered", 0) }}{% if progress.get("total_frames") %} / {{ progress.get("total_frames") }}{% endif %}</dd>
       {% if progress.get("percent") is not none %}
       <dt>Percent</dt><dd class="mono small">{{ progress.get("percent") }}%</dd>
+      {% endif %}
+      {% if progress.get("eta_seconds") is not none %}
+      <dt>ETA</dt><dd class="mono small">{{ progress.get("eta_seconds") }}s</dd>
+      {% endif %}
+      {% if progress.get("estimate_source") %}
+      <dt>Estimate</dt><dd class="mono small">{{ progress.get("estimate_source") }}</dd>
+      {% endif %}
+      {% if progress.get("seconds_since_last_frame") is not none %}
+      <dt>Last Frame</dt><dd class="mono small">{{ progress.get("seconds_since_last_frame") }}s ago</dd>
+      {% endif %}
+      {% if progress.get("message") %}
+      <dt>Note</dt><dd class="mono small">{{ progress.get("message") }}</dd>
+      {% endif %}
+      {% if progress.get("warning") %}
+      <dt>Warning</dt><dd class="mono small">{{ progress.get("warning") }}</dd>
       {% endif %}
       <dt>Updated</dt><dd class="mono small">{{ progress.get("updated_at", "—") }}</dd>
     </dl>
@@ -72,6 +90,18 @@
 
 <section>
   <h2>Artifacts</h2>
+  {% if latest_progress_frame %}
+  <div class="artifact-list">
+    <div class="artifact-row">
+      <div>
+        <a href="/review/artifacts/{{ latest_progress_frame.id }}">Latest progress frame</a>
+        <span class="mono small">{{ latest_progress_frame.filename }}</span>
+      </div>
+      <span class="mono small">{{ latest_progress_frame.mime_type or "image/png" }}</span>
+    </div>
+    <img class="preview-image" src="/review/artifacts/{{ latest_progress_frame.id }}" alt="{{ latest_progress_frame.filename }}">
+  </div>
+  {% endif %}
   {% if artifacts %}
   <div class="artifact-list">
     {% for artifact in artifacts %}

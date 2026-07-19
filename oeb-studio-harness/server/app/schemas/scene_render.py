@@ -20,8 +20,8 @@ class SceneRenderRequest(BaseModel):
     @field_validator("quality")
     @classmethod
     def validate_quality(cls, quality: str) -> str:
-        if quality not in {"preview", "final"}:
-            raise ValueError("quality must be preview or final")
+        if quality not in {"draft", "preview", "final"}:
+            raise ValueError("quality must be draft, preview, or final")
         return quality
 
     @field_validator("mode")
