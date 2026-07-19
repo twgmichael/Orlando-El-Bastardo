@@ -89,6 +89,9 @@ class JobRunner:
                 await asyncio.sleep(lease_seconds * LEASE_RENEW_THRESHOLD)
                 try:
                     await self._client.renew_lease(job_id)
+                    progress = self._scene_render_progress(job)
+                    if progress:
+                        await self._client.report_progress(job_id, progress)
                     log.debug("Renewed lease for job %s", job_id)
                 except Exception:
                     log.warning("Lease renewal failed for job %s", job_id, exc_info=True)
@@ -118,6 +121,7 @@ class JobRunner:
         result_summary = result.output_summary or {}
         artifact_views = result_summary.get("artifact_views") or {}
         is_asset_review = result_summary.get("job_type") == "asset.review_render"
+        is_scene_render = result_summary.get("job_type") == "scene.render" or payload.get("job_type") == "scene.render"
         requested_views = set((payload or {}).get("views") or result_summary.get("views") or [])
         for artifact_path in result.artifacts:
             try:
@@ -132,6 +136,13 @@ class JobRunner:
                         "quality": result_summary.get("quality"),
                         "view": artifact_views.get(artifact_file.name),
                     }
+                elif is_scene_render:
+                    review_metadata = {
+                        "job_type": "scene.render",
+                        "scene_name": result_summary.get("scene_name") or payload.get("scene_name"),
+                        "script_path": payload.get("script_path"),
+                        "quality": result_summary.get("quality") or payload.get("quality"),
+                    }
                 try:
                     reg = await self._client.upload_artifact_file(
                         job_id=job_id,
@@ -141,8 +152,9 @@ class JobRunner:
                         **info,
                     )
                 except Exception:
-                    if is_asset_review:
-                        reason = f"Review render artifact byte upload failed for {artifact_file.name}"
+                    if is_asset_review or is_scene_render:
+                        label = "Scene render" if is_scene_render else "Review render"
+                        reason = f"{label} artifact byte upload failed for {artifact_file.name}"
                         log.exception("%s; failing job %s", reason, job_id)
                         await self._client.fail_job(
                             job_id,
@@ -166,10 +178,10 @@ class JobRunner:
                 log.info("Uploaded artifact %s for job %s", artifact_file.name, job_id)
             except Exception:
                 log.exception("Failed to register artifact %s", artifact_path)
-                if is_asset_review:
+                if is_asset_review or is_scene_render:
                     await self._client.fail_job(
                         job_id,
-                        reason=f"Review render artifact registration failed for {artifact_path}",
+                        reason=f"Render artifact registration failed for {artifact_path}",
                         log_output=result.log_output,
                     )
                     return
@@ -214,9 +226,57 @@ class JobRunner:
                 for a in uploaded
             ]
 
+        if is_scene_render:
+            public_base = (
+                self._config.artifact_public_base_url
+                or self._config.harness_url
+                or self._client.base_url
+            ).rstrip("/")
+            output_summary["scene_render_url"] = f"{public_base}/review/scene-renders/{job_id}"
+            output_summary["artifact_urls"] = [
+                {
+                    "id": a["id"],
+                    "filename": a["filename"],
+                    "url": a.get("public_url") or f"{public_base}/review/artifacts/{a['id']}",
+                }
+                for a in uploaded
+            ]
+
         completed_job = await self._client.complete_job(
             job_id,
             log_output=result.log_output,
             output_summary=output_summary,
         )
         log.info("Completed job %s with server status %s", job_id, completed_job.get("status"))
+
+    def _resolve_payload_path(self, raw: str, job_id: str) -> Path:
+        resolved = raw.replace("{output_root}", self._config.output_root)
+        resolved = resolved.replace("{workspace_root}", self._config.workspace_root)
+        resolved = resolved.replace("{job_id}", job_id)
+        return Path(resolved)
+
+    def _scene_render_progress(self, job: dict) -> dict | None:
+        payload = job.get("payload") or {}
+        if payload.get("job_type") != "scene.render":
+            return None
+
+        job_id = job["id"]
+        frames_dir_raw = payload.get("frames_dir")
+        if frames_dir_raw:
+            frames_dir = self._resolve_payload_path(str(frames_dir_raw), job_id)
+        elif payload.get("output_path"):
+            output_path = self._resolve_payload_path(str(payload["output_path"]), job_id)
+            frames_dir = output_path.with_name(f"{output_path.stem}_frames")
+        else:
+            return None
+
+        frames_rendered = len(list(frames_dir.glob("*.png"))) if frames_dir.exists() else 0
+        total_frames = payload.get("expected_frames")
+        progress = {
+            "frames_rendered": frames_rendered,
+            "frames_dir": str(frames_dir),
+        }
+        if total_frames:
+            progress["total_frames"] = int(total_frames)
+            progress["percent"] = min(100, round(frames_rendered * 100 / int(total_frames), 1))
+        return progress

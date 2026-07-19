@@ -103,6 +103,10 @@ class JobFailRequest(BaseModel):
     log_output: Optional[str] = None
 
 
+class JobProgressRequest(BaseModel):
+    progress: dict = Field(default_factory=dict)
+
+
 class AttemptSummary(BaseModel):
     id: uuid.UUID
     job_id: uuid.UUID

@@ -253,12 +253,38 @@ class BlenderCLIAdapter(Adapter):
             rendered = sorted(out.parent.glob(f"{out.stem}*")) or ([out] if out.exists() else [])
 
         is_preview = payload.get("_preview", False)
+        output_summary = {"script_file": str(script), "frames_rendered": len(rendered)}
+        if payload.get("job_type") == "scene.render":
+            frame_count = 0
+            if out:
+                frames_dir = self._resolve_runtime_path(
+                    str(payload.get("frames_dir") or out.with_name(f"{out.stem}_frames")),
+                    "frames_dir",
+                    cwd=cwd,
+                    job_id=job_id,
+                )
+                if frames_dir.exists():
+                    frame_count = len(list(frames_dir.glob("*.png")))
+            output_summary.update({
+                "job_type": "scene.render",
+                "scene_name": payload.get("scene_name"),
+                "script_path": payload.get("script_path"),
+                "quality": payload.get("quality"),
+                "mode": payload.get("mode"),
+                "output_path": str(out) if out else None,
+                "frame_count": frame_count,
+                "progress": {
+                    "frames_rendered": frame_count,
+                    "total_frames": payload.get("expected_frames"),
+                    "percent": 100 if frame_count and payload.get("expected_frames") and frame_count >= int(payload["expected_frames"]) else None,
+                },
+            })
         return AdapterResult(
             success=True,
             log_output=log_output,
             artifacts=rendered,
             artifact_type=payload.get("artifact_type") or ("preview_render" if is_preview else "final_render"),
-            output_summary={"script_file": str(script), "frames_rendered": len(rendered)},
+            output_summary=output_summary,
         )
 
     def _run(self, cmd: list[str], cwd: str | None = None) -> tuple[str, int]:

@@ -25,10 +25,30 @@
       <dt>ID</dt><dd class="mono small">{{ job.id }}</dd>
       <dt>Worker</dt><dd class="mono small">{{ job.assigned_worker_id or "—" }}</dd>
       <dt>Policy</dt><dd class="mono small">{{ job.policy }}</dd>
+      {% if job.payload and job.payload.get("job_type") == "scene.render" %}
+      <dt>Scene</dt><dd class="mono small">{{ job.payload.get("scene_name") }}</dd>
+      <dt>Script</dt><dd class="mono small">{{ job.payload.get("script_path") }}</dd>
+      <dt>Quality</dt><dd class="mono small">{{ job.payload.get("quality") }}</dd>
+      <dt>Resolution</dt><dd class="mono small">{{ job.payload.get("width", "—") }} x {{ job.payload.get("height", "—") }}</dd>
+      {% endif %}
       <dt>Created</dt><dd class="mono small">{{ job.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
       <dt>Updated</dt><dd class="mono small">{{ job.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
     </dl>
   </div>
+
+  {% if attempts and attempts[0].output_summary and attempts[0].output_summary.get("progress") %}
+  <div>
+    <h2>Progress</h2>
+    {% set progress = attempts[0].output_summary.get("progress") %}
+    <dl class="details">
+      <dt>Frames</dt><dd class="mono small">{{ progress.get("frames_rendered", 0) }}{% if progress.get("total_frames") %} / {{ progress.get("total_frames") }}{% endif %}</dd>
+      {% if progress.get("percent") is not none %}
+      <dt>Percent</dt><dd class="mono small">{{ progress.get("percent") }}%</dd>
+      {% endif %}
+      <dt>Updated</dt><dd class="mono small">{{ progress.get("updated_at", "—") }}</dd>
+    </dl>
+  </div>
+  {% endif %}
 
   <div>
     <h2>Conversation Spec</h2>
@@ -64,6 +84,8 @@
     </div>
     {% if artifact.mime_type and artifact.mime_type.startswith("image/") %}
     <img class="preview-image" src="/review/artifacts/{{ artifact.id }}" alt="{{ artifact.filename }}">
+    {% elif artifact.mime_type == "video/mp4" %}
+    <video class="preview-image" src="/review/artifacts/{{ artifact.id }}" controls></video>
     {% endif %}
     {% endfor %}
   </div>
