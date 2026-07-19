@@ -26,6 +26,7 @@ from app.schemas.job import (
     LeaseDetail,
     JobCompleteRequest,
     JobFailRequest,
+    JobProgressRequest,
     AttemptSummary,
 )
 
@@ -296,6 +297,44 @@ async def renew_lease(
     await db.commit()
     await db.refresh(lease)
     return LeaseDetail.model_validate(lease)
+
+
+@router.post("/{job_id}/progress", response_model=AttemptSummary)
+async def report_job_progress(
+    job_id: uuid.UUID,
+    body: JobProgressRequest,
+    db: AsyncSession = Depends(get_db),
+    token: ApiToken = Depends(require_worker),
+):
+    now = datetime.now(timezone.utc)
+
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.assigned_worker_id != token.worker_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not the assigned worker")
+    if job.status != "running":
+        raise HTTPException(status_code=409, detail=f"Job is not running (status={job.status})")
+
+    attempt_result = await db.execute(
+        select(JobAttempt)
+        .where(JobAttempt.job_id == job_id, JobAttempt.worker_id == token.worker_id)
+        .order_by(JobAttempt.attempt_number.desc())
+    )
+    attempt = attempt_result.scalars().first()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="No active attempt found")
+
+    summary = dict(attempt.output_summary or {})
+    progress = dict(body.progress or {})
+    progress["updated_at"] = now.isoformat()
+    summary["progress"] = progress
+    attempt.output_summary = summary
+    job.updated_at = now
+    await db.commit()
+    await db.refresh(attempt)
+    return AttemptSummary.model_validate(attempt)
 
 
 @router.post("/{job_id}/complete", response_model=JobSummary)

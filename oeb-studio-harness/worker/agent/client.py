@@ -115,6 +115,17 @@ class HarnessClient:
             r.raise_for_status()
             return r.json()
 
+    async def report_progress(self, job_id: str, progress: dict) -> dict:
+        async with httpx.AsyncClient(verify=False) as c:
+            r = await c.post(
+                f"{self._base}/api/v1/jobs/{job_id}/progress",
+                json={"progress": progress},
+                headers=self._worker_headers(),
+                timeout=10,
+            )
+            r.raise_for_status()
+            return r.json()
+
     async def complete_job(
         self,
         job_id: str,

@@ -116,6 +116,7 @@ def create_app() -> FastAPI:
     from app.routers.jobs import router as jobs_router
     from app.routers.artifacts import router as artifacts_router
     from app.routers.assets import router as assets_router
+    from app.routers.scene_renders import router as scene_renders_router
     from app.routers.conversations import router as conversations_router
     from app.routers.debug import router as debug_router
     from app.routers.studio_chat import router as studio_chat_router
@@ -129,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs_router, prefix="/api/v1")
     app.include_router(artifacts_router, prefix="/api/v1")
     app.include_router(assets_router, prefix="/api/v1")
+    app.include_router(scene_renders_router, prefix="/api/v1")
     app.include_router(conversations_router, prefix="/api/v1")
     app.include_router(debug_router, prefix="/api/v1")
     app.include_router(studio_chat_router, prefix="/api/v1")

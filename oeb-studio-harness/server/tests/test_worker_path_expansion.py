@@ -79,3 +79,62 @@ def test_blender_adapter_routes_asset_review_render(tmp_path, monkeypatch):
         "ventradi_cruiser_front.png": "front",
         "ventradi_cruiser_action.png": "action",
     }
+
+
+def test_blender_adapter_routes_scene_render(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tools_dir = workspace / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "scene.py").write_text("# test script\n", encoding="utf-8")
+    output_root = tmp_path / "output"
+    commands = []
+
+    adapter = BlenderCLIAdapter(
+        BlenderAdapterConfig(executable="blender"),
+        output_root=str(output_root),
+        workspace_root=str(workspace),
+    )
+
+    def fake_run(cmd, cwd=None):
+        commands.append((cmd, cwd))
+        out_dir = output_root / "oeb-studio-harness" / "scene-renders" / "job-456"
+        frames_dir = out_dir / "jb100-pirate-escape_final_frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "jb100-pirate-escape_final.mp4").write_bytes(b"mp4")
+        for frame in range(1, 4):
+            (frames_dir / f"frame_{frame:04d}.png").write_bytes(b"png")
+        return "ok", 0
+
+    monkeypatch.setattr(adapter, "_run", fake_run)
+
+    result = adapter.execute({
+        "id": "job-456",
+        "required_capabilities": ["blender.final_render"],
+        "payload": {
+            "job_type": "scene.render",
+            "scene_name": "JB100-pirate-escape",
+            "script_path": "tools/scene.py",
+            "script_file": "{workspace_root}/tools/scene.py",
+            "cwd": "{workspace_root}",
+            "factory_startup": True,
+            "quality": "final",
+            "mode": "preview",
+            "output_path": "{output_root}/oeb-studio-harness/scene-renders/{job_id}/jb100-pirate-escape_final.mp4",
+            "frames_dir": "{output_root}/oeb-studio-harness/scene-renders/{job_id}/jb100-pirate-escape_final_frames",
+            "artifact_paths": [
+                "{output_root}/oeb-studio-harness/scene-renders/{job_id}/jb100-pirate-escape_final.mp4",
+            ],
+            "artifact_type": "scene.final_render",
+            "expected_frames": 3,
+        },
+    })
+
+    assert result.success
+    assert [path.name for path in result.artifacts] == ["jb100-pirate-escape_final.mp4"]
+    assert "--factory-startup" in commands[0][0]
+    assert commands[0][1] == str(workspace)
+    assert result.artifact_type == "scene.final_render"
+    assert result.output_summary["job_type"] == "scene.render"
+    assert result.output_summary["scene_name"] == "JB100-pirate-escape"
+    assert result.output_summary["frame_count"] == 3

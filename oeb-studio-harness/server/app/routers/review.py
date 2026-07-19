@@ -102,6 +102,11 @@ async def review_job(job_id: uuid.UUID, request: Request, db: AsyncSession = Dep
     })
 
 
+@router.get("/scene-renders/{job_id}", response_class=HTMLResponse)
+async def review_scene_render(job_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_db)):
+    return await review_job(job_id, request, db)
+
+
 @router.get("/assets/{asset_id}", response_class=HTMLResponse)
 async def review_asset(asset_id: str, request: Request, db: AsyncSession = Depends(get_db)):
     asset = await resolve_review_asset(db, asset_id=asset_id)

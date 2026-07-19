@@ -9,6 +9,7 @@ Camera sweeps 30% further back to shoulder position by 5 s, then holds.
 
 Output: out/jb100_barrel_roll.mp4 (960×540, H.264)
 """
+import argparse
 import bpy, math, os, glob as globmod, shutil, subprocess
 from mathutils import Vector, Quaternion, Euler
 
@@ -16,6 +17,21 @@ FPS      = 24
 N_FRAMES = FPS * 10  # 240
 DURATION = 10.0
 CWD      = os.getcwd()
+
+
+def parse_args():
+    argv = None
+    if "--" in __import__("sys").argv:
+        argv = __import__("sys").argv[__import__("sys").argv.index("--") + 1:]
+    parser = argparse.ArgumentParser(prog="tmp_jb100_barrel_roll")
+    parser.add_argument("--mode", choices=("preview", "blocking"), default="preview")
+    parser.add_argument("--output", default=None)
+    parser.add_argument("--width", type=int, default=None)
+    parser.add_argument("--height", type=int, default=None)
+    return parser.parse_args(argv)
+
+
+args = parse_args()
 
 # ── clear ─────────────────────────────────────────────────────────────────────
 for obj in list(bpy.data.objects):
@@ -300,10 +316,15 @@ scene.collection.objects.link(fo)
 fo.rotation_euler = (math.radians(120), 0, math.radians(140))
 
 # ── render frames ──────────────────────────────────────────────────────────────
-frames_dir = os.path.join(CWD, "out/jb100_barrel_roll_frames")
+out_mp4 = args.output or os.path.join(CWD, "out/jb100_barrel_roll.mp4")
+if args.output:
+    base, _ = os.path.splitext(out_mp4)
+    frames_dir = f"{base}_frames"
+else:
+    frames_dir = os.path.join(CWD, "out/jb100_barrel_roll_frames")
 os.makedirs(frames_dir, exist_ok=True)
-scene.render.resolution_x = 960
-scene.render.resolution_y = 540
+scene.render.resolution_x = args.width or 960
+scene.render.resolution_y = args.height or 540
 scene.render.image_settings.file_format = 'PNG'
 scene.render.filepath = os.path.join(frames_dir, "frame_")
 print(f"[barrel_roll] rendering {N_FRAMES} frames …")
@@ -314,7 +335,7 @@ print("[barrel_roll] render done")
 hits = globmod.glob(os.path.join(CWD,
     ".venv/lib/python*/site-packages/imageio_ffmpeg/binaries/ffmpeg-*"))
 ffmpeg = hits[0] if hits else shutil.which("ffmpeg") or "ffmpeg"
-out_mp4 = os.path.join(CWD, "out/jb100_barrel_roll.mp4")
+os.makedirs(os.path.dirname(out_mp4), exist_ok=True)
 subprocess.run([
     ffmpeg, "-y",
     "-framerate", str(FPS),
@@ -323,5 +344,6 @@ subprocess.run([
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18",
     out_mp4,
 ], check=True)
-shutil.rmtree(frames_dir)
+if not args.output:
+    shutil.rmtree(frames_dir)
 print("[barrel_roll] wrote", out_mp4)
