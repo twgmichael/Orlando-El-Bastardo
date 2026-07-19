@@ -40,6 +40,12 @@ KNOWN_REVIEW_ASSETS: tuple[ReviewAsset, ...] = (
         aliases=("jb 5k", "jb-5k", "jb45", "jb 45", "journey blaster 5000"),
     ),
     ReviewAsset(
+        asset_id="prop_jb100_A",
+        asset_path="assets/ships/jb100.glb",
+        name="JourneyBlaster 100",
+        aliases=("jb100", "jb 100", "journey blaster 100", "journeyblaster 100"),
+    ),
+    ReviewAsset(
         asset_id="ellipso_flyer_mk1",
         asset_path="assets/ships/ellipso_flyer_mk1.glb",
         name="Ellipso Flyer",
