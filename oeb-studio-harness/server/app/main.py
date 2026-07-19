@@ -20,6 +20,9 @@ async def maintenance_loop() -> None:
     from app.database import _session_factory
     from app.models.worker import Worker
     from app.models.job import Job, JobLease, JobAttempt
+    from app.services.artifact_prune import prune_old_review_render_artifacts
+
+    last_review_render_prune: datetime | None = None
 
     while True:
         await asyncio.sleep(10)
@@ -62,6 +65,16 @@ async def maintenance_loop() -> None:
                         else:
                             job.status = "failed"
                         job.updated_at = now
+
+                should_prune_review_renders = (
+                    last_review_render_prune is None
+                    or (
+                        now - last_review_render_prune
+                    ).total_seconds() >= settings.review_render_prune_interval_seconds
+                )
+                if should_prune_review_renders:
+                    await prune_old_review_render_artifacts(db, now=now)
+                    last_review_render_prune = now
 
                 await db.commit()
         except asyncio.CancelledError:
