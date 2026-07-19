@@ -29,10 +29,10 @@ live studio worker state without requiring a desktop login.
 - The service starts at boot before login, launches Xorg/Openbox plus the
   non-snap `surf` browser, and points it at a local Python status/slideshow
   server on `127.0.0.1:8765`.
-- The page shows `OEB Studio - render-pc-01` and `DO NOT POWER OFF`, worker
+- The page shows `Safe to turn off screen.` / `DO NOT TURN OFF PC.`, worker
   online/offline status, worker service state, current job, GPU temperature,
   utilization, VRAM, and the five newest local render images from the
-  configured worker output root.
+  configured worker output root, with the worker name at the bottom.
 - X screen sleep/DPMS blanking is disabled so the warning stays visible, while
   the page briefly blanks itself every 15 minutes for burn-in relief.
 - Deployed to `render-pc-01` and verified service/processes live, API status

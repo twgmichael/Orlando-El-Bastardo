@@ -20,6 +20,7 @@ class HeartbeatLoop:
         self._worker_id = worker_id
         self._interval = interval
         self._current_job_id: Optional[str] = None
+        self._current_job_title: str = ""
         self._status: str = "online"
         self._on_busy = on_busy
         self._on_idle = on_idle
@@ -27,14 +28,22 @@ class HeartbeatLoop:
 
     def set_busy(self, job_id: str, job_title: str = "") -> None:
         self._current_job_id = job_id
+        self._current_job_title = job_title
         self._status = "busy"
         if self._on_busy:
             self._on_busy(job_id, job_title)
 
     def set_idle(self) -> None:
         self._current_job_id = None
+        self._current_job_title = ""
         self._status = "online"
         if self._on_idle:
+            self._on_idle()
+
+    def _notify_recovered(self) -> None:
+        if self._status == "busy" and self._current_job_id and self._on_busy:
+            self._on_busy(self._current_job_id, self._current_job_title)
+        elif self._on_idle:
             self._on_idle()
 
     async def run(self) -> None:
@@ -46,6 +55,8 @@ class HeartbeatLoop:
                     status=self._status,
                     current_job_id=self._current_job_id,
                 )
+                if failures:
+                    self._notify_recovered()
                 failures = 0
             except Exception:
                 failures += 1
