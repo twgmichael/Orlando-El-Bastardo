@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-16T19:16:39-04:00
+updated: 2026-07-19T03:45:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -28,12 +28,14 @@ front door live: wiki mirror (`tools/sync_wiki.py`), rebuilt README,
 privacy audit passed. **Studio harness RUNNING** (2026-07-14): FastAPI
 control plane + PostgreSQL + Ansible role on docker-pi-01; cross-platform
 worker agent with OllamaAdapter + BlenderCLIAdapter (script_file + cwd +
-output_root live); macOS menu bar app on the Mac mini; pipeline render
-scripts dispatching and writing renders to OEB-PROJECT external drive.
-Remaining Phase 2: bar furniture, night lighting variant. Next frontier:
-publishing plan build (PUBLISHING-PLAN.md), pilot ticket backlog (lounge
-dressing, audio), Godot/USD move-cue support, agent bus (AGENT-BUS-PLAN.md),
-gaming-PC worker install.
+output_root live); macOS menu bar app on `render-mac-01`; `render-pc-01`
+Linux GPU worker online with official Blender/CUDA; pipeline render scripts
+dispatching and writing renders to OEB-PROJECT external drive. JB100 final
+review renders are proven through the real harness with uploaded artifacts and
+gallery review pages. Remaining Phase 2: bar furniture, night lighting
+variant. Next frontier: publishing plan build (PUBLISHING-PLAN.md), pilot
+ticket backlog (lounge dressing, audio), Godot/USD move-cue support, and agent
+bus (AGENT-BUS-PLAN.md).
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -117,8 +119,9 @@ Harness spec: `docs/planning/studio-production-pipeline-harness-ansible-spec.jso
 Agent bus plan: `docs/planning/AGENT-BUS-PLAN.md` (PLANNED, not built).
 Worker plan: `docs/planning/WORKER-AGENT-PLAN.md`.
 Control plane on docker-pi-01 at `http://oeb-studio.docker-pi`; `render-mac-01`
-worker registered; local and staging harness targets are selected by
-environment; first docker-pi prompt-to-render job completed end-to-end.
+and `render-pc-01` workers registered and online; local and staging harness
+targets are selected by environment; docker-pi prompt-to-render and
+GPU-accelerated review-render jobs completed end-to-end.
 
 - [x] Install worker on Mac mini — DONE 2026-07-14 (menu bar running,
   worker registered, first job claimed)
@@ -131,8 +134,22 @@ environment; first docker-pi prompt-to-render job completed end-to-end.
 - [x] Add `oeb-studio.docker-pi` to the `traefik_domains` list in
   project-pi-admin — DONE 2026-07-16
 - [x] Verify docker-pi studio chat to Mac worker render — DONE 2026-07-16
-- [ ] Bring up Linux gaming-PC worker from external SSD
-  (`config-examples/gaming-pc.yml`, `scripts/start-gaming-pc-worker.sh`)
+- [x] Bring up Linux GPU worker from external SSD — DONE 2026-07-18/19;
+  `render-pc-01` runs Ubuntu Server 26.04, NVIDIA 595.71.05, CUDA 13.2,
+  official Blender 5.0.1, Ollama, and the harness worker service
+- [x] Prove GPU-accelerated review renders through the real harness —
+  DONE 2026-07-18/19; JB100 final seven-view render completed on
+  `render-pc-01` with uploaded gallery artifacts
+- [x] Rename Mac mini worker identity to `render-mac-01` and restore the OEB
+  menu bar worker — DONE 2026-07-19
+- [x] Add review gallery lightbox navigation and retention pruning —
+  DONE 2026-07-19; action plus six angles cycle in the lightbox and old review
+  render image artifacts prune after 7 days while preserving latest active
+  asset galleries
+- [x] Add boot-time render PC warning/status kiosk — DONE 2026-07-19;
+  `render-pc-01` now starts a no-login X/`surf` kiosk with DO NOT POWER OFF
+  warning, worker/job/GPU status, and a slideshow of the five newest local
+  render images from its output root
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
