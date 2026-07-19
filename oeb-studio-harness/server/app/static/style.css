@@ -196,6 +196,68 @@ a:hover { text-decoration: underline; }
   padding: 1rem 0;
 }
 
+.render-request-bar,
+.inline-render-form {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.render-request-bar {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: .85rem 0;
+}
+
+.render-request-bar form {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+
+.render-request-bar label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+select,
+button {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+select {
+  padding: .35rem .55rem;
+}
+
+button {
+  padding: .4rem .7rem;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+.ready-note,
+.missing-note {
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.ready-note { color: var(--completed); }
+.missing-note { color: var(--running); }
+
 .asset-action-image {
   display: block;
   width: min(100%, 1280px);

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Review Assets{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Jobs</a>
+  <span>/</span>
+  <span>Review Assets</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>Review Assets</h1>
+    <p>Submit existing models for review renders on the shared harness.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Known Assets</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Asset</th>
+        <th>Source</th>
+        <th>Render</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for asset in assets %}
+      <tr>
+        <td>
+          <a href="/review/assets/{{ asset.asset_id }}">{{ asset.name }}</a>
+          <div class="mono small">{{ asset.asset_id }}</div>
+        </td>
+        <td class="mono small">{{ asset.asset_path }}</td>
+        <td>
+          <form class="inline-render-form" method="post" action="/review/assets/{{ asset.asset_id }}/renders">
+            <select name="quality" aria-label="Quality">
+              <option value="preview" selected>preview</option>
+              <option value="final">final</option>
+            </select>
+            <input type="hidden" name="priority" value="10">
+            <button type="submit">Render all views</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

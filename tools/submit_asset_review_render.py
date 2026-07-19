@@ -46,8 +46,9 @@ def request_json(method: str, url: str, token: str, body: dict | None = None) ->
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--asset", required=True, help="Repo-relative or worker-visible asset path")
-    parser.add_argument("--asset-id", required=True)
+    parser.add_argument("--asset", help="Repo-relative or worker-visible asset path")
+    parser.add_argument("--asset-id", help="Canonical asset id")
+    parser.add_argument("--asset-name", "--name", dest="asset_name", help="Friendly asset name or alias")
     parser.add_argument("--views", default=DEFAULT_VIEWS)
     parser.add_argument("--quality", choices=("preview", "final"), default="preview")
     parser.add_argument("--output-namespace")
@@ -58,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int)
     parser.add_argument("--samples", type=int)
     parser.add_argument("--output-path")
-    parser.add_argument("--harness-url", default=os.environ.get("OEB_HARNESS_URL", ""))
+    parser.add_argument("--harness-url", default=os.environ.get("OEB_HARNESS_URL", DEFAULT_STAGING_HARNESS_URL))
     parser.add_argument(
         "--staging",
         action="store_true",
@@ -73,10 +74,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     harness_url = DEFAULT_STAGING_HARNESS_URL if args.staging and not args.harness_url else args.harness_url
-    if not harness_url:
-        raise SystemExit(
-            "Set OEB_HARNESS_URL, pass --harness-url, or pass --staging for docker-pi"
-        )
+    if not (args.asset_name or args.asset_id or args.asset):
+        raise SystemExit("Pass --asset-name, --asset-id, or --asset")
 
     token = args.admin_token
     if not token:
@@ -86,8 +85,9 @@ def main() -> None:
     public_base_url = normalize_base_url(args.public_base_url) if args.public_base_url else base_url
     views = [view.strip() for view in args.views.split(",") if view.strip()]
     body = {
-        "asset_path": args.asset,
+        "asset_name": args.asset_name,
         "asset_id": args.asset_id,
+        "asset_path": args.asset,
         "views": views,
         "quality": args.quality,
         "output_namespace": args.output_namespace,
@@ -103,7 +103,8 @@ def main() -> None:
 
     job = request_json("POST", f"{base_url}/api/v1/jobs/asset-review-renders", token, body)
     job_id = job["id"]
-    gallery_url = f"{public_base_url}/review/assets/{args.asset_id}"
+    resolved_asset_id = (job.get("payload") or {}).get("asset_id") or args.asset_id
+    gallery_url = f"{public_base_url}/review/assets/{resolved_asset_id}" if resolved_asset_id else None
     job_url = f"{public_base_url}/review/jobs/{job_id}"
     print(json.dumps({
         "job_id": job_id,
