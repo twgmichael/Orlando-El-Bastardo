@@ -8,6 +8,7 @@ from app.services import asset_review
 async def test_resolves_known_friendly_asset_names():
     assert (await asset_review.resolve_review_asset(None, asset_query="Ventradi Cruiser")).asset_id == "ventradi_cruiser"
     assert (await asset_review.resolve_review_asset(None, asset_query="JB45")).asset_id == "jb5k"
+    assert (await asset_review.resolve_review_asset(None, asset_query="JB100")).asset_id == "prop_jb100_A"
     assert (await asset_review.resolve_review_asset(None, asset_query="Ellispso Flyer")).asset_id == "ellipso_flyer_mk1"
 
 
