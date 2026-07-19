@@ -42,6 +42,10 @@
       </select>
     </label>
     <input type="hidden" name="priority" value="10">
+    <label>
+      <input type="checkbox" name="require_gpu_cycles" value="1" {% if quality == "final" %}checked{% endif %}>
+      GPU Cycles
+    </label>
     <button type="submit">Render all views</button>
   </form>
   {% if gallery_ready %}
@@ -56,6 +60,7 @@
   <dl class="details">
     <dt>Job</dt><dd class="mono small"><a href="/review/jobs/{{ job.id }}">{{ job.id }}</a></dd>
     <dt>Quality</dt><dd class="mono small">{{ quality or "preview" }}</dd>
+    <dt>Capabilities</dt><dd class="mono small">{{ job.required_capabilities|join(", ") }}</dd>
     <dt>Worker</dt><dd class="mono small">{{ job.assigned_worker_id or "-" }}</dd>
     <dt>Updated</dt><dd class="mono small">{{ job.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
   </dl>

@@ -57,6 +57,7 @@ async def create_asset_review_render_job(
         height=body.height,
         samples=body.samples,
         output_path=body.output_path,
+        require_gpu_cycles=body.require_gpu_cycles,
         actor_id="admin",
     )
     await db.commit()

@@ -159,6 +159,7 @@ async def submit_review_asset_render(asset_id: str, request: Request, db: AsyncS
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="priority must be an integer") from exc
     preferred_worker_id = str(form.get("preferred_worker_id") or "").strip() or None
+    require_gpu_cycles = str(form.get("require_gpu_cycles") or "").lower() in {"1", "true", "on", "yes"}
     job = await create_asset_review_render_job(
         db,
         asset=asset,
@@ -166,6 +167,7 @@ async def submit_review_asset_render(asset_id: str, request: Request, db: AsyncS
         quality=quality,
         priority=priority,
         preferred_worker_id=preferred_worker_id,
+        require_gpu_cycles=require_gpu_cycles,
         actor_id="review-ui",
     )
     await db.commit()

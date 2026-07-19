@@ -458,7 +458,7 @@ recording what the box is in human terms.
 |---|---|---|---|
 | Mac mini (M-series) | `render-mac-01` | llm.*, vision.*, blender.preview | Running; rename from `mac-mini` planned |
 | MacBook Air (Intel) | `render-mac-02` | blender.preview, blender.command_line | Planned |
-| First PC tower | `render-pc-01` | blender.final_render, gpu.cycles_render, gpu.texture_bake | Planned Linux worker |
+| First PC tower | `render-pc-01` | blender.final_render, gpu.cycles_render, gpu.texture_bake, llm.* | Running Linux worker; GTX 1660 SUPER verified |
 | Additional PC tower | `render-pc-02` | blender.final_render, gpu.cycles_render, gpu.texture_bake | Planned Linux worker |
 
 ## Open work
@@ -473,10 +473,17 @@ recording what the box is in human terms.
 - [x] PostgreSQL port 5432 exposed for direct SQL client access — DONE 2026-07-14
 - [x] Staging docker-pi chat-to-render smoke test — DONE 2026-07-16
 - [ ] Add MacBook Air as lightweight preview/build worker
-- [ ] Bring up `render-pc-01` Linux worker from external SSD
+- [x] Bring up `render-pc-01` Linux worker from external SSD —
+  DONE 2026-07-18; Ubuntu Server 26.04, NVIDIA 595.71.05, CUDA 13.2,
+  GTX 1660 SUPER 6 GB
+- [x] Prove `render-pc-01` can complete GPU Cycles jobs from the harness —
+  DONE 2026-07-18; JB100 smoke and seven-view final render completed with
+  uploaded PNG artifacts
 - [ ] Add `render-pc-02` as second Linux render worker
 - [ ] Rename existing worker identities to the `render-{pc,mac}-NN` convention
 - [ ] Add `pyproject.toml` for clean `pip install -e .`
 - [x] Add `oeb-studio.docker-pi` to `traefik_domains` in host vars —
   DONE 2026-07-16
 - [ ] Wire worker into the agent bus once AGENT-BUS-PLAN.md is actioned
+- [ ] Gate `gpu.cycles_render` advertising on a Blender CUDA probe, not only
+  `nvidia-smi`

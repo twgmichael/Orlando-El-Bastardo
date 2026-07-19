@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models.artifact import Artifact
 from app.models.asset import Asset
 from app.models.audit import AuditEvent
@@ -82,11 +83,16 @@ def _asset_path_for_db_asset(asset: Asset) -> str | None:
     if not asset.file_path:
         return None
     path = Path(asset.file_path)
-    if path.suffix.lower() == ".glb":
+    if path.is_absolute():
         return asset.file_path
+    asset_root = Path(get_settings().asset_root)
+    if path.parts[:len(asset_root.parts)] != asset_root.parts:
+        path = asset_root / path
+    if path.suffix.lower() == ".glb":
+        return path.as_posix()
     if path.suffix:
-        return str(path.with_suffix(".glb"))
-    return asset.file_path
+        return path.with_suffix(".glb").as_posix()
+    return path.as_posix()
 
 
 async def list_review_assets(db: AsyncSession | None) -> list[ReviewAsset]:
@@ -176,10 +182,13 @@ async def create_asset_review_render_job(
     height: int | None = None,
     samples: int | None = None,
     output_path: str | None = None,
+    require_gpu_cycles: bool = False,
     actor_id: str = "admin",
 ) -> Job:
     view_list = list(views)
-    required_capability = "blender.final_render" if quality == "final" else "blender.preview_render"
+    required_capabilities = ["blender.final_render" if quality == "final" else "blender.preview_render"]
+    if require_gpu_cycles:
+        required_capabilities.append("gpu.cycles_render")
     resolved_artifact_prefix = artifact_prefix or output_namespace or asset.asset_id
     resolved_output_path = output_path or "{output_root}/oeb-studio-harness/review-renders/{job_id}"
     payload = {
@@ -191,6 +200,7 @@ async def create_asset_review_render_job(
         "quality": quality,
         "output_namespace": output_namespace,
         "artifact_prefix": resolved_artifact_prefix,
+        "require_gpu_cycles": require_gpu_cycles,
         "script_file": "{workspace_root}/tools/render_asset_review.py",
         "cwd": "{workspace_root}",
         "output_path": resolved_output_path,
@@ -202,7 +212,7 @@ async def create_asset_review_render_job(
     job = Job(
         title=f"Review render {asset.asset_id}",
         description=f"Render {asset.name} review views from {asset.asset_path}",
-        required_capabilities=[required_capability],
+        required_capabilities=required_capabilities,
         policy="wait_for_preferred_worker" if preferred_worker_id else "run_anywhere",
         preferred_worker_id=preferred_worker_id,
         priority=priority,
@@ -222,6 +232,7 @@ async def create_asset_review_render_job(
             "asset_path": asset.asset_path,
             "views": view_list,
             "quality": quality,
+            "require_gpu_cycles": require_gpu_cycles,
         },
     ))
     return job
