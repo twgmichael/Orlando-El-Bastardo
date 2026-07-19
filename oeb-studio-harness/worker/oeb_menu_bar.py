@@ -6,7 +6,7 @@ state in the macOS menu bar via rumps.
 
 Usage:
     OEB_HARNESS_URL=https://harness.local OEB_ENROLLMENT_TOKEN=<tok> \
-    python oeb_menu_bar.py config-examples/mac-mini.yml
+    python oeb_menu_bar.py config-examples/render-mac-01.yml
 """
 
 import asyncio

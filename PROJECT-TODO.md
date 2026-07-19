@@ -116,7 +116,7 @@ storytelling pipeline.
 Harness spec: `docs/planning/studio-production-pipeline-harness-ansible-spec.json`.
 Agent bus plan: `docs/planning/AGENT-BUS-PLAN.md` (PLANNED, not built).
 Worker plan: `docs/planning/WORKER-AGENT-PLAN.md`.
-Control plane on docker-pi-01 at `http://oeb-studio.docker-pi`; mac-mini
+Control plane on docker-pi-01 at `http://oeb-studio.docker-pi`; `render-mac-01`
 worker registered; local and staging harness targets are selected by
 environment; first docker-pi prompt-to-render job completed end-to-end.
 

@@ -1,4 +1,4 @@
-worker_id: mac-mini
+worker_id: render-mac-01
 platform: macos-arm64
 agent_version: "0.1.0"
 
@@ -19,8 +19,8 @@ resources:
 # harness_url and enrollment_token are set via env vars:
 #   OEB_HARNESS_URL=https://studio-orchestrator.local
 #   OEB_ENROLLMENT_TOKEN=<from vault>
-# token_file stores the per-worker token after first registration
-token_file: ~/.oeb-harness-worker-token
+# token_file stores the per-worker token after first registration.
+token_file: ~/.oeb-harness-worker-token-render-mac-01
 
 poll_interval_seconds: 5
 heartbeat_interval_seconds: 20
