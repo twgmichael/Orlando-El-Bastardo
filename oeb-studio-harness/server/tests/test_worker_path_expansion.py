@@ -203,6 +203,58 @@ def test_blender_adapter_falls_back_to_config_timeout_when_payload_omits_timeout
     assert result.output_summary["blender_timeout_source"] == "adapter_default"
 
 
+def test_blender_adapter_reports_scene_render_failure_diagnostics(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tools_dir = workspace / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "scene.py").write_text("# test script\n", encoding="utf-8")
+    output_root = tmp_path / "output"
+
+    adapter = BlenderCLIAdapter(
+        BlenderAdapterConfig(executable="blender", timeout_seconds=321),
+        output_root=str(output_root),
+        workspace_root=str(workspace),
+    )
+
+    def fake_run(cmd, cwd=None, timeout_seconds=None):
+        frames_dir = output_root / "oeb-studio-harness" / "scene-renders" / "job-458" / "scene_preview_frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for frame in range(1, 3):
+            (frames_dir / f"frame_{frame:04d}.png").write_bytes(b"png")
+        return "\n".join(f"log line {idx}" for idx in range(100)), 2
+
+    monkeypatch.setattr(adapter, "_run", fake_run)
+
+    result = adapter.execute({
+        "id": "job-458",
+        "required_capabilities": ["blender.preview_render"],
+        "payload": {
+            "job_type": "scene.render",
+            "scene_name": "JB100-pirate-escape",
+            "script_path": "tools/scene.py",
+            "script_file": "{workspace_root}/tools/scene.py",
+            "cwd": "{workspace_root}",
+            "quality": "preview",
+            "output_path": "{output_root}/oeb-studio-harness/scene-renders/{job_id}/scene_preview.mp4",
+            "frames_dir": "{output_root}/oeb-studio-harness/scene-renders/{job_id}/scene_preview_frames",
+            "artifact_type": "scene.preview_render",
+            "expected_frames": 276,
+        },
+    })
+
+    assert not result.success
+    assert result.error == "Blender exited 2"
+    assert result.output_summary["job_type"] == "scene.render"
+    assert result.output_summary["exit_code"] == 2
+    assert result.output_summary["frames_rendered"] == 2
+    assert result.output_summary["latest_frame_path"].endswith("frame_0002.png")
+    assert result.output_summary["blender_timeout_seconds"] == 321
+    assert result.output_summary["blender_timeout_source"] == "adapter_default"
+    assert "log line 20" in result.output_summary["log_tail"]
+    assert "log line 19" not in result.output_summary["log_tail"]
+
+
 def test_job_runner_reports_scene_render_progress(tmp_path):
     frames_dir = tmp_path / "frames"
     frames_dir.mkdir()

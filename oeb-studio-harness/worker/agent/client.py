@@ -156,11 +156,16 @@ class HarnessClient:
         job_id: str,
         reason: str,
         log_output: Optional[str] = None,
+        output_summary: Optional[dict] = None,
     ) -> None:
         async with httpx.AsyncClient(verify=False) as c:
             r = await c.post(
                 f"{self._base}/api/v1/jobs/{job_id}/fail",
-                json={"reason": reason, "log_output": log_output},
+                json={
+                    "reason": reason,
+                    "log_output": log_output,
+                    "output_summary": output_summary,
+                },
                 headers=self._worker_headers(),
                 timeout=10,
             )

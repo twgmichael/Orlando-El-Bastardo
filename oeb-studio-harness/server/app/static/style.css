@@ -53,6 +53,8 @@ main { padding: 1.5rem; display: flex; flex-direction: column; gap: 2rem; }
 
 h2 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: .75rem; }
 h2 small { font-size: 11px; margin-left: .5rem; }
+h3 { font-size: 13px; margin-bottom: .75rem; }
+h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; margin: .9rem 0 .4rem; }
 
 .section-heading {
   display: flex;
@@ -122,6 +124,14 @@ tr:hover td { background: var(--surface); }
 }
 
 .empty { color: var(--muted); font-style: italic; padding: .5rem 0; }
+
+.diagnostic-panel {
+  border: 1px solid rgba(239,68,68,.35);
+  background: rgba(239,68,68,.06);
+  border-radius: 4px;
+  margin-top: 1rem;
+  padding: 1rem;
+}
 
 .review-hero {
   display: flex;

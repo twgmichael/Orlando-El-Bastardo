@@ -17,6 +17,7 @@ BLENDER_CAPABILITIES = {
 
 ASSET_REVIEW_JOB_TYPE = "asset.review_render"
 ASSET_REVIEW_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action")
+LOG_TAIL_LINES = 80
 
 _PATH_TRAVERSAL = re.compile(r"\.\.")
 
@@ -245,7 +246,23 @@ class BlenderCLIAdapter(Adapter):
         log_output, returncode = self._run(cmd, cwd=cwd, timeout_seconds=timeout_seconds)
         elapsed_seconds = time.monotonic() - started
         if returncode != 0:
-            return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
+            return AdapterResult(
+                success=False,
+                error=f"Blender exited {returncode}",
+                log_output=log_output,
+                output_summary=self._script_failure_summary(
+                    payload=payload,
+                    job_id=job_id,
+                    script=script,
+                    out=out,
+                    cmd=cmd,
+                    cwd=cwd,
+                    returncode=returncode,
+                    timeout_seconds=timeout_seconds,
+                    elapsed_seconds=elapsed_seconds,
+                    log_output=log_output,
+                ),
+            )
 
         rendered: list[Path] = []
         artifact_paths = payload.get("artifact_paths") or []
@@ -310,6 +327,72 @@ class BlenderCLIAdapter(Adapter):
             output_summary=output_summary,
         )
 
+    def _script_failure_summary(
+        self,
+        payload: dict,
+        job_id: str,
+        script: Path,
+        out: Path | None,
+        cmd: list[str],
+        cwd: str | None,
+        returncode: int,
+        timeout_seconds: int,
+        elapsed_seconds: float,
+        log_output: str,
+    ) -> dict:
+        summary = {
+            "script_file": str(script),
+            "exit_code": returncode,
+            "elapsed_seconds": round(elapsed_seconds, 3),
+            "blender_timeout_seconds": timeout_seconds,
+            "blender_timeout_source": "payload" if payload.get("blender_timeout_seconds") else "adapter_default",
+            "command": shlex.join(cmd),
+            "cwd": cwd,
+            "log_tail": self._log_tail(log_output),
+        }
+        if payload.get("job_type") == "scene.render":
+            frames_dir = None
+            if out:
+                frames_dir = self._resolve_runtime_path(
+                    str(payload.get("frames_dir") or out.with_name(f"{out.stem}_frames")),
+                    "frames_dir",
+                    cwd=cwd,
+                    job_id=job_id,
+                )
+            frame_paths = sorted(frames_dir.glob("*.png")) if frames_dir and frames_dir.exists() else []
+            latest_frame = frame_paths[-1] if frame_paths else None
+            summary.update({
+                "job_type": "scene.render",
+                "scene_name": payload.get("scene_name"),
+                "script_path": payload.get("script_path"),
+                "quality": payload.get("quality"),
+                "mode": payload.get("mode"),
+                "output_path": str(out) if out else None,
+                "frames_dir": str(frames_dir) if frames_dir else None,
+                "frames_rendered": len(frame_paths),
+                "latest_frame_path": str(latest_frame) if latest_frame else None,
+                "expected_frames": payload.get("expected_frames"),
+                "progress": {
+                    "phase": "failed",
+                    "quality": payload.get("quality"),
+                    "frames_rendered": len(frame_paths),
+                    "total_frames": payload.get("expected_frames"),
+                    "percent": (
+                        min(100, round(len(frame_paths) * 100 / int(payload["expected_frames"]), 1))
+                        if frame_paths and payload.get("expected_frames")
+                        else None
+                    ),
+                    "eta_seconds": None,
+                    "estimate_source": "failed",
+                    "warning": f"Blender exited {returncode}",
+                },
+            })
+        return summary
+
+    def _log_tail(self, log_output: str) -> str:
+        lines = (log_output or "").splitlines()
+        return "\n".join(lines[-LOG_TAIL_LINES:])
+
     def _payload_timeout_seconds(self, payload: dict) -> int:
         raw_timeout = payload.get("blender_timeout_seconds")
         if raw_timeout is None:
@@ -326,7 +409,15 @@ class BlenderCLIAdapter(Adapter):
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout, cwd=cwd)
             return proc.stdout + proc.stderr, proc.returncode
-        except subprocess.TimeoutExpired:
-            return f"Blender render timed out after {effective_timeout}s", -1
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode(errors="replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode(errors="replace")
+            partial = (stdout + stderr).strip()
+            timeout_line = f"Blender render timed out after {effective_timeout}s"
+            return f"{partial}\n{timeout_line}" if partial else timeout_line, -1
         except FileNotFoundError:
             return f"Blender executable not found: {self._cfg.executable!r}", -1
