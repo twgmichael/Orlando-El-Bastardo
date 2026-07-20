@@ -3,7 +3,11 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from app.routers.workers import WORKER_UPDATE_ERROR_MAX_LENGTH, _worker_update_error
+from app.routers.workers import (
+    WORKER_UPDATE_ERROR_MAX_LENGTH,
+    _heartbeat_error_is_stale,
+    _worker_update_error,
+)
 from app.schemas.worker import WorkerHeartbeatResponse, WorkerUpdateRequest
 from app.services.worker_updates import worker_can_claim_jobs
 
@@ -58,3 +62,12 @@ def test_worker_update_error_is_truncated_for_storage():
 
     assert len(error) == WORKER_UPDATE_ERROR_MAX_LENGTH
     assert error.endswith("...")
+
+
+@pytest.mark.parametrize("pending_state", ["draining", "ready_to_update", "force_requested"])
+def test_worker_update_ignores_stale_heartbeat_errors_for_new_requests(pending_state):
+    assert _heartbeat_error_is_stale(pending_state, "failed")
+
+
+def test_worker_update_accepts_errors_after_apply_begins():
+    assert not _heartbeat_error_is_stale("applying", "failed")
