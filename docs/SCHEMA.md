@@ -58,6 +58,8 @@ discriminated union keyed on a `type` field.
 - Prefer discriminated unions for cue types using a `type` field.
 - Validate before export.
 - Use a canonical schema with exporter-specific target adapters.
+- Use `draft`, `preview`, and `final` as the canonical render quality values
+  for harness asset and scene render requests.
 
 ## Conversational asset-detail schema
 

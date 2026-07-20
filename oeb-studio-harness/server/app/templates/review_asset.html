@@ -37,6 +37,7 @@
     <label>
       Quality
       <select name="quality">
+        <option value="draft" {% if quality == "draft" %}selected{% endif %}>draft</option>
         <option value="preview" {% if quality == "preview" %}selected{% endif %}>preview</option>
         <option value="final" {% if quality == "final" %}selected{% endif %}>final</option>
       </select>

@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset-id", help="Canonical asset id")
     parser.add_argument("--asset-name", "--name", dest="asset_name", help="Friendly asset name or alias")
     parser.add_argument("--views", default=DEFAULT_VIEWS)
-    parser.add_argument("--quality", choices=("preview", "final"), default="preview")
+    parser.add_argument("--quality", choices=("draft", "preview", "final"), default="preview")
     parser.add_argument("--output-namespace")
     parser.add_argument("--artifact-prefix")
     parser.add_argument("--priority", type=int, default=10)

@@ -91,8 +91,8 @@ class BlenderCLIAdapter(Adapter):
             return AdapterResult(success=False, error="asset.review_render payload requires asset_id")
 
         quality = payload.get("quality") or "preview"
-        if quality not in {"preview", "final"}:
-            return AdapterResult(success=False, error="asset.review_render quality must be preview or final")
+        if quality not in {"draft", "preview", "final"}:
+            return AdapterResult(success=False, error="asset.review_render quality must be draft, preview, or final")
 
         raw_views = payload.get("views") or ASSET_REVIEW_VIEWS
         if isinstance(raw_views, str):

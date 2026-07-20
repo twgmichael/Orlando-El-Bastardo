@@ -49,6 +49,7 @@ are not front-door reading unless they still serve the active production state.
 - [planning/ASSET-REGISTRY-PLAN.md](planning/ASSET-REGISTRY-PLAN.md) — lean registry for conversation grounding and pipeline lookup
 - [planning/CONVERSATION-TO-BUILD-LOOP.md](planning/CONVERSATION-TO-BUILD-LOOP.md) — prompt-to-render loop verified across local/staging configuration
 - [planning/STUDIO-HARNESS-VISION.md](planning/STUDIO-HARNESS-VISION.md) — studio harness product and operations vision
+- [planning/HARNESS-RENDER-QUALITY-LANGUAGE.md](planning/HARNESS-RENDER-QUALITY-LANGUAGE.md) — canonical draft/preview/final render quality language
 - [planning/WORKER-AGENT-PLAN.md](planning/WORKER-AGENT-PLAN.md) — worker agent architecture, environment selection, and remaining install work
 - [planning/AGENT-BUS-PLAN.md](planning/AGENT-BUS-PLAN.md) — planned production issue bus
 - [planning/PUBLISHING-PLAN.md](planning/PUBLISHING-PLAN.md) — public publishing and render upload flow

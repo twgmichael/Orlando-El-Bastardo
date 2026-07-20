@@ -85,3 +85,28 @@ async def test_final_review_render_can_require_gpu_cycles():
 
     assert job.required_capabilities == ["blender.final_render", "gpu.cycles_render"]
     assert job.payload["require_gpu_cycles"] is True
+
+
+@pytest.mark.anyio
+async def test_draft_review_render_uses_preview_worker_capability():
+    db = SimpleNamespace(
+        add=lambda value: None,
+        flush=lambda: None,
+    )
+
+    async def flush():
+        return None
+
+    db.flush = flush
+    job = await asset_review.create_asset_review_render_job(
+        db,
+        asset=asset_review.ReviewAsset(
+            asset_id="prop_jb100_A",
+            asset_path="assets/ships/jb100.glb",
+            name="JourneyBlaster 100",
+        ),
+        quality="draft",
+    )
+
+    assert job.required_capabilities == ["blender.preview_render"]
+    assert job.payload["quality"] == "draft"

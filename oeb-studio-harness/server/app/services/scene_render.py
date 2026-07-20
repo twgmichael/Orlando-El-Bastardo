@@ -16,6 +16,7 @@ SCENE_RENDER_TIMEOUT_DEFAULTS = {
     "preview": 7200,
     "final": 86400,
 }
+SCENE_RENDER_QUALITIES = set(SCENE_RENDER_TIMEOUT_DEFAULTS)
 
 
 def slug_scene_name(value: str) -> str:
@@ -140,6 +141,9 @@ async def create_scene_render_job(
     blender_timeout_seconds: int | None = None,
     actor_id: str = "admin",
 ) -> Job:
+    if quality not in SCENE_RENDER_QUALITIES:
+        raise HTTPException(status_code=422, detail="quality must be draft, preview, or final")
+
     normalized_script_path = normalize_scene_script_path(script_path)
     scene_slug = slug_scene_name(scene_name)
     render_mode = mode or ("blocking" if quality == "draft" else "preview")

@@ -145,6 +145,10 @@ GPU-accelerated review-render jobs completed end-to-end.
   stale-frame warnings, and intermittent `scene.progress_frame` uploads for
   long renders. See
   `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [x] Adopt draft/preview/final render quality language across harness asset
+  and scene render requests — `draft` is the fastest blocking/check pass,
+  `preview` is middle quality for review, and `final` is delivery-quality
+  output. See `docs/planning/HARNESS-RENDER-QUALITY-LANGUAGE.md`.
 - [ ] Add failed jobs section to harness dashboard — show failed jobs from the
   last 24 hours so render failures remain visible from the main index instead
   of disappearing into the status count.

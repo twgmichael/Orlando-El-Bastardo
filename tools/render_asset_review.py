@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--asset", required=True)
     parser.add_argument("--asset-id", required=True)
     parser.add_argument("--views", default="top,bottom,left,right,front,back,action")
-    parser.add_argument("--quality", choices=("preview", "final"), default="preview")
+    parser.add_argument("--quality", choices=("draft", "preview", "final"), default="preview")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--artifact-prefix")
     parser.add_argument("--width", type=int)
@@ -109,9 +109,16 @@ def scene_bounds() -> tuple[Vector, Vector]:
 
 def configure_render(args: argparse.Namespace) -> None:
     scene = bpy.context.scene
-    width = args.width or (1600 if args.quality == "final" else 1000)
-    height = args.height or (1000 if args.quality == "final" else 700)
-    samples = args.samples or (96 if args.quality == "final" else 32)
+    if args.quality == "final":
+        default_width, default_height, default_samples = 1600, 1000, 96
+    elif args.quality == "draft":
+        default_width, default_height, default_samples = 800, 560, 16
+    else:
+        default_width, default_height, default_samples = 1000, 700, 32
+
+    width = args.width or default_width
+    height = args.height or default_height
+    samples = args.samples or default_samples
     engine = args.engine or ("CYCLES" if args.quality == "final" else "BLENDER_EEVEE_NEXT")
 
     scene.render.resolution_x = width
