@@ -25,21 +25,40 @@
         <th>ID</th>
         <th>Platform</th>
         <th>Status</th>
+        <th>Update</th>
+        <th>Version</th>
         <th>Capabilities</th>
+        <th>Current Job</th>
         <th>Last Heartbeat</th>
       </tr>
     </thead>
     <tbody>
       {% for w in workers %}
       <tr>
-        <td class="mono">{{ w.id }}</td>
+        <td class="mono">{{ worker_display_id(w) }}</td>
         <td>{{ w.platform }}</td>
         <td><span class="badge status-{{ w.status }}">{{ w.status }}</span></td>
+        <td class="mono small">
+          {{ w.update_state or "idle" }}
+          {% if w.update_target_git_sha %}
+          <br>target {{ w.update_target_git_sha }}
+          {% endif %}
+          {% if w.update_last_error %}
+          <br><span class="status-failed">{{ w.update_last_error }}</span>
+          {% endif %}
+        </td>
+        <td class="mono small">
+          {{ w.agent_version }}
+          {% if w.git_sha %}
+          <br>{{ w.git_sha }}
+          {% endif %}
+        </td>
         <td class="caps">
           {% for cap in caps_by_worker.get(w.id, []) %}
           <span class="cap">{{ cap }}</span>
           {% endfor %}
         </td>
+        <td class="mono small">{{ w.current_job_id or "—" }}</td>
         <td class="mono">
           {% if w.last_heartbeat_at %}
             {{ w.last_heartbeat_at.strftime("%H:%M:%S") }}
@@ -85,6 +104,38 @@
   </table>
   {% else %}
   <p class="empty">No pending or running jobs.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Failed Jobs <small>(last 24 hours)</small></h2>
+  {% if failed_jobs %}
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Status</th>
+        <th>Policy</th>
+        <th>Worker</th>
+        <th>Priority</th>
+        <th>Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in failed_jobs %}
+      <tr>
+        <td><a href="{{ job_review_url(j) }}">{{ j.title }}</a></td>
+        <td><span class="badge status-{{ j.status }}">{{ j.status }}</span></td>
+        <td class="mono small">{{ j.policy }}</td>
+        <td class="mono small">{{ j.assigned_worker_id or "—" }}</td>
+        <td>{{ j.priority }}</td>
+        <td class="mono small">{{ j.updated_at.strftime("%m-%d %H:%M") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No failed jobs in the last 24 hours.</p>
   {% endif %}
 </section>
 

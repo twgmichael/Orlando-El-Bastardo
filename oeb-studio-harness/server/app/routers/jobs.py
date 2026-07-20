@@ -9,7 +9,7 @@ from app.auth import require_admin, require_worker, require_admin_or_worker
 from app.config import get_settings
 from app.models.artifact import Artifact
 from app.models.job import Job, JobAttempt, JobLease
-from app.models.worker import WorkerCapability
+from app.models.worker import Worker, WorkerCapability
 from app.models.audit import AuditEvent
 from app.models.user import ApiToken
 from app.services.asset_review import (
@@ -18,6 +18,7 @@ from app.services.asset_review import (
     missing_uploaded_views,
     resolve_review_asset,
 )
+from app.services.worker_updates import worker_can_claim_jobs
 from app.schemas.job import (
     AssetReviewRenderRequest,
     JobCreateRequest,
@@ -161,6 +162,11 @@ async def list_eligible_jobs(
     db: AsyncSession = Depends(get_db),
     token: ApiToken = Depends(require_worker),
 ):
+    worker_result = await db.execute(select(Worker).where(Worker.id == token.worker_id))
+    worker = worker_result.scalar_one_or_none()
+    if not worker_can_claim_jobs(worker):
+        return []
+
     caps_result = await db.execute(
         select(WorkerCapability.capability).where(WorkerCapability.worker_id == token.worker_id)
     )
@@ -213,6 +219,15 @@ async def claim_job(
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status != "pending":
         raise HTTPException(status_code=409, detail=f"Job is not claimable (status={job.status})")
+
+    worker_result = await db.execute(select(Worker).where(Worker.id == token.worker_id))
+    worker = worker_result.scalar_one_or_none()
+    if not worker_can_claim_jobs(worker):
+        update_state = (worker.update_state if worker else "unknown")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Worker is not claimable while update_state={update_state}",
+        )
 
     # Verify capabilities
     caps_result = await db.execute(
