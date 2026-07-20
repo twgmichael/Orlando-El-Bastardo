@@ -20,6 +20,15 @@ from app.schemas.worker import (
 from app.services.worker_updates import worker_active_job_id
 
 router = APIRouter(prefix="/workers", tags=["workers"])
+WORKER_UPDATE_ERROR_MAX_LENGTH = 512
+
+
+def _worker_update_error(value: str | None) -> str | None:
+    if not value:
+        return None
+    if len(value) <= WORKER_UPDATE_ERROR_MAX_LENGTH:
+        return value
+    return value[: WORKER_UPDATE_ERROR_MAX_LENGTH - 3] + "..."
 
 
 @router.post("/register", response_model=WorkerRegisterResponse, status_code=status.HTTP_201_CREATED,
@@ -132,7 +141,7 @@ async def heartbeat(
     if body.git_sha is not None:
         worker.git_sha = body.git_sha
     if body.update_last_error:
-        worker.update_last_error = body.update_last_error
+        worker.update_last_error = _worker_update_error(body.update_last_error)
         worker.update_state = "failed"
     elif body.update_state in {"idle", "applying", "complete", "failed"}:
         worker.update_state = body.update_state

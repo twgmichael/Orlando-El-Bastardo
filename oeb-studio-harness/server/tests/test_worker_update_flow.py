@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
+from app.routers.workers import WORKER_UPDATE_ERROR_MAX_LENGTH, _worker_update_error
 from app.schemas.worker import WorkerHeartbeatResponse, WorkerUpdateRequest
 from app.services.worker_updates import worker_can_claim_jobs
 
@@ -50,3 +51,10 @@ def test_worker_heartbeat_response_carries_update_instruction():
     assert response.update_state == "ready_to_update"
     assert response.update_mode == "drain_then_update"
     assert response.update_target_git_sha == "abc1234"
+
+
+def test_worker_update_error_is_truncated_for_storage():
+    error = _worker_update_error("x" * 2000)
+
+    assert len(error) == WORKER_UPDATE_ERROR_MAX_LENGTH
+    assert error.endswith("...")
