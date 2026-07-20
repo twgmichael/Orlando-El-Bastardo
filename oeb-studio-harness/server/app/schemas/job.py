@@ -101,6 +101,7 @@ class JobCompleteRequest(BaseModel):
 class JobFailRequest(BaseModel):
     reason: str
     log_output: Optional[str] = None
+    output_summary: Optional[dict] = None
 
 
 class JobProgressRequest(BaseModel):

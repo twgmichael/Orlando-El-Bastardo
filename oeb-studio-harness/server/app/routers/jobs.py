@@ -466,7 +466,9 @@ async def fail_job(
         attempt.status = "failed"
         attempt.finished_at = now
         attempt.log_output = body.log_output
-        attempt.output_summary = {"reason": body.reason}
+        summary = dict(body.output_summary or {})
+        summary["reason"] = body.reason
+        attempt.output_summary = summary
 
     # Return ordinary idempotent jobs to the queue. Review renders have a strict
     # upload contract, so artifact failures must remain visible as failed jobs.

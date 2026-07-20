@@ -119,6 +119,10 @@ class JobRunner:
                 job_id,
                 reason=result.error or "Adapter reported failure",
                 log_output=result.log_output,
+                output_summary={
+                    "adapter": adapter.name,
+                    **(result.output_summary or {}),
+                },
             )
             return
 

@@ -1,7 +1,15 @@
 from datetime import datetime, timezone
+import sys
+from types import ModuleType
 from types import SimpleNamespace
 
 from app.routers.dashboard import _worker_display_id, templates
+from app.routers.review import templates as review_templates
+
+client_stub = ModuleType("agent.client")
+client_stub.HarnessClient = object
+sys.modules.setdefault("agent.client", client_stub)
+
 from agent import main as worker_main
 
 
@@ -83,6 +91,61 @@ def test_dashboard_worker_table_uses_worker_display_id():
     )
 
     assert "render-pc-01 (203.0.113.42)" in html
+
+
+def test_review_job_renders_failed_attempt_diagnostics():
+    job = SimpleNamespace(
+        id="job-456",
+        title="Scene render JB100-pirate-escape",
+        status="failed",
+        description="Render scene JB100-pirate-escape from tools/JB100-pirate-escape.py",
+        policy="wait_for_preferred_worker",
+        assigned_worker_id="render-pc-01",
+        payload={
+            "job_type": "scene.render",
+            "scene_name": "JB100-pirate-escape",
+            "script_path": "tools/JB100-pirate-escape.py",
+            "quality": "preview",
+        },
+        created_at=datetime(2026, 7, 20, 16, 42, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 7, 20, 18, 42, tzinfo=timezone.utc),
+        llm_response=None,
+    )
+    attempt = SimpleNamespace(
+        attempt_number=1,
+        worker_id="render-pc-01",
+        status="failed",
+        started_at=datetime(2026, 7, 20, 16, 42, tzinfo=timezone.utc),
+        finished_at=datetime(2026, 7, 20, 18, 42, tzinfo=timezone.utc),
+        log_output="full blender output",
+        output_summary={
+            "reason": "Blender exited 2",
+            "exit_code": 2,
+            "frames_rendered": 17,
+            "expected_frames": 276,
+            "latest_frame_path": "/renders/frame_0017.png",
+            "frames_dir": "/renders/frames",
+            "elapsed_seconds": 7201.5,
+            "blender_timeout_seconds": 7200,
+            "blender_timeout_source": "quality_default",
+            "cwd": "{workspace_root}",
+            "command": "blender --background --python tools/JB100-pirate-escape.py",
+            "log_tail": "last useful blender line",
+        },
+    )
+
+    html = review_templates.env.get_template("review_job.html").render(
+        job=job,
+        artifacts=[],
+        attempts=[attempt],
+        latest_progress_frame=None,
+    )
+
+    assert "Failure Diagnostics" in html
+    assert "Blender exited 2" in html
+    assert "17 / 276" in html
+    assert "/renders/frame_0017.png" in html
+    assert "last useful blender line" in html
 
 
 def test_registration_resources_preserves_configured_ip(monkeypatch):

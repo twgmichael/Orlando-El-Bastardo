@@ -125,11 +125,11 @@
 </section>
 
 <section>
-  <h2>Attempts</h2>
-  {% if attempts %}
-  <table>
-    <thead>
-      <tr>
+    <h2>Attempts</h2>
+    {% if attempts %}
+    <table>
+      <thead>
+        <tr>
         <th>#</th>
         <th>Worker</th>
         <th>Status</th>
@@ -149,11 +149,56 @@
         </td>
       </tr>
       {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="empty">No attempts yet.</p>
-  {% endif %}
+      </tbody>
+    </table>
+    {% for attempt in attempts %}
+      {% if attempt.status == "failed" %}
+      <div class="diagnostic-panel">
+        <h3>Failure Diagnostics — Attempt {{ attempt.attempt_number }}</h3>
+        {% set summary = attempt.output_summary or {} %}
+        <dl class="details">
+          {% if summary.get("reason") %}
+          <dt>Reason</dt><dd class="mono small">{{ summary.get("reason") }}</dd>
+          {% endif %}
+          {% if summary.get("exit_code") is not none %}
+          <dt>Exit Code</dt><dd class="mono small">{{ summary.get("exit_code") }}</dd>
+          {% endif %}
+          {% if summary.get("frames_rendered") is not none %}
+          <dt>Frames Rendered</dt><dd class="mono small">{{ summary.get("frames_rendered") }}{% if summary.get("expected_frames") %} / {{ summary.get("expected_frames") }}{% endif %}</dd>
+          {% endif %}
+          {% if summary.get("latest_frame_path") %}
+          <dt>Latest Frame</dt><dd class="mono small">{{ summary.get("latest_frame_path") }}</dd>
+          {% endif %}
+          {% if summary.get("frames_dir") %}
+          <dt>Frames Dir</dt><dd class="mono small">{{ summary.get("frames_dir") }}</dd>
+          {% endif %}
+          {% if summary.get("elapsed_seconds") is not none %}
+          <dt>Elapsed</dt><dd class="mono small">{{ summary.get("elapsed_seconds") }}s</dd>
+          {% endif %}
+          {% if summary.get("blender_timeout_seconds") %}
+          <dt>Timeout</dt><dd class="mono small">{{ summary.get("blender_timeout_seconds") }}s / {{ summary.get("blender_timeout_source", "unknown") }}</dd>
+          {% endif %}
+          {% if summary.get("cwd") %}
+          <dt>CWD</dt><dd class="mono small">{{ summary.get("cwd") }}</dd>
+          {% endif %}
+        </dl>
+        {% if summary.get("command") %}
+        <h4>Command</h4>
+        <pre>{{ summary.get("command") }}</pre>
+        {% endif %}
+        {% if summary.get("log_tail") %}
+        <h4>Log Tail</h4>
+        <pre>{{ summary.get("log_tail") }}</pre>
+        {% elif attempt.log_output %}
+        <h4>Log Output</h4>
+        <pre>{{ attempt.log_output }}</pre>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% else %}
+    <p class="empty">No attempts yet.</p>
+    {% endif %}
 </section>
 
 {% endblock %}
