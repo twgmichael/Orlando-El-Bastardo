@@ -55,6 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--priority", type=int, default=10)
     parser.add_argument("--require-gpu-cycles", action="store_true")
     parser.add_argument("--expected-frames", type=int)
+    parser.add_argument("--blender-timeout-seconds", type=int)
     parser.add_argument("--harness-url", default=os.environ.get("OEB_HARNESS_URL", DEFAULT_STAGING_HARNESS_URL))
     parser.add_argument("--admin-token", default=os.environ.get("API_ADMIN_TOKEN", ""))
     parser.add_argument("--public-base-url", default=os.environ.get("OEB_HARNESS_PUBLIC_BASE_URL", ""))
@@ -80,6 +81,7 @@ def main() -> None:
         "priority": args.priority,
         "require_gpu_cycles": args.require_gpu_cycles,
         "expected_frames": args.expected_frames,
+        "blender_timeout_seconds": args.blender_timeout_seconds,
     }
     body = {key: value for key, value in body.items() if value is not None}
 

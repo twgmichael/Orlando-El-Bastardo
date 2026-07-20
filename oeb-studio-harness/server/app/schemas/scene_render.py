@@ -16,6 +16,7 @@ class SceneRenderRequest(BaseModel):
     require_gpu_cycles: bool = False
     mode: Optional[str] = None
     expected_frames: Optional[int] = Field(default=None, gt=0)
+    blender_timeout_seconds: Optional[int] = Field(default=None, gt=0)
 
     @field_validator("quality")
     @classmethod

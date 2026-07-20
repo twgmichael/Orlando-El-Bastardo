@@ -199,7 +199,8 @@ class BlenderCLIAdapter(Adapter):
         else:
             cmd += ["--render-frame", "1"]
 
-        log_output, returncode = self._run(cmd)
+        timeout_seconds = self._payload_timeout_seconds(payload)
+        log_output, returncode = self._run(cmd, timeout_seconds=timeout_seconds)
         if returncode != 0:
             return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
 
@@ -240,7 +241,8 @@ class BlenderCLIAdapter(Adapter):
             cmd += ["--"] + [self._resolve_path(str(a), job_id=job_id) for a in script_args]
 
         started = time.monotonic()
-        log_output, returncode = self._run(cmd, cwd=cwd)
+        timeout_seconds = self._payload_timeout_seconds(payload)
+        log_output, returncode = self._run(cmd, cwd=cwd, timeout_seconds=timeout_seconds)
         elapsed_seconds = time.monotonic() - started
         if returncode != 0:
             return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
@@ -279,6 +281,8 @@ class BlenderCLIAdapter(Adapter):
                 "frame_count": frame_count,
                 "elapsed_seconds": round(elapsed_seconds, 3),
                 "seconds_per_frame": round(seconds_per_frame, 3) if seconds_per_frame else None,
+                "blender_timeout_seconds": timeout_seconds,
+                "blender_timeout_source": "payload" if payload.get("blender_timeout_seconds") else "adapter_default",
                 "timing": {
                     "elapsed_seconds": round(elapsed_seconds, 3),
                     "frames": frame_count,
@@ -306,12 +310,23 @@ class BlenderCLIAdapter(Adapter):
             output_summary=output_summary,
         )
 
-    def _run(self, cmd: list[str], cwd: str | None = None) -> tuple[str, int]:
-        log.info("Running Blender: %s", shlex.join(cmd))
+    def _payload_timeout_seconds(self, payload: dict) -> int:
+        raw_timeout = payload.get("blender_timeout_seconds")
+        if raw_timeout is None:
+            return self._cfg.timeout_seconds
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self._cfg.timeout_seconds, cwd=cwd)
+            timeout_seconds = int(raw_timeout)
+        except (TypeError, ValueError):
+            return self._cfg.timeout_seconds
+        return timeout_seconds if timeout_seconds > 0 else self._cfg.timeout_seconds
+
+    def _run(self, cmd: list[str], cwd: str | None = None, timeout_seconds: int | None = None) -> tuple[str, int]:
+        effective_timeout = timeout_seconds or self._cfg.timeout_seconds
+        log.info("Running Blender with timeout %ss: %s", effective_timeout, shlex.join(cmd))
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout, cwd=cwd)
             return proc.stdout + proc.stderr, proc.returncode
         except subprocess.TimeoutExpired:
-            return "Blender render timed out", -1
+            return f"Blender render timed out after {effective_timeout}s", -1
         except FileNotFoundError:
             return f"Blender executable not found: {self._cfg.executable!r}", -1

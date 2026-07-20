@@ -33,6 +33,7 @@ async def create_scene_render(
         require_gpu_cycles=body.require_gpu_cycles,
         mode=body.mode,
         expected_frames=body.expected_frames,
+        blender_timeout_seconds=body.blender_timeout_seconds,
         actor_id="admin",
     )
     await db.commit()

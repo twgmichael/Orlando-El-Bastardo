@@ -11,6 +11,11 @@ from app.models.audit import AuditEvent
 from app.models.job import Job, JobAttempt
 
 SCENE_RENDER_JOB_TYPE = "scene.render"
+SCENE_RENDER_TIMEOUT_DEFAULTS = {
+    "draft": 1800,
+    "preview": 7200,
+    "final": 86400,
+}
 
 
 def slug_scene_name(value: str) -> str:
@@ -132,11 +137,13 @@ async def create_scene_render_job(
     require_gpu_cycles: bool = False,
     mode: str | None = None,
     expected_frames: int | None = None,
+    blender_timeout_seconds: int | None = None,
     actor_id: str = "admin",
 ) -> Job:
     normalized_script_path = normalize_scene_script_path(script_path)
     scene_slug = slug_scene_name(scene_name)
     render_mode = mode or ("blocking" if quality == "draft" else "preview")
+    effective_timeout_seconds = blender_timeout_seconds or SCENE_RENDER_TIMEOUT_DEFAULTS[quality]
     required_capabilities = ["blender.final_render" if quality == "final" else "blender.preview_render"]
     if require_gpu_cycles:
         required_capabilities.append("gpu.cycles_render")
@@ -184,6 +191,8 @@ async def create_scene_render_job(
         "require_gpu_cycles": require_gpu_cycles,
         "initial_progress": initial_progress,
         "progress_frame_interval": 24,
+        "blender_timeout_seconds": effective_timeout_seconds,
+        "blender_timeout_source": "request" if blender_timeout_seconds else "quality_default",
     }
     if width is not None:
         payload["width"] = width
@@ -215,6 +224,8 @@ async def create_scene_render_job(
             "script_path": normalized_script_path,
             "quality": quality,
             "require_gpu_cycles": require_gpu_cycles,
+            "blender_timeout_seconds": effective_timeout_seconds,
+            "blender_timeout_source": payload["blender_timeout_source"],
         },
     ))
     return job
