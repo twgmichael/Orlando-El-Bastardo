@@ -17,6 +17,7 @@ from app.models.job import Job
 
 REVIEW_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action")
 ANGLE_VIEWS = ("front", "back", "left", "right", "top", "bottom")
+RENDER_QUALITIES = {"draft", "preview", "final"}
 
 
 @dataclass(frozen=True)
@@ -185,6 +186,9 @@ async def create_asset_review_render_job(
     require_gpu_cycles: bool = False,
     actor_id: str = "admin",
 ) -> Job:
+    if quality not in RENDER_QUALITIES:
+        raise HTTPException(status_code=422, detail="quality must be draft, preview, or final")
+
     view_list = list(views)
     required_capabilities = ["blender.final_render" if quality == "final" else "blender.preview_render"]
     if require_gpu_cycles:

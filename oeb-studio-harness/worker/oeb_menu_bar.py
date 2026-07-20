@@ -106,7 +106,8 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
     from agent.registry import AdapterRegistry
     from agent.adapters.ollama import OllamaAdapter
     from agent.adapters.blender import BlenderCLIAdapter
-    from agent.main import _load_token, _save_token
+    from agent.main import _git_sha, _load_token, _registration_resources, _save_token
+    from agent.updater import WorkerUpdateExecutor
 
     async def run():
         cfg = load_config(config_path)
@@ -116,7 +117,9 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
         if token := os.environ.get("OEB_ENROLLMENT_TOKEN"):
             cfg.enrollment_token = token
 
+        registration_resources = _registration_resources(cfg.resources, cfg.harness_url)
         worker_token = _load_token(cfg)
+        git_sha = _git_sha()
         client = HarnessClient(
             base_url=cfg.harness_url,
             worker_token=worker_token,
@@ -133,8 +136,9 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
                         worker_id=cfg.worker_id,
                         platform=cfg.platform,
                         agent_version=cfg.agent_version,
+                        git_sha=git_sha or None,
                         capabilities=cfg.capabilities,
-                        resources=cfg.resources,
+                        resources=registration_resources,
                     )
                     client.set_worker_token(worker_token)
                     _save_token(cfg, worker_token)
@@ -157,13 +161,39 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
             workspace_root=cfg.workspace_root,
         ))
 
+        updater = WorkerUpdateExecutor(cfg)
+        update_task: asyncio.Task | None = None
+
+        async def _run_update(target_git_sha: str | None) -> None:
+            nonlocal git_sha
+            heartbeat.set_update_state("applying")
+            result = await updater.apply(target_git_sha=target_git_sha)
+            if result.git_sha:
+                git_sha = result.git_sha
+                heartbeat.set_git_sha(git_sha)
+            if result.success:
+                heartbeat.set_update_state("complete")
+                app.notify_status(f"Updated {cfg.worker_id}")
+            else:
+                heartbeat.set_update_state("failed", result.error or "Worker update failed")
+                app.notify_error(f"update failed: {result.error or 'unknown error'}")
+
+        def _on_update_instruction(instruction: dict) -> None:
+            nonlocal update_task
+            if updater.is_running or (update_task and not update_task.done()):
+                return
+            target_git_sha = instruction.get("update_target_git_sha")
+            update_task = asyncio.create_task(_run_update(target_git_sha))
+
         heartbeat = HeartbeatLoop(
             client,
             cfg.worker_id,
             cfg.heartbeat_interval_seconds,
+            git_sha=git_sha or None,
             on_busy=app.notify_busy,
             on_idle=app.notify_idle,
             on_error=app.notify_error,
+            on_update_instruction=_on_update_instruction,
         )
         runner = JobRunner(client, heartbeat, registry, cfg)
 
@@ -184,9 +214,10 @@ def main() -> None:
         sys.exit(1)
 
     config_path = sys.argv[1]
-    from agent.config import normalize_harness_url
+    from agent.config import load_config, normalize_harness_url
 
-    harness_url = normalize_harness_url(os.environ.get("OEB_HARNESS_URL", "http://localhost"))
+    cfg = load_config(config_path)
+    harness_url = normalize_harness_url(os.environ.get("OEB_HARNESS_URL", cfg.harness_url or "http://localhost"))
 
     app = OEBWorkerApp(harness_url=harness_url)
 

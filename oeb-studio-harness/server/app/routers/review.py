@@ -163,8 +163,8 @@ async def submit_review_asset_render(asset_id: str, request: Request, db: AsyncS
     form = await request.form()
     asset = await resolve_review_asset(db, asset_id=asset_id)
     quality = str(form.get("quality") or "preview")
-    if quality not in {"preview", "final"}:
-        raise HTTPException(status_code=422, detail="quality must be preview or final")
+    if quality not in {"draft", "preview", "final"}:
+        raise HTTPException(status_code=422, detail="quality must be draft, preview, or final")
     try:
         priority = int(form.get("priority") or 10)
     except ValueError as exc:

@@ -40,6 +40,7 @@
         <td>
           <form class="inline-render-form" method="post" action="/review/assets/{{ asset.asset_id }}/renders">
             <select name="quality" aria-label="Quality">
+              <option value="draft">draft</option>
               <option value="preview" selected>preview</option>
               <option value="final">final</option>
             </select>

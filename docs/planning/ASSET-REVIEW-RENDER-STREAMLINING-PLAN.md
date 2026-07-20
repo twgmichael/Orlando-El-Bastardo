@@ -7,6 +7,10 @@ Ventradi Cruiser, JB5k, Ellipso Flyer, and JB100 all resolve through the review
 asset path. JB100 final-quality GPU review renders completed on `render-pc-01`,
 and the live gallery supports action-plus-angle lightbox navigation.
 
+Updated: 2026-07-20. Asset review renders now use the same user-facing render
+quality language as scene renders: `draft`, `preview`, and `final`. See
+`HARNESS-RENDER-QUALITY-LANGUAGE.md`.
+
 ## Context
 
 During the first existing-model review render runs for Ventradi Cruiser, JB5k,
@@ -102,6 +106,8 @@ gallery URL with no follow-up repair.
      "quality": "preview"
    }
    ```
+
+   The `quality` field may be `draft`, `preview`, or `final`.
 
 4. The harness routes the job only to a Blender worker that passes review-render
    preflight checks.
