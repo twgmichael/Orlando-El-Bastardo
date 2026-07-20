@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-19T03:45:00-04:00
+updated: 2026-07-20T10:40:00-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -16,6 +16,22 @@ wiki_order: 20
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-07-20 — Conversational asset intake cleanup
+
+Completed two conversation-first studio loop TODOs:
+
+- Deterministic canonical-id slugging now preserves meaningful differentiators
+  such as `capital_letter_v`, uses local rules instead of extra LLM calls, and
+  keeps `job_id` as the unique run key.
+- Strong asset/location orientation is done for the current primitive and
+  conversational asset path: prompts, primitive builder placement, manifest
+  metadata, canonical camera definitions, and tests use the OEB standard
+  `+X` front, `-X` rear/back, `-Y` left, `+Y` right, `+Z` up, `-Z` down. Caveat:
+  this is complete for the current primitive/conversation path; future asset
+  families or exporters may still need their own transform-adaptation checks.
 
 ---
 

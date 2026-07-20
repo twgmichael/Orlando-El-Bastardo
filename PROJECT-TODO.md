@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-19T03:45:00-04:00
+updated: 2026-07-20T10:40:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -58,17 +58,6 @@ visible shot.
 
 1. **Conversation-to-job intake** — build the smallest usable chat entry point
    where a creative request becomes a structured harness job payload.
-   - [ ] Improve deterministic canonical-id slugging — preserve meaningful
-     differentiators like `capital_letter_v`, keep `job_id` as the unique run
-     key, and avoid extra LLM calls (see
-     `docs/planning/CANONICAL-ID-SLUG-PLAN.md`).
-   - [ ] Finish strong asset/location orientation — enforce the OEB standard
-     end-to-end: `+X` front, `-X` rear/back, `-Y` left, `+Y` right, `+Z` up,
-     `-Z` down. The canonical planning doc is
-     `docs/planning/ASSET-LOCATION-ORIENTATION-STANDARD.md`; do not create a
-     duplicate `ASSET-ORIENTATION-STANDARD.md`. Current implementation work
-     has started in the primitive builder, scene-plan prompts, manifest
-     metadata, canonical camera definitions, and Docker pytest coverage.
    - [ ] Simplify and consolidate schema discussion — unify `docs/SCHEMA.md`,
      `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`, and
      `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` so the canonical production
@@ -173,6 +162,9 @@ GPU-accelerated review-render jobs completed end-to-end.
   heartbeat, reported git SHA, capabilities, Blender executable, and GPU health
   before returning the worker to the eligible pool. See
   `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [ ] Show worker IP address on Studio Harness index — display workers as
+  `worker-id (ip-address)` so operators can quickly identify and troubleshoot
+  render machines from the dashboard.
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth

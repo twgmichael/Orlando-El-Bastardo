@@ -7,14 +7,14 @@ from app.schemas.worker import WorkerHeartbeatResponse, WorkerUpdateRequest
 from app.services.worker_updates import worker_can_claim_jobs
 
 
-@pytest.mark.parametrize("state", ["idle", "complete", "failed", None])
+@pytest.mark.parametrize("state", ["idle", "complete", None])
 def test_worker_can_claim_jobs_when_not_draining(state):
     worker = SimpleNamespace(update_state=state)
 
     assert worker_can_claim_jobs(worker)
 
 
-@pytest.mark.parametrize("state", ["draining", "ready_to_update", "applying", "force_requested"])
+@pytest.mark.parametrize("state", ["draining", "ready_to_update", "applying", "force_requested", "failed"])
 def test_worker_cannot_claim_jobs_during_update_states(state):
     worker = SimpleNamespace(update_state=state)
 
