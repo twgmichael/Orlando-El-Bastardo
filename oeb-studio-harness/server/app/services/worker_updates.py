@@ -5,7 +5,13 @@ from app.models.job import Job
 from app.models.worker import Worker
 
 
-WORKER_UPDATE_EXCLUDED_STATES = {"draining", "ready_to_update", "applying", "force_requested"}
+WORKER_UPDATE_EXCLUDED_STATES = {
+    "draining",
+    "ready_to_update",
+    "applying",
+    "force_requested",
+    "failed",
+}
 
 
 def worker_can_claim_jobs(worker: Worker | None) -> bool:

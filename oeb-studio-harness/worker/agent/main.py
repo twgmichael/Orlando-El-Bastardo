@@ -2,9 +2,11 @@ import asyncio
 import logging
 import os
 import signal
+import socket
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from agent.config import load_config, normalize_harness_url
 from agent.client import HarnessClient
@@ -13,6 +15,7 @@ from agent.job_runner import JobRunner
 from agent.registry import AdapterRegistry
 from agent.adapters.ollama import OllamaAdapter
 from agent.adapters.blender import BlenderCLIAdapter
+from agent.updater import WorkerUpdateExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +62,35 @@ def _git_sha() -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _detect_primary_ip(harness_url: str) -> str:
+    parsed = urlparse(normalize_harness_url(harness_url))
+    host = parsed.hostname or "8.8.8.8"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect((host, port))
+            ip_address = sock.getsockname()[0]
+            if ip_address and not ip_address.startswith("127."):
+                return ip_address
+    except OSError:
+        pass
+
+    try:
+        ip_address = socket.gethostbyname(socket.gethostname())
+        return "" if ip_address.startswith("127.") else ip_address
+    except OSError:
+        return ""
+
+
+def _registration_resources(resources: dict, harness_url: str) -> dict:
+    enriched = dict(resources or {})
+    enriched.setdefault("hostname", socket.gethostname())
+    if not any(enriched.get(key) for key in ("ip_address", "primary_ip", "host_ip")):
+        if ip_address := _detect_primary_ip(harness_url):
+            enriched["ip_address"] = ip_address
+    return enriched
+
+
 async def run(config_path: str) -> None:
     cfg = load_config(config_path)
 
@@ -72,6 +104,7 @@ async def run(config_path: str) -> None:
         log.error("harness_url not set (config or OEB_HARNESS_URL env var)")
         sys.exit(1)
 
+    registration_resources = _registration_resources(cfg.resources, cfg.harness_url)
     worker_token = _load_token(cfg)
     git_sha = _git_sha()
     client = HarnessClient(
@@ -94,7 +127,7 @@ async def run(config_path: str) -> None:
                     agent_version=cfg.agent_version,
                     git_sha=git_sha or None,
                     capabilities=cfg.capabilities,
-                    resources=cfg.resources,
+                    resources=registration_resources,
                 )
                 client.set_worker_token(worker_token)
                 _save_token(cfg, worker_token)
@@ -117,11 +150,38 @@ async def run(config_path: str) -> None:
         workspace_root=cfg.workspace_root,
     ))
 
+    updater = WorkerUpdateExecutor(cfg)
+    update_task: asyncio.Task | None = None
+
+    async def _run_update(target_git_sha: str | None) -> None:
+        nonlocal git_sha
+        heartbeat.set_update_state("applying")
+        result = await updater.apply(target_git_sha=target_git_sha)
+        if result.git_sha:
+            git_sha = result.git_sha
+            heartbeat.set_git_sha(git_sha)
+        if result.success:
+            heartbeat.set_update_state("complete")
+            log.info("Worker update complete: %s", result.message)
+        else:
+            heartbeat.set_update_state("failed", result.error or "Worker update failed")
+            log.error("Worker update failed: %s", result.error)
+
+    def _on_update_instruction(instruction: dict) -> None:
+        nonlocal update_task
+        if updater.is_running or (update_task and not update_task.done()):
+            return
+        target_git_sha = instruction.get("update_target_git_sha")
+        update_state = instruction.get("update_state")
+        log.info("Starting worker self-update from state=%s target=%s", update_state, target_git_sha)
+        update_task = asyncio.create_task(_run_update(target_git_sha))
+
     heartbeat = HeartbeatLoop(
         client,
         cfg.worker_id,
         cfg.heartbeat_interval_seconds,
         git_sha=git_sha or None,
+        on_update_instruction=_on_update_instruction,
     )
     runner = JobRunner(client, heartbeat, registry, cfg)
 
@@ -146,9 +206,12 @@ async def run(config_path: str) -> None:
 
     await stop_event.wait()
 
-    for task in (hb_task, run_task):
+    tasks = [hb_task, run_task]
+    if update_task and not update_task.done():
+        tasks.append(update_task)
+    for task in tasks:
         task.cancel()
-    await asyncio.gather(hb_task, run_task, return_exceptions=True)
+    await asyncio.gather(*tasks, return_exceptions=True)
     log.info("Worker %s shut down cleanly", cfg.worker_id)
 
 

@@ -1,20 +1,18 @@
-"""Add worker update state
+"""add worker update state
 
 Revision ID: 0006_worker_update_state
 Revises: 0005
 Create Date: 2026-07-19
-
 """
-from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
 
 revision: str = "0006_worker_update_state"
-down_revision: Union[str, None] = "0005"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str = "0005"
+branch_labels = None
+depends_on = None
 
 
 def upgrade() -> None:

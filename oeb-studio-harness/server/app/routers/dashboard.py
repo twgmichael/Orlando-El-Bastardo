@@ -26,7 +26,18 @@ def _job_review_url(job: Job) -> str:
     return f"/review/jobs/{job.id}"
 
 
+def _worker_display_id(worker: Worker) -> str:
+    resources = worker.resources or {}
+    ip_address = (
+        resources.get("ip_address")
+        or resources.get("primary_ip")
+        or resources.get("host_ip")
+    )
+    return f"{worker.id} ({ip_address})" if ip_address else worker.id
+
+
 templates.env.globals["job_review_url"] = _job_review_url
+templates.env.globals["worker_display_id"] = _worker_display_id
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -66,6 +77,13 @@ async def dashboard(
         .order_by(active_status_order, Job.priority.desc(), Job.created_at.asc())
     )
     active_jobs = active_result.scalars().all()
+
+    failed_result = await db.execute(
+        select(Job)
+        .where(Job.status == "failed", Job.updated_at >= recent_cutoff)
+        .order_by(Job.updated_at.desc())
+    )
+    failed_jobs = failed_result.scalars().all()
 
     if completed_page == 0:
         completed_query = (
@@ -116,6 +134,7 @@ async def dashboard(
         "workers": workers,
         "caps_by_worker": caps_by_worker,
         "active_jobs": active_jobs,
+        "failed_jobs": failed_jobs,
         "completed_jobs": completed_jobs,
         "completed_label": completed_label,
         "completed_page": completed_page,
