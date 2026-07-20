@@ -164,6 +164,15 @@ GPU-accelerated review-render jobs completed end-to-end.
   use the payload timeout over the adapter default so final animation renders
   are not killed by the worker-wide 2-hour cap. See
   `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [x] Add active-job-safe worker update control plane — workers report agent
+  version and git SHA, support drain mode, queue harness-triggered updates
+  until idle, and block draining/updating workers from claiming new jobs. See
+  `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [ ] Add worker self-update executor and post-update probes — once a worker
+  reaches `ready_to_update`, run the approved code sync/restart path and verify
+  heartbeat, reported git SHA, capabilities, Blender executable, and GPU health
+  before returning the worker to the eligible pool. See
+  `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth

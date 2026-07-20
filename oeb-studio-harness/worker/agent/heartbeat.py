@@ -12,6 +12,7 @@ class HeartbeatLoop:
         client: HarnessClient,
         worker_id: str,
         interval: int = 20,
+        git_sha: str | None = None,
         on_busy: Optional[Callable[[str, str], None]] = None,
         on_idle: Optional[Callable[[], None]] = None,
         on_error: Optional[Callable[[str], None]] = None,
@@ -19,6 +20,7 @@ class HeartbeatLoop:
         self._client = client
         self._worker_id = worker_id
         self._interval = interval
+        self._git_sha = git_sha
         self._current_job_id: Optional[str] = None
         self._current_job_title: str = ""
         self._status: str = "online"
@@ -50,11 +52,20 @@ class HeartbeatLoop:
         failures = 0
         while True:
             try:
-                await self._client.heartbeat(
+                response = await self._client.heartbeat(
                     worker_id=self._worker_id,
                     status=self._status,
                     current_job_id=self._current_job_id,
+                    git_sha=self._git_sha,
                 )
+                update_state = (response or {}).get("update_state")
+                if update_state and update_state != "idle":
+                    log.info(
+                        "Worker update state from harness: %s target=%s mode=%s",
+                        update_state,
+                        (response or {}).get("update_target_git_sha"),
+                        (response or {}).get("update_mode"),
+                    )
                 if failures:
                     self._notify_recovered()
                 failures = 0
