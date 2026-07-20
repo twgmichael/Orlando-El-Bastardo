@@ -45,6 +45,10 @@ class WorkerConfig(BaseModel):
     artifact_public_base_url: str = ""  # public harness base URL for review links; defaults to harness_url
     output_root: str = ""  # base path for render/file output; substituted into {output_root} in job script_args
     workspace_root: str = "."  # base path for repo-relative job scripts; substituted into {workspace_root}
+    update_commands: list[str | list[str]] = Field(default_factory=list)
+    update_probe_commands: list[str | list[str]] = Field(default_factory=list)
+    update_command_timeout_seconds: int = 900
+    update_probe_timeout_seconds: int = 30
 
 
 _ENV_DEFAULT_PATTERN = re.compile(r"\$\{([A-Z0-9_]+):-([^}]+)\}")

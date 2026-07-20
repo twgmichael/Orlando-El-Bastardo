@@ -33,6 +33,15 @@ artifact_public_base_url: ${OEB_ARTIFACT_PUBLIC_BASE_URL:-http://oeb-studio.dock
 output_root: ${OEB_OUTPUT_ROOT:-/mnt/oeb-project/OEB-PRODUCTION}
 workspace_root: ${OEB_WORKSPACE_ROOT:-../../..}
 
+# Optional harness-triggered self-update path. Commands run from workspace_root
+# with {target_git_sha} and {workspace_root} substitutions available.
+# update_commands:
+#   - ["git", "fetch", "--all", "--prune"]
+#   - ["git", "checkout", "{target_git_sha}"]
+#   - ["sudo", "systemctl", "restart", "oeb-studio-worker"]
+# update_probe_commands:
+#   - ["git", "status", "--short"]
+
 adapters:
   ollama:
     base_url: http://localhost:11434
