@@ -40,6 +40,7 @@ class HarnessClient:
         worker_id: str,
         platform: str,
         agent_version: str,
+        git_sha: str | None,
         capabilities: list[str],
         resources: dict,
     ) -> str:
@@ -50,6 +51,7 @@ class HarnessClient:
                     "worker_id": worker_id,
                     "platform": platform,
                     "agent_version": agent_version,
+                    "git_sha": git_sha,
                     "capabilities": capabilities,
                     "resources": resources,
                 },
@@ -64,6 +66,9 @@ class HarnessClient:
         worker_id: str,
         status: str,
         current_job_id: Optional[str] = None,
+        git_sha: Optional[str] = None,
+        update_state: Optional[str] = None,
+        update_last_error: Optional[str] = None,
         cpu_load_percent: Optional[float] = None,
         gpu_load_percent: Optional[float] = None,
         free_ram_gb: Optional[float] = None,
@@ -75,6 +80,9 @@ class HarnessClient:
                 json={
                     "status": status,
                     "current_job_id": current_job_id,
+                    "git_sha": git_sha,
+                    "update_state": update_state,
+                    "update_last_error": update_last_error,
                     "cpu_load_percent": cpu_load_percent,
                     "gpu_load_percent": gpu_load_percent,
                     "free_ram_gb": free_ram_gb,
@@ -84,6 +92,7 @@ class HarnessClient:
                 timeout=10,
             )
             r.raise_for_status()
+            return r.json()
 
     async def get_eligible_jobs(self) -> list[dict]:
         async with httpx.AsyncClient(verify=False) as c:

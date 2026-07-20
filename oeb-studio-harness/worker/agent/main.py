@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,6 +45,20 @@ def _save_token(cfg, token: str) -> None:
     log.info("Worker token saved to %s", p)
 
 
+def _git_sha() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return ""
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 async def run(config_path: str) -> None:
     cfg = load_config(config_path)
 
@@ -58,6 +73,7 @@ async def run(config_path: str) -> None:
         sys.exit(1)
 
     worker_token = _load_token(cfg)
+    git_sha = _git_sha()
     client = HarnessClient(
         base_url=cfg.harness_url,
         worker_token=worker_token,
@@ -76,6 +92,7 @@ async def run(config_path: str) -> None:
                     worker_id=cfg.worker_id,
                     platform=cfg.platform,
                     agent_version=cfg.agent_version,
+                    git_sha=git_sha or None,
                     capabilities=cfg.capabilities,
                     resources=cfg.resources,
                 )
@@ -100,7 +117,12 @@ async def run(config_path: str) -> None:
         workspace_root=cfg.workspace_root,
     ))
 
-    heartbeat = HeartbeatLoop(client, cfg.worker_id, cfg.heartbeat_interval_seconds)
+    heartbeat = HeartbeatLoop(
+        client,
+        cfg.worker_id,
+        cfg.heartbeat_interval_seconds,
+        git_sha=git_sha or None,
+    )
     runner = JobRunner(client, heartbeat, registry, cfg)
 
     log.info(

@@ -25,7 +25,10 @@
         <th>ID</th>
         <th>Platform</th>
         <th>Status</th>
+        <th>Update</th>
+        <th>Version</th>
         <th>Capabilities</th>
+        <th>Current Job</th>
         <th>Last Heartbeat</th>
       </tr>
     </thead>
@@ -35,11 +38,24 @@
         <td class="mono">{{ w.id }}</td>
         <td>{{ w.platform }}</td>
         <td><span class="badge status-{{ w.status }}">{{ w.status }}</span></td>
+        <td class="mono small">
+          {{ w.update_state or "idle" }}
+          {% if w.update_target_git_sha %}
+          <br>target {{ w.update_target_git_sha }}
+          {% endif %}
+        </td>
+        <td class="mono small">
+          {{ w.agent_version }}
+          {% if w.git_sha %}
+          <br>{{ w.git_sha }}
+          {% endif %}
+        </td>
         <td class="caps">
           {% for cap in caps_by_worker.get(w.id, []) %}
           <span class="cap">{{ cap }}</span>
           {% endfor %}
         </td>
+        <td class="mono small">{{ w.current_job_id or "—" }}</td>
         <td class="mono">
           {% if w.last_heartbeat_at %}
             {{ w.last_heartbeat_at.strftime("%H:%M:%S") }}
