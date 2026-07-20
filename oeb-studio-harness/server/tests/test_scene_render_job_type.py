@@ -67,6 +67,8 @@ async def test_scene_render_final_job_prefers_requested_worker_and_gpu():
         job.payload["output_path"],
     ]
     assert job.payload["expected_frames"] == 360
+    assert job.payload["blender_timeout_seconds"] == 86400
+    assert job.payload["blender_timeout_source"] == "quality_default"
     assert job.payload["initial_progress"]["estimate_source"] == "insufficient_data"
     assert job.payload["initial_progress"]["message"].startswith("No prior preview timing")
     assert not job.is_idempotent
@@ -95,6 +97,7 @@ async def test_scene_render_preview_runs_anywhere():
     assert job.preferred_worker_id is None
     assert job.payload["artifact_type"] == "scene.preview_render"
     assert job.payload["mode"] == "blocking"
+    assert job.payload["blender_timeout_seconds"] == 7200
 
 
 @pytest.mark.anyio
@@ -118,6 +121,7 @@ async def test_scene_render_draft_uses_preview_worker_and_blocking_mode():
     assert job.required_capabilities == ["blender.preview_render"]
     assert job.payload["mode"] == "blocking"
     assert job.payload["artifact_type"] == "scene.draft_render"
+    assert job.payload["blender_timeout_seconds"] == 1800
     assert job.payload["initial_progress"] == {
         "phase": "queued",
         "quality": "draft",
@@ -127,3 +131,25 @@ async def test_scene_render_draft_uses_preview_worker_and_blocking_mode():
         "eta_seconds": None,
         "estimate_source": "not_needed",
     }
+
+
+@pytest.mark.anyio
+async def test_scene_render_preserves_requested_blender_timeout():
+    async def flush():
+        return None
+
+    db = SimpleNamespace(
+        add=lambda value: None,
+        flush=flush,
+    )
+
+    job = await scene_render.create_scene_render_job(
+        db,
+        scene_name="Overnight Final",
+        script_path="tools/overnight_final.py",
+        quality="final",
+        blender_timeout_seconds=172800,
+    )
+
+    assert job.payload["blender_timeout_seconds"] == 172800
+    assert job.payload["blender_timeout_source"] == "request"

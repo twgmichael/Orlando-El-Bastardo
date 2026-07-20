@@ -54,8 +54,8 @@ def test_blender_adapter_routes_asset_review_render(tmp_path, monkeypatch):
         workspace_root=str(workspace),
     )
 
-    def fake_run(cmd, cwd=None):
-        commands.append((cmd, cwd))
+    def fake_run(cmd, cwd=None, timeout_seconds=None):
+        commands.append((cmd, cwd, timeout_seconds))
         out_dir = output_root / "oeb-studio-harness" / "review-renders" / "job-123"
         out_dir.mkdir(parents=True, exist_ok=True)
         for view in ("front", "action"):
@@ -105,8 +105,8 @@ def test_blender_adapter_routes_scene_render(tmp_path, monkeypatch):
         workspace_root=str(workspace),
     )
 
-    def fake_run(cmd, cwd=None):
-        commands.append((cmd, cwd))
+    def fake_run(cmd, cwd=None, timeout_seconds=None):
+        commands.append((cmd, cwd, timeout_seconds))
         out_dir = output_root / "oeb-studio-harness" / "scene-renders" / "job-456"
         frames_dir = out_dir / "jb100-pirate-escape_final_frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
@@ -136,6 +136,7 @@ def test_blender_adapter_routes_scene_render(tmp_path, monkeypatch):
             ],
             "artifact_type": "scene.final_render",
             "expected_frames": 3,
+            "blender_timeout_seconds": 172800,
         },
     })
 
@@ -143,12 +144,63 @@ def test_blender_adapter_routes_scene_render(tmp_path, monkeypatch):
     assert [path.name for path in result.artifacts] == ["jb100-pirate-escape_final.mp4"]
     assert "--factory-startup" in commands[0][0]
     assert commands[0][1] == str(workspace)
+    assert commands[0][2] == 172800
     assert result.artifact_type == "scene.final_render"
     assert result.output_summary["job_type"] == "scene.render"
     assert result.output_summary["scene_name"] == "JB100-pirate-escape"
     assert result.output_summary["frame_count"] == 3
     assert result.output_summary["timing"]["frames"] == 3
     assert result.output_summary["progress"]["phase"] == "complete"
+    assert result.output_summary["blender_timeout_seconds"] == 172800
+    assert result.output_summary["blender_timeout_source"] == "payload"
+
+
+def test_blender_adapter_falls_back_to_config_timeout_when_payload_omits_timeout(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tools_dir = workspace / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "scene.py").write_text("# test script\n", encoding="utf-8")
+    output_root = tmp_path / "output"
+    commands = []
+
+    adapter = BlenderCLIAdapter(
+        BlenderAdapterConfig(executable="blender", timeout_seconds=321),
+        output_root=str(output_root),
+        workspace_root=str(workspace),
+    )
+
+    def fake_run(cmd, cwd=None, timeout_seconds=None):
+        commands.append((cmd, cwd, timeout_seconds))
+        out_dir = output_root / "oeb-studio-harness" / "scene-renders" / "job-457"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "scene_preview.mp4").write_bytes(b"mp4")
+        return "ok", 0
+
+    monkeypatch.setattr(adapter, "_run", fake_run)
+
+    result = adapter.execute({
+        "id": "job-457",
+        "required_capabilities": ["blender.preview_render"],
+        "payload": {
+            "job_type": "scene.render",
+            "scene_name": "No Timeout Payload",
+            "script_path": "tools/scene.py",
+            "script_file": "{workspace_root}/tools/scene.py",
+            "cwd": "{workspace_root}",
+            "quality": "preview",
+            "output_path": "{output_root}/oeb-studio-harness/scene-renders/{job_id}/scene_preview.mp4",
+            "artifact_paths": [
+                "{output_root}/oeb-studio-harness/scene-renders/{job_id}/scene_preview.mp4",
+            ],
+            "artifact_type": "scene.preview_render",
+        },
+    })
+
+    assert result.success
+    assert commands[0][2] == 321
+    assert result.output_summary["blender_timeout_seconds"] == 321
+    assert result.output_summary["blender_timeout_source"] == "adapter_default"
 
 
 def test_job_runner_reports_scene_render_progress(tmp_path):

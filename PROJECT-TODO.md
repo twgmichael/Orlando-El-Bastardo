@@ -156,6 +156,14 @@ GPU-accelerated review-render jobs completed end-to-end.
   stale-frame warnings, and intermittent `scene.progress_frame` uploads for
   long renders. See
   `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [ ] Add failed jobs section to harness dashboard — show failed jobs from the
+  last 24 hours so render failures remain visible from the main index instead
+  of disappearing into the status count.
+- [x] Add per-job Blender timeout for scene renders — support
+  `blender_timeout_seconds`, set quality-aware defaults, and have the worker
+  use the payload timeout over the adapter default so final animation renders
+  are not killed by the worker-wide 2-hour cap. See
+  `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
