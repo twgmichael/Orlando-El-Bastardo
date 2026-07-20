@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-20T10:40:00-04:00
+updated: 2026-07-20T17:05:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -152,6 +152,10 @@ GPU-accelerated review-render jobs completed end-to-end.
 - [ ] Add failed jobs section to harness dashboard — show failed jobs from the
   last 24 hours so render failures remain visible from the main index instead
   of disappearing into the status count.
+- [ ] Force GPU rendering for GPU-capable Blender scene and asset renders —
+  add the shared Blender device helper, worker `OEB_FORCE_CYCLES_GPU` contract,
+  pre-render GPU probes, render-device metadata, and fail-fast CPU fallback
+  checks. See `docs/planning/GPU-FORCED-BLENDER-RENDER-PLAN.md`.
 - [x] Add per-job Blender timeout for scene renders — support
   `blender_timeout_seconds`, set quality-aware defaults, and have the worker
   use the payload timeout over the adapter default so final animation renders
