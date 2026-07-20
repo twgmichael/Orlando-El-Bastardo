@@ -1,7 +1,12 @@
 import sys
+from types import ModuleType
 from pathlib import Path
 
 import pytest
+
+client_stub = ModuleType("agent.client")
+client_stub.HarnessClient = object
+sys.modules.setdefault("agent.client", client_stub)
 
 from agent.config import WorkerConfig
 from agent.heartbeat import HeartbeatLoop

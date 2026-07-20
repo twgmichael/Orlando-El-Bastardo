@@ -36,9 +36,12 @@ workspace_root: ${OEB_WORKSPACE_ROOT:-../../..}
 # Optional harness-triggered self-update path. Commands run from workspace_root
 # with {target_git_sha} and {workspace_root} substitutions available.
 # update_commands:
-#   - ["git", "fetch", "--all", "--prune"]
-#   - ["git", "checkout", "{target_git_sha}"]
-#   - ["sudo", "systemctl", "restart", "oeb-studio-worker"]
+#   - [
+#       "oeb-studio-harness/worker/scripts/apply-worker-update.sh",
+#       "--target", "{target_git_sha}",
+#       "--service", "oeb-worker-gaming-pc.service",
+#       "--restart-service"
+#     ]
 # update_probe_commands:
 #   - ["git", "status", "--short"]
 
