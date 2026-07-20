@@ -74,6 +74,12 @@ def import_asset(path: Path) -> None:
         raise ValueError(f"Unsupported asset format: {ext}")
 
 
+def clear_imported_animation() -> None:
+    for obj in bpy.context.scene.objects:
+        if obj.animation_data:
+            obj.animation_data_clear()
+
+
 def mesh_objects() -> list:
     return [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
 
@@ -83,17 +89,21 @@ def scene_bounds() -> tuple[Vector, Vector]:
     if not meshes:
         raise ValueError("Imported asset has no mesh objects")
 
+    depsgraph = bpy.context.evaluated_depsgraph_get()
     mins = Vector((math.inf, math.inf, math.inf))
     maxs = Vector((-math.inf, -math.inf, -math.inf))
     for obj in meshes:
-        for corner in obj.bound_box:
-            world = obj.matrix_world @ Vector(corner)
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        for vertex in mesh.vertices:
+            world = evaluated.matrix_world @ vertex.co
             mins.x = min(mins.x, world.x)
             mins.y = min(mins.y, world.y)
             mins.z = min(mins.z, world.z)
             maxs.x = max(maxs.x, world.x)
             maxs.y = max(maxs.y, world.y)
             maxs.z = max(maxs.z, world.z)
+        evaluated.to_mesh_clear()
     return mins, maxs
 
 
@@ -164,7 +174,7 @@ def look_at(obj, target: Vector, up: Vector | None = None) -> None:
 
 
 def ortho_scale_for_view(view: str, dims: Vector) -> float:
-    padding = 1.22
+    padding = 1.70
     if view in {"front", "back"}:
         span = max(dims.y, dims.z)
     elif view in {"left", "right"}:
@@ -186,9 +196,9 @@ def render_view(view: str, center: Vector, dims: Vector, radius: float, output_p
     cam = make_camera(f"review_camera_{view}")
     if view == "action":
         cam.data.type = "PERSP"
-        cam.data.lens = 58
-        cam.location = center + Vector((radius * 1.45, -radius * 1.9, radius * 0.82))
-        look_at(cam, center + Vector((0, 0, dims.z * 0.08)))
+        cam.data.lens = 50
+        cam.location = center + Vector((radius * 1.8, -radius * 2.35, radius * 1.0))
+        look_at(cam, center + Vector((0, 0, dims.z * 0.03)))
     else:
         axis, _up = ORTHO_VIEWS[view]
         axis_vec = Vector(axis)
@@ -218,6 +228,8 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     clear_scene()
     import_asset(asset_path)
+    clear_imported_animation()
+    bpy.context.scene.frame_set(1)
     mins, maxs = scene_bounds()
     center = (mins + maxs) * 0.5
     dims = maxs - mins

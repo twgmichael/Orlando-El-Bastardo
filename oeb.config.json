@@ -8,14 +8,16 @@
       "kind": "set"
     },
     "char_hero_v1": {
-      "file": "characters/oeb_dressed_characters.glb",
+      "file": "characters/char_hero_v1.glb",
       "node": "char_hero_v1",
-      "kind": "character"
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1"
     },
     "char_bartender_v1": {
-      "file": "characters/oeb_dressed_characters.glb",
+      "file": "characters/char_bartender_v1.glb",
       "node": "char_bartender_v1",
-      "kind": "character"
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1"
     },
     "prop_bar_counter_A": {
       "file": "sets/bar_scene_scifi.glb",
