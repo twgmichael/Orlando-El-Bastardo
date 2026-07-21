@@ -44,7 +44,19 @@ else
   fi
 fi
 
-python -m compileall -q oeb-studio-harness/worker/agent
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [[ -z "$PYTHON_BIN" && -x "oeb-studio-harness/worker/.venv/bin/python" ]]; then
+  PYTHON_BIN="oeb-studio-harness/worker/.venv/bin/python"
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="$(command -v python3 || command -v python || true)"
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "No Python interpreter found for compile check" >&2
+  exit 127
+fi
+
+"$PYTHON_BIN" -m compileall -q oeb-studio-harness/worker/agent
 
 if [[ "$RESTART_SERVICE" == "1" ]]; then
   if [[ -z "$SERVICE_NAME" ]]; then
