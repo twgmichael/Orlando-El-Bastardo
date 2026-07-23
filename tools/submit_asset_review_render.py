@@ -59,6 +59,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int)
     parser.add_argument("--samples", type=int)
     parser.add_argument("--output-path")
+    parser.add_argument(
+        "--require-gpu-cycles",
+        action="store_true",
+        help="Require the gpu.cycles_render capability so CPU-only Blender workers cannot claim the job.",
+    )
     parser.add_argument("--harness-url", default=os.environ.get("OEB_HARNESS_URL", DEFAULT_STAGING_HARNESS_URL))
     parser.add_argument(
         "--staging",
@@ -98,6 +103,7 @@ def main() -> None:
         "height": args.height,
         "samples": args.samples,
         "output_path": args.output_path,
+        "require_gpu_cycles": args.require_gpu_cycles,
     }
     body = {key: value for key, value in body.items() if value is not None}
 

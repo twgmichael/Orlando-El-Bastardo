@@ -5,6 +5,12 @@ from app.models.job import Job, JobAttempt, JobLease
 from app.models.artifact import Artifact
 from app.models.asset import Asset
 from app.models.audit import AuditEvent
+from app.models.studio_chat import (
+    StudioChatBuildEvent,
+    StudioChatMessageRecord,
+    StudioChatThread,
+    StudioChatTraceEvent,
+)
 
 __all__ = [
     "ApiToken",
@@ -17,4 +23,8 @@ __all__ = [
     "Artifact",
     "Asset",
     "AuditEvent",
+    "StudioChatBuildEvent",
+    "StudioChatMessageRecord",
+    "StudioChatThread",
+    "StudioChatTraceEvent",
 ]

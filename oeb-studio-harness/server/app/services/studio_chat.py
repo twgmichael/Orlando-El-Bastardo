@@ -23,7 +23,8 @@ deterministic workers. The local coordinate frame is +X front, -X rear/back,
 -Y left, +Y right, +Z up, -Z down. Emit small buildable primitive jobs. Ask a
 clarifying question when the request is vague. Escalate ambiguous art direction,
 reference interpretation, or visual judgment. Do not write Blender code, submit
-jobs, invent unavailable assets, or add scene shells for standalone assets.
+jobs, invent unavailable assets, or add scene shells for standalone assets. Cone
+tips point +Z by default; "pointing down" is rotation [3.141592654, 0, 0].
 When review renders are requested and no custom view list is supplied, use
 review_views: ["top", "bottom", "left", "right", "front", "rear", "action"].
 Use all seven views exactly, including "action". Missing "action" is invalid.
@@ -60,7 +61,8 @@ name the exact endpoint, log, setting, or job identifier to check next."""
 PRIMITIVE_SHAPE_RESOLVER_PROMPT = """You are the OEB primitive shape resolver.
 Convert the user's creative request and assistant draft JSON into a strict
 PrimitiveRegistry v0.1 build spec. Use only registry primitive types, material
-names, transforms, and numeric params. Do not write Blender code or invent APIs.
+names, transforms, and numeric params. Cone tips point +Z by default; "pointing
+down" is rotation [3.141592654, 0, 0]. Do not write Blender code or invent APIs.
 When a request is vague, set needs_clarification true with one short question.
 When art direction is ambiguous, set escalation_reason. Return only JSON with:
 version, needs_clarification, clarification_question, escalation_reason,
@@ -328,6 +330,16 @@ PRIMITIVE_ALIASES = {
 }
 PRIMITIVE_TYPES = set(PRIMITIVE_ALIASES)
 CANONICAL_PRIMITIVE_TYPES = set(PRIMITIVE_REGISTRY_V01["primitive_types"])
+DIRECTIONAL_PRIMITIVE_TYPES = {"cone"}
+PRIMITIVE_DIRECTION_ROTATIONS = {
+    "up": [0.0, 0.0, 0.0],
+    "down": [3.141592654, 0.0, 0.0],
+    "front": [0.0, 1.570796327, 0.0],
+    "rear": [0.0, -1.570796327, 0.0],
+    "back": [0.0, -1.570796327, 0.0],
+    "left": [1.570796327, 0.0, 0.0],
+    "right": [-1.570796327, 0.0, 0.0],
+}
 MATERIAL_COLOR_WORDS = {
     "blue",
     "red",
@@ -473,6 +485,58 @@ def _normalize_primitive_params(primitive_type: str, params: Any) -> dict[str, A
     return normalized
 
 
+def _orientation_direction_near_primitive(text: str, primitive_type: str, ordinal: int = 0) -> str | None:
+    aliases = [
+        alias
+        for alias, canonical_type in PRIMITIVE_ALIASES.items()
+        if canonical_type == primitive_type
+    ]
+    alias_pattern = "|".join(re.escape(alias).replace("_", r"[\s_-]+") for alias in sorted(aliases, key=len, reverse=True))
+    if not alias_pattern:
+        return None
+    mentions = list(re.finditer(rf"\b(?:{alias_pattern})s?\b", text.lower()))
+    if not mentions:
+        return None
+    mention = mentions[min(ordinal, len(mentions) - 1)]
+    nearby = text.lower()[max(0, mention.start() - 80): mention.end() + 120]
+    if re.search(r"\b(pointing|facing|oriented|orient|tip|apex)\s+(?:straight\s+)?down\b", nearby):
+        return "down"
+    if re.search(r"\b(pointing|facing|oriented|orient|tip|apex)\s+(?:straight\s+)?up\b", nearby):
+        return "up"
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?front\b", nearby):
+        return "front"
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?(?:rear|back)\b", nearby):
+        return "back"
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?left\b", nearby):
+        return "left"
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?right\b", nearby):
+        return "right"
+    return None
+
+
+def _apply_explicit_orientation_hints(primitives: list[dict[str, Any]], creative_request: str) -> list[dict[str, Any]]:
+    type_counts: dict[str, int] = {}
+    for primitive in primitives:
+        primitive_type = primitive["type"]
+        ordinal = type_counts.get(primitive_type, 0)
+        type_counts[primitive_type] = ordinal + 1
+        if primitive_type not in DIRECTIONAL_PRIMITIVE_TYPES:
+            continue
+        direction = _orientation_direction_near_primitive(creative_request, primitive_type, ordinal)
+        if direction is None:
+            continue
+        primitive["transform"] = {
+            **primitive["transform"],
+            "rotation": PRIMITIVE_DIRECTION_ROTATIONS[direction].copy(),
+        }
+        primitive["orientation"] = {
+            "source": "creative_request",
+            "direction": "rear" if direction == "back" else direction,
+            "applied_rotation": primitive["transform"]["rotation"],
+        }
+    return primitives
+
+
 def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("primitive resolver output must be an object")
@@ -501,6 +565,8 @@ def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> d
             },
             "params": _normalize_primitive_params(primitive_type, primitive.get("params")),
         })
+
+    normalized_primitives = _apply_explicit_orientation_hints(normalized_primitives, creative_request)
 
     primary_type = normalized_primitives[0]["type"]
     primary_material = normalized_primitives[0]["material"]
@@ -634,6 +700,9 @@ def _primitive_mentions_from_text(text: str) -> list[dict[str, Any]]:
         mentions.append({
             "type": primitive_type,
             "color": color or "neutral",
+            "direction": _orientation_direction_near_primitive(text, primitive_type, len([
+                mention for mention in mentions if mention["type"] == primitive_type
+            ])),
             "start": match.start(),
         })
     return mentions
@@ -825,12 +894,24 @@ def resolve_primitive_spec(
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str):
             validation_error = "resolver response did not include message.content"
-            attempts.append({"attempt": attempt + 1, "error": validation_error, "raw": raw_response})
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "error": validation_error,
+                "raw": raw_response,
+            })
             continue
         try:
             parsed = parse_assistant_json(content)
             resolved = validate_primitive_spec(parsed, creative_request)
-            attempts.append({"attempt": attempt + 1, "parsed": parsed, "resolved": resolved})
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "raw": raw_response,
+                "content": content,
+                "parsed": parsed,
+                "resolved": resolved,
+            })
             return {
                 "ok": True,
                 "source": "ollama_resolver",
@@ -841,7 +922,13 @@ def resolve_primitive_spec(
         except ValueError as exc:
             validation_error = str(exc)
             previous_response = {"content": content}
-            attempts.append({"attempt": attempt + 1, "error": validation_error, "content": content})
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "raw": raw_response,
+                "error": validation_error,
+                "content": content,
+            })
 
     return {
         "ok": False,
@@ -870,6 +957,7 @@ def _spec_from_resolved_primitive(
                 "shape": {"primary_form": primitive["type"]},
                 "materials": {"primary": primitive.get("material", "neutral")},
                 "source_phrases": [creative_request],
+                "orientation": primitive.get("orientation", {}),
             }
             for primitive in resolved["primitives"]
         ],

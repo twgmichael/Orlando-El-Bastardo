@@ -2,7 +2,9 @@ from app.schemas.studio_chat import (
     STANDARD_REVIEW_VIEWS,
     StudioChatMessage,
     StudioChatOllamaRequest,
+    StudioChatThreadCreateRequest,
 )
+from app.routers.studio_chat import _thread_title_from_prompt
 from app.services import studio_chat
 from app.services.studio_chat import (
     build_spec_from_assistant_response,
@@ -80,6 +82,18 @@ def test_review_views_normalize_back_to_rear():
     )
 
     assert body.review_views == ["front", "rear", "action"]
+
+
+def test_thread_create_request_normalizes_review_views():
+    body = StudioChatThreadCreateRequest(review_views=["front", "back", "action", "front"])
+
+    assert body.review_views == ["front", "rear", "action"]
+
+
+def test_thread_title_from_prompt_is_short_and_readable():
+    assert _thread_title_from_prompt("Build a yellow cone with a white sphere on top.") == (
+        "Build a yellow cone with a white sphere"
+    )
 
 
 def test_parse_assistant_json_accepts_fenced_json():
@@ -188,6 +202,59 @@ def test_malformed_multi_primitive_response_falls_back_to_compound_primitives():
     assert spec.primitives[1].transform.location[2] > spec.primitives[0].transform.location[2]
 
 
+def test_explicit_cone_pointing_down_overrides_zero_rotation():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build a yellow cone pointing down with a white sphere on top.",
+        """```json
+{
+  "action": "build",
+  "build_job": {
+    "type": "cone",
+    "color": "#FFFF00", // Yellow
+    "position": [0, 0, -2],
+    "scale": [1, 1, 1]
+  },
+  "build_job": {
+    "type": "sphere",
+    "color": "#FFFFFF", // White
+    "position": [0, 0.5, -2],
+    "scale": [1, 1, 1]
+  }
+}
+```""",
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert resolver["resolved"]["primitives"][0]["orientation"]["direction"] == "down"
+    assert spec.primitives[0].type == "cone"
+    assert spec.primitives[0].transform.rotation == [3.141592654, 0.0, 0.0]
+    assert spec.primitives[1].type == "sphere"
+    assert spec.primitives[1].transform.rotation == [0.0, 0.0, 0.0]
+
+
+def test_resolver_output_cone_pointing_down_is_normalized_even_when_model_misses_rotation():
+    resolved = validate_primitive_spec(
+        {
+            "asset_kind": "prop",
+            "canonical_id": "prop_cone_down_A",
+            "name": "Cone Down",
+            "primitives": [
+                {
+                    "id": "cone_1",
+                    "type": "cone",
+                    "material": "yellow",
+                    "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                    "params": {"depth": 1},
+                }
+            ],
+        },
+        "Build a yellow cone pointing down.",
+    )
+
+    assert resolved["primitives"][0]["transform"]["rotation"] == [3.141592654, 0.0, 0.0]
+    assert resolved["primitives"][0]["orientation"]["source"] == "creative_request"
+
+
 def test_resolve_primitive_spec_retries_once_after_invalid_output(monkeypatch):
     calls = []
 
@@ -213,6 +280,11 @@ def test_resolve_primitive_spec_retries_once_after_invalid_output(monkeypatch):
     assert resolved["ok"] is True
     assert len(calls) == 2
     assert "validation_error" in calls[1]["messages"][1]["content"]
+    assert resolved["attempts"][0]["request"] == calls[0]
+    assert resolved["attempts"][0]["raw"]["message"]["content"] == '{"version":"0.1","primitives":[{"type":"imaginary"}]}'
+    assert resolved["attempts"][1]["request"] == calls[1]
+    assert resolved["attempts"][1]["raw"]["done"] is True
+    assert resolved["attempts"][1]["content"].startswith('{"version":"0.1"')
     assert resolved["resolved"]["primitives"][0]["type"] == "cone"
 
 

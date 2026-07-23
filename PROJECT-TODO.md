@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-20T17:05:00-04:00
+updated: 2026-07-23T16:45:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -65,6 +65,21 @@ visible shot.
      are clearly layered. Include structured detail pass-through for fields
      such as `shape`, `required_features`, `source_phrases`, `materials`, and
      `style_details`.
+   - [ ] Add complete `oeb-studio-chat` trace ledger — keep the normal
+     thread/message/build-event tables optimized for chat UI rehydration, but
+     add append-only `studio_chat_trace_events` for full audit/reference
+     memory. Record every boundary crossing: user prompt saved, Ollama request
+     sent, Ollama response received, assistant text saved, JSON parse attempts
+     and failures, resolver prompts/responses/retries, validation errors,
+     accepted normalized specs, generated harness job payloads, job creation
+     responses, build/review status transitions, review artifacts, final inline
+     card snapshots, and exports. Add trace endpoints for thread, message, and
+     job review:
+     `GET /api/v1/studio-chat/threads/{thread_id}/trace`,
+     `GET /api/v1/studio-chat/messages/{message_id}/trace`, and
+     `GET /api/v1/studio-chat/jobs/{job_id}/trace`. Use one shared
+     `record_studio_chat_trace(...)` helper so the ledger stays flexible while
+     remaining boring and auditable.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.

@@ -306,6 +306,69 @@ button:disabled {
   gap: .85rem;
 }
 
+.new-thread-button,
+.thread-button {
+  width: 100%;
+  text-align: left;
+}
+
+.new-thread-button {
+  border-color: rgba(59,130,246,.55);
+  color: var(--accent);
+}
+
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  min-height: 0;
+  max-height: 34vh;
+  overflow: auto;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid rgba(42, 46, 54, .8);
+}
+
+.thread-button {
+  min-height: 34px;
+  padding: .45rem .55rem;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-button.is-active {
+  border-color: var(--accent);
+  background: rgba(59,130,246,.16);
+  color: #bfdbfe;
+}
+
+.settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+}
+
+.settings-panel summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.settings-panel summary:hover {
+  color: var(--accent);
+}
+
+.settings-panel[open] {
+  border-top: 1px solid rgba(42, 46, 54, .8);
+  padding-top: .75rem;
+}
+
+.settings-panel[open] > * + * {
+  margin-top: .85rem;
+}
+
 .control-row {
   display: flex;
   flex-direction: column;
@@ -408,6 +471,11 @@ button:disabled {
   flex-direction: column;
   gap: .3rem;
   color: var(--text);
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  cursor: zoom-in;
 }
 
 .chat-render-thumb img {
@@ -417,6 +485,12 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: rgba(12, 15, 18, .72);
+}
+
+.chat-render-thumb:hover img,
+.chat-render-thumb:focus-visible img {
+  border-color: var(--accent);
+  filter: brightness(1.08);
 }
 
 .chat-render-thumb span {
@@ -696,9 +770,42 @@ button:disabled {
   background: var(--surface);
 }
 
+.chat-lightbox {
+  z-index: 80;
+}
+
+.chat-lightbox-panel {
+  width: min(92vw, 1180px);
+  align-items: stretch;
+}
+
+.chat-lightbox .lightbox-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.chat-lightbox-title {
+  min-width: 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chat-lightbox-panel img {
+  width: 100%;
+  max-height: min(78vh, 820px);
+  object-fit: contain;
+}
+
 @media (max-width: 800px) {
   .review-grid { grid-template-columns: 1fr; }
   .review-hero { flex-direction: column; }
   .breadcrumbs { padding-inline: 1rem; overflow-x: auto; }
   .lightbox { padding: 1rem; }
+  .chat-lightbox .lightbox-toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .chat-lightbox-title {
+    grid-column: 1 / -1;
+    order: -1;
+  }
 }
