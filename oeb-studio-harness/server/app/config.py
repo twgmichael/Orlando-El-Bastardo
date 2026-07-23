@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     oeb_config_path: str = Field(default="../../oeb.config.json", alias="OEB_CONFIG_PATH")
     studio_chat_harness_url: str = Field(default="", alias="OEB_STUDIO_CHAT_HARNESS_URL")
     studio_chat_admin_token: str = Field(default="", alias="OEB_STUDIO_CHAT_ADMIN_TOKEN")
+    ollama_base_url: str = Field(default="", alias="OEB_OLLAMA_BASE_URL")
     studio_chat_ollama_url: str = Field(default="", alias="OEB_STUDIO_CHAT_OLLAMA_URL")
     studio_chat_model: str = Field(default="oeb-qwen2.5-3b", alias="OEB_STUDIO_CHAT_MODEL")
     timezone: str = "America/New_York"
@@ -46,6 +47,8 @@ class Settings(BaseSettings):
         if self.environment not in VALID_ENVIRONMENTS:
             allowed = ", ".join(sorted(VALID_ENVIRONMENTS))
             raise ValueError(f"OEB_ENVIRONMENT must be one of: {allowed}")
+        if not self.studio_chat_ollama_url:
+            self.studio_chat_ollama_url = self.ollama_base_url or "http://localhost:11434"
         if not self.studio_chat_ollama_url:
             raise ValueError("OEB_STUDIO_CHAT_OLLAMA_URL is required")
         if self.environment != "local":

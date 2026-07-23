@@ -1,8 +1,105 @@
 import json
 import re
+from typing import Any
 import urllib.request
 
 from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
+from app.schemas.studio_chat import (
+    StudioChatMessage,
+    StudioChatOllamaRequest,
+    StudioChatOllamaResponse,
+    StudioChatPreset,
+)
+
+
+GENERAL_LOCAL_CHAT_PROMPT = """You are the local OEB studio chat assistant.
+Answer directly and plainly. Do not claim to have submitted jobs, edited files,
+created assets, or run tools. When production work is requested, explain the
+smallest next buildable step or ask one concise clarifying question."""
+
+ASSET_BUILDER_TRANSLATOR_PROMPT = """You are the OEB local asset-builder translator.
+Translate approved creative asset requests into strict JSON specs for later
+deterministic workers. The local coordinate frame is +X front, -X rear/back,
+-Y left, +Y right, +Z up, -Z down. Emit small buildable primitive jobs. Ask a
+clarifying question when the request is vague. Escalate ambiguous art direction,
+reference interpretation, or visual judgment. Do not write Blender code, submit
+jobs, invent unavailable assets, or add scene shells for standalone assets.
+When review renders are requested and no custom view list is supplied, use
+review_views: ["top", "bottom", "left", "right", "front", "rear", "action"].
+Use all seven views exactly, including "action". Missing "action" is invalid.
+Use semantic view names only; do not invent axis/side pairs.
+Return only JSON with: action, confidence, clarification_question,
+escalation_reason, build_job."""
+
+ASSET_EDIT_TRANSLATOR_PROMPT = """You are the OEB local asset-edit translator.
+Translate conversational edits into strict JSON deltas against named assets and
+parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down. Prefer
+target_part, operation, semantic_direction, axis, amount, units, material_delta,
+requested_review_views, and escalation_reason. Ask one clarifying question if
+the target part, direction, or amount is unclear. Do not mutate files or submit
+worker jobs. For standard review renders, use requested_review_views:
+["top", "bottom", "left", "right", "front", "rear", "action"]. Use all seven
+views exactly, including "action". Return only JSON."""
+
+SCENE_PLAN_EXTRACTOR_PROMPT = """You are the OEB local scene-plan extractor.
+Convert creative scene or location requests into strict JSON scene plans with
+objects, structured shape/material/style details, source phrases, and spatial
+relationships. Preserve every meaningful modifier. Use OEB directions:
++X front, -X rear/back, -Y left, +Y right, +Z up, -Z down. Prefer small
+buildable primitive scenes and ask for clarification when relationships or
+required objects are unclear. For asset review renders, use review_views:
+["top", "bottom", "left", "right", "front", "rear", "action"]. Use all seven
+views exactly, including "action". Return only JSON."""
+
+HARNESS_DEBUG_HELPER_PROMPT = """You are the OEB harness-debug helper.
+Help inspect local harness, Ollama, worker, artifact, and review-page behavior.
+Be precise about likely failure boundaries. Do not imply that you can run shell
+commands or mutate the harness from this chat. When more evidence is needed,
+name the exact endpoint, log, setting, or job identifier to check next."""
+
+
+STUDIO_CHAT_PRESETS = [
+    StudioChatPreset(
+        id="general_local_chat",
+        label="General Local Chat",
+        description="Direct local-model chat with no production side effects.",
+        system_prompt=GENERAL_LOCAL_CHAT_PROMPT,
+        temperature=0.4,
+        max_tokens=2048,
+    ),
+    StudioChatPreset(
+        id="asset_builder_translator",
+        label="Asset Builder",
+        description="Translate creative asset requests into constrained primitive-builder specs.",
+        system_prompt=ASSET_BUILDER_TRANSLATOR_PROMPT,
+        temperature=0.2,
+        max_tokens=2048,
+    ),
+    StudioChatPreset(
+        id="asset_edit_translator",
+        label="Asset Edit",
+        description="Translate follow-up asset edits into constrained deltas.",
+        system_prompt=ASSET_EDIT_TRANSLATOR_PROMPT,
+        temperature=0.2,
+        max_tokens=2048,
+    ),
+    StudioChatPreset(
+        id="scene_plan_extractor",
+        label="Scene Plan",
+        description="Extract structured primitive scene plans from creative requests.",
+        system_prompt=SCENE_PLAN_EXTRACTOR_PROMPT,
+        temperature=0.2,
+        max_tokens=3072,
+    ),
+    StudioChatPreset(
+        id="harness_debug_helper",
+        label="Harness Debug",
+        description="Reason about local harness and worker issues without side effects.",
+        system_prompt=HARNESS_DEBUG_HELPER_PROMPT,
+        temperature=0.1,
+        max_tokens=2048,
+    ),
+]
 
 FIGHTER_COMPONENTS = [
     "wedge nose",
@@ -71,6 +168,76 @@ def post_json(url: str, payload: dict, token: str | None = None, timeout: int = 
     )
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def get_json(url: str, timeout: int = 10) -> dict:
+    req = urllib.request.Request(url, headers={"Accept": "application/json"}, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def studio_chat_presets() -> list[StudioChatPreset]:
+    return STUDIO_CHAT_PRESETS
+
+
+def list_ollama_models(ollama_url: str, timeout: int = 10) -> list[str]:
+    payload = get_json(f"{ollama_url.rstrip('/')}/api/tags", timeout=timeout)
+    return sorted(
+        model["name"]
+        for model in payload.get("models", [])
+        if isinstance(model, dict) and isinstance(model.get("name"), str)
+    )
+
+
+def ollama_chat_payload(body: StudioChatOllamaRequest) -> dict[str, Any]:
+    messages: list[StudioChatMessage] = []
+    system_prompt = body.system_prompt.strip()
+    if body.review_views:
+        review_views_json = json.dumps(body.review_views)
+        system_prompt = "\n\n".join([
+            system_prompt,
+            (
+                "OEB review-view shortcut is active. When the user asks for review "
+                f"renders, standard review renders, or the preferred view set, emit "
+                f'exactly "review_views": {review_views_json}. Use semantic view '
+                "names only. Include every listed view; omitting any listed view, "
+                'especially "action", is invalid. Do not emit axis/side pairs; '
+                "deterministic harness renderers own camera math."
+            ),
+        ]).strip()
+    if system_prompt:
+        messages.append(StudioChatMessage(role="system", content=system_prompt))
+    messages.extend(body.messages)
+    return {
+        "model": body.model,
+        "messages": [message.model_dump() for message in messages],
+        "stream": False,
+        "options": {
+            "temperature": body.temperature,
+            "num_predict": body.max_tokens,
+        },
+    }
+
+
+def chat_with_ollama(
+    ollama_url: str,
+    body: StudioChatOllamaRequest,
+    timeout: int = 120,
+) -> StudioChatOllamaResponse:
+    payload = ollama_chat_payload(body)
+    raw_response = post_json(f"{ollama_url.rstrip('/')}/api/chat", payload, timeout=timeout)
+    message = raw_response.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+        raise ValueError("Ollama response did not include message.content")
+    return StudioChatOllamaResponse(
+        model=str(raw_response.get("model") or body.model),
+        message={"role": "assistant", "content": message["content"]},
+        done=bool(raw_response.get("done")),
+        raw={
+            "request": payload,
+            "response": raw_response,
+        },
+    )
 
 
 def extract_json(text: str) -> dict:

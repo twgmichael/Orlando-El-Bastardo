@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}OEB Studio Chat{% endblock %}
+
+{% block content %}
+<section class="chat-shell" data-chat-root>
+  <aside class="chat-controls">
+    <div class="control-row">
+      <label for="model-select">Model</label>
+      <select id="model-select"></select>
+    </div>
+    <div class="control-row">
+      <label for="preset-select">Role</label>
+      <select id="preset-select"></select>
+    </div>
+    <div class="control-row">
+      <label for="temperature-input">Temperature</label>
+      <input id="temperature-input" type="number" min="0" max="2" step="0.1" value="0.2">
+    </div>
+    <div class="control-row">
+      <label for="max-tokens-input">Max Tokens</label>
+      <input id="max-tokens-input" type="number" min="1" max="32768" step="128" value="2048">
+    </div>
+    <div class="control-row">
+      <label for="review-views-select">Review Views</label>
+      <select id="review-views-select">
+        <option value="standard" selected>Standard asset views</option>
+        <option value="none">None</option>
+      </select>
+    </div>
+    <div class="review-view-chip-list" aria-label="Selected review views">
+      <span class="cap">top</span>
+      <span class="cap">bottom</span>
+      <span class="cap">left</span>
+      <span class="cap">right</span>
+      <span class="cap">front</span>
+      <span class="cap">rear</span>
+      <span class="cap">action</span>
+    </div>
+    <label class="toggle-row">
+      <input id="debug-toggle" type="checkbox" checked>
+      <span>Debug view</span>
+    </label>
+    <label class="toggle-row">
+      <input id="stream-toggle" type="checkbox" disabled>
+      <span>Streaming</span>
+    </label>
+    <div class="control-row">
+      <label for="system-prompt">System Prompt</label>
+      <textarea id="system-prompt" rows="14"></textarea>
+    </div>
+    <div class="chat-actions">
+      <button type="button" id="clear-chat">Clear</button>
+      <button type="button" id="export-json">Export JSON</button>
+      <button type="button" id="export-md">Export Markdown</button>
+    </div>
+  </aside>
+
+  <div class="chat-workspace">
+    <div id="chat-status" class="chat-status">Loading local studio chat...</div>
+    <div id="chat-error" class="chat-error" hidden></div>
+    <div id="transcript" class="transcript" aria-live="polite"></div>
+    <form id="composer" class="composer">
+      <textarea id="message-input" rows="3" placeholder="Message the local OEB model"></textarea>
+      <button type="submit" id="send-message">Send</button>
+    </form>
+  </div>
+
+  <aside id="debug-panel" class="debug-panel">
+    <h2>Raw Debug</h2>
+    <pre id="debug-output">{}</pre>
+  </aside>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/studio_chat.js"></script>
+{% endblock %}

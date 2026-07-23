@@ -24,6 +24,15 @@ def test_local_allows_local_docker_ollama_url_and_placeholder_secrets():
     assert settings.studio_chat_ollama_url == "http://host.docker.internal:11434"
 
 
+def test_local_accepts_lightweight_ollama_base_url_alias():
+    settings = Settings(**settings_kwargs(
+        OEB_STUDIO_CHAT_OLLAMA_URL="",
+        OEB_OLLAMA_BASE_URL="http://localhost:11434",
+    ))
+
+    assert settings.studio_chat_ollama_url == "http://localhost:11434"
+
+
 def test_staging_rejects_local_docker_ollama_url():
     with pytest.raises(ValidationError, match="local-only host"):
         Settings(**settings_kwargs(

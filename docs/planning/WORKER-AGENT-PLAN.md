@@ -1,7 +1,7 @@
 ---
 title: Worker Agent Plan
 created: 2026-07-14T18:00:35-04:00
-updated: 2026-07-19T03:45:00-04:00
+updated: 2026-07-21T00:00:00-04:00
 doc_type: plan
 production_area: operations
 department: pipeline
@@ -10,14 +10,15 @@ canonical: true
 canonical_for: worker_agent
 wiki: true
 wiki_group: Planning
-wiki_page: Worker-Agent-Plan
+wiki_page: Worker-Agent-Plan-Development
 wiki_order: 90
 ---
 # Worker agent plan — cross-platform harness workers + macOS menu bar
 
-Recorded 2026-07-14. Updated 2026-07-19 (`render-pc-01` GPU worker proven,
-Mac mini renamed to `render-mac-01`, and the first render-PC monitor kiosk
-installed).
+Recorded 2026-07-14. Updated 2026-07-21 (worker install/update plan revised:
+Mac-like packaged installer, built-in updater, no chatbot SSH access to
+personal render Macs, and `render-pc-01` remains the only full-SSH development
+test worker).
 Status: **RUNNING** — control plane at `http://oeb-studio.docker-pi`;
 `render-mac-01` worker registered; pipeline render scripts dispatched end-to-end;
 renders writing to OEB-PROJECT external drive. The worker must be launched
@@ -448,6 +449,135 @@ automatically; the explicit dark variants exist if manual control is needed.
 - `on_busy(job_id, job_title)` → swaps to busy icon, updates status line
 - `on_idle()` → swaps to idle icon, resets status line
 
+## Worker Deployment And Update Plan
+
+Updated 2026-07-21 after reviewing the current install/update path for adding
+a MacBook Pro and MacBook Air as `render-mac` workers, while also keeping the
+same operational model viable for future `render-pc` Windows/Linux devices.
+
+### Discovery
+
+The current worker is functionally cross-platform, but deployment is still
+developer-shaped:
+
+- A worker install assumes a repo checkout, manually created `.venv`, edited
+  YAML config, local environment variables, and direct command-line launch.
+- macOS has a useful menu bar app, but it still runs from the Python checkout
+  instead of behaving like a normal installed Mac app.
+- The harness already has an active-job-safe update control plane: workers
+  report version/git SHA, can drain before update, and are kept out of the
+  eligible pool while update states are active.
+- The worker already has a self-update executor with post-update probes, but
+  its command model is intentionally broad.
+- The checked-in `apply-worker-update.sh` path uses `git fetch` and
+  `git reset --hard`, optionally followed by service restart. That is useful
+  for a development test worker, but too sharp as the default maintenance path
+  for personal Macs or routine render PCs.
+
+The main problem is not the worker runtime. The problem is the operator
+experience and trust boundary: adding laptops should not require giving
+chatbots or routine automation direct SSH access to those machines.
+
+### Research And Discussion
+
+The safer shape is a pull-based worker application:
+
+- The harness coordinates intent: drain, update requested, target version,
+  health expectations, and dashboard status.
+- The worker device owns local privileged actions: install, verify, restart,
+  and rollback.
+- Updates are release artifacts, not arbitrary remote shell commands.
+- SSH/Ansible remains reserved for initial infrastructure provisioning,
+  OS/package/GPU driver work, and emergency repair.
+
+Platform expectations:
+
+- macOS should feel like a normal Mac app: signed/notarized `.pkg` or `.dmg`,
+  `OEB Worker.app`, menu bar status, LaunchAgent startup, Keychain-backed
+  secrets, and an in-app setup/update surface.
+- Windows should use a signed installer (`.msi` or `.exe`), a Windows Service
+  or tray app, Credential Manager for secrets, and the same updater protocol.
+- Linux render PCs should use a package (`.deb` first, `.rpm` later if needed),
+  a systemd service, journald logs, and the existing kiosk/status surface.
+
+The current git-based update path remains valuable, but only as a development
+backend for `render-pc-01`. It lets us test, break, inspect, and recover one
+device with full SSH access without normalizing that power across the fleet.
+
+### Recommendations
+
+1. Package the worker as an installed application, not a checked-out Python
+   script.
+2. Add a first-run setup wizard:
+   - harness URL
+   - enrollment code
+   - worker profile (`render-mac`, `render-pc`, `preview-only`,
+     `final-render`, etc.)
+   - durable output/artifact location
+   - local probes for Blender, storage, GPU where applicable, and harness
+     reachability
+3. Store secrets in the platform-native secret store:
+   - macOS Keychain
+   - Windows Credential Manager
+   - Linux keyring or root-readable service credential file
+4. Replace routine arbitrary update commands with signed update bundles:
+   - manifest
+   - version/build id
+   - platform/architecture
+   - worker class
+   - checksums
+   - signature
+5. Keep the harness update route, but make it an update coordinator:
+   - request drain/update
+   - expose state
+   - verify heartbeat, version, capabilities, Blender, and GPU health
+   - keep failed/updating workers out of the claimable pool
+6. Support two channels:
+   - `stable` for MacBook Pro, MacBook Air, Mac mini, and future routine PCs
+   - `dev` for `render-pc-01` only, where git/SSH/manual reset paths are
+     allowed
+
+### Decisions
+
+- Do not grant chatbots direct SSH access to the MacBook Pro, MacBook Air, or
+  future routine render PCs.
+- `render-pc-01` is the only full-SSH development test worker where mistakes,
+  manual git resets, and service-level experiments are allowed.
+- Normal worker updates will be pull-based from the worker device, after
+  harness-coordinated drain.
+- Routine stable-channel updates will use signed release bundles rather than
+  arbitrary configured shell commands.
+- The existing command-based `WorkerUpdateExecutor` and
+  `apply-worker-update.sh` path may remain as the dev-channel backend until
+  the packaged updater replaces it.
+- macOS packaging is the first implementation target because the immediate
+  new devices are a MacBook Pro and MacBook Air.
+- The installation process must validate durable output storage and refuse
+  unsafe temporary output roots, preserving the existing worker safety rule.
+
+### Implementation Sequence
+
+1. Add worker packaging metadata (`pyproject.toml`) so the worker can install
+   cleanly without manual `requirements.txt`/`PYTHONPATH` handling.
+2. Split runtime paths into platform-appropriate config, data, log, and secret
+   locations.
+3. Add a small worker supervisor responsible for start/stop/restart/update,
+   separate from job execution.
+4. Build the macOS packaged app:
+   - bundled Python/runtime dependencies
+   - `OEB Worker.app`
+   - LaunchAgent
+   - setup wizard
+   - menu bar status
+   - update UI/status
+5. Add signed update bundle generation and verification.
+6. Extend heartbeat/update reporting with installed package version, update
+   channel, installer state, and last probe summary.
+7. Port the same installer/updater contract to Linux systemd packages and
+   Windows service/tray packages.
+8. Keep `render-pc-01` on the dev git/SSH update path until the stable package
+   flow has passed real render-worker smoke tests.
+
 ## Worker role naming
 
 Use boring, role-based names for managed worker devices. The hostname,
@@ -495,6 +625,7 @@ recording what the box is in human terms.
 |---|---|---|---|
 | Mac mini (M-series) | `render-mac-01` | llm.*, vision.*, blender.preview | Running |
 | MacBook Air (Intel) | `render-mac-02` | blender.preview, blender.command_line | Planned |
+| MacBook Pro | `render-mac-03` | blender.preview, blender.command_line, possible llm.* after thermal/model test | Planned; wait for packaged Mac installer path |
 | First PC tower | `render-pc-01` | blender.final_render, gpu.cycles_render, gpu.texture_bake, llm.* | Running Linux worker; GTX 1660 SUPER verified |
 | Additional PC tower | `render-pc-02` | blender.final_render, gpu.cycles_render, gpu.texture_bake | Planned Linux worker |
 
@@ -510,6 +641,8 @@ recording what the box is in human terms.
 - [x] PostgreSQL port 5432 exposed for direct SQL client access — DONE 2026-07-14
 - [x] Staging docker-pi chat-to-render smoke test — DONE 2026-07-16
 - [ ] Add MacBook Air as lightweight preview/build worker
+- [ ] Add MacBook Pro as `render-mac-03` after the Mac installer/update path
+  is ready
 - [x] Bring up `render-pc-01` Linux worker from external SSD —
   DONE 2026-07-18; Ubuntu Server 26.04, NVIDIA 595.71.05, CUDA 13.2,
   GTX 1660 SUPER 6 GB
@@ -522,6 +655,11 @@ recording what the box is in human terms.
 - [x] Restore the OEB macOS menu bar worker under `render-mac-01` —
   DONE 2026-07-19
 - [ ] Add `pyproject.toml` for clean `pip install -e .`
+- [ ] Build Mac-like worker installer and setup wizard for `render-mac`
+  devices
+- [ ] Add signed stable-channel worker update bundles and local verification
+- [ ] Keep `render-pc-01` as the only dev-channel worker with full SSH/git
+  update access
 - [x] Add `oeb-studio.docker-pi` to `traefik_domains` in host vars —
   DONE 2026-07-16
 - [ ] Wire worker into the agent bus once AGENT-BUS-PLAN.md is actioned
