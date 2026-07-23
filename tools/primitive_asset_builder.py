@@ -38,6 +38,13 @@ def parse_args():
 def material(name, color):
     mat = bpy.data.materials.new(name)
     mat.diffuse_color = color
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF") if mat.node_tree else None
+    if bsdf:
+        if "Base Color" in bsdf.inputs:
+            bsdf.inputs["Base Color"].default_value = color
+        if "Alpha" in bsdf.inputs:
+            bsdf.inputs["Alpha"].default_value = color[3]
     return mat
 
 
@@ -740,6 +747,17 @@ def material_for_registry_primitive(primitive, mat):
     return mat.get(material_key, mat["neutral"])
 
 
+def quantity_for_registry_primitive(primitive):
+    for key in ("quantity", "count"):
+        try:
+            quantity = int(primitive.get(key))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= quantity <= 20:
+            return quantity
+    return 1
+
+
 def _registry_box(name, location, rotation, scale, params, mat):
     obj = cube(name, location, scale, mat)
     obj.rotation_euler = rotation
@@ -808,7 +826,17 @@ def primitive_for_registry_instance(primitive, idx, mat):
     rotation = vec3(transform.get("rotation"), (0.0, 0.0, 0.0))
     scale = vec3(transform.get("scale"), (1.0, 1.0, 1.0))
     params = primitive.get("params") if isinstance(primitive.get("params"), dict) else {}
-    return builder(name, location, rotation, scale, params, material_for_registry_primitive(primitive, mat))
+    material_choice = material_for_registry_primitive(primitive, mat)
+    quantity = quantity_for_registry_primitive(primitive)
+    objects = []
+    for copy_idx in range(quantity):
+        copy_location = list(location)
+        copy_name = name
+        if quantity > 1:
+            copy_location[1] += (copy_idx - ((quantity - 1) / 2)) * 1.25
+            copy_name = safe_object_name(f"{name}_{copy_idx + 1}", f"{primitive_type}_{idx + 1}_{copy_idx + 1}")
+        objects.extend(builder(copy_name, tuple(copy_location), rotation, scale, params, material_choice))
+    return objects
 
 
 def layout_items_for_spec(spec):

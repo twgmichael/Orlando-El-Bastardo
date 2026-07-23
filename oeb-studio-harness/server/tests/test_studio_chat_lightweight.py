@@ -154,6 +154,32 @@ def test_validate_primitive_spec_normalizes_cube_alias_to_box():
     assert resolved["primitives"][0]["material"] == "blue"
 
 
+def test_validate_primitive_spec_expands_quantity_with_stable_offsets():
+    resolved = validate_primitive_spec(
+        {
+            "asset_kind": "prop",
+            "canonical_id": "prop_spheres_blue_A",
+            "name": "Blue Spheres",
+            "primitives": [
+                {
+                    "id": "sphere",
+                    "type": "sphere",
+                    "material": "blue",
+                    "quantity": 2,
+                    "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                }
+            ],
+        },
+        "Build 2 blue balls.",
+    )
+
+    assert [primitive["id"] for primitive in resolved["primitives"]] == ["sphere_1", "sphere_2"]
+    assert [primitive["material"] for primitive in resolved["primitives"]] == ["blue", "blue"]
+    assert [primitive["type"] for primitive in resolved["primitives"]] == ["sphere", "sphere"]
+    assert resolved["primitives"][0]["transform"]["location"] == [0.0, -0.625, 0.5]
+    assert resolved["primitives"][1]["transform"]["location"] == [0.0, 0.625, 0.5]
+
+
 def test_build_spec_with_primitive_resolver_prefers_assistant_primitives():
     spec, parsed, resolver = build_spec_with_primitive_resolver(
         "Build a blue cube.",
@@ -304,6 +330,82 @@ def test_build_spec_falls_back_from_malformed_json_for_blue_cube():
     assert spec.scene_plan.objects[0].category == "box"
     assert spec.scene_plan.objects[0].materials == {"primary": "blue"}
     assert "blue" in spec.scene_plan.objects[0].style_details
+
+
+def test_malformed_quantity_response_keeps_count_and_color():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build 2 blue balls.",
+        """```json
+{
+    "action": "build",
+    "confidence": 1,
+    "clarification_question": null,
+    "escalation_reason": null,
+    "build_job": {
+        "type": "sphere",
+        "size": 0.5, // local model comment
+        "color": "#006400", // mislabeled blue
+        "quantity": 2
+    }
+}
+```""",
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert resolver["source"] == "fallback_intent"
+    assert spec.components == ["sphere", "sphere"]
+    assert [primitive.type for primitive in spec.primitives] == ["sphere", "sphere"]
+    assert [primitive.material for primitive in spec.primitives] == ["blue", "blue"]
+
+
+def test_malformed_compound_prompt_preserves_count_color_and_layout():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build two blue spheres with a yellow tube between them and a red ball on the right.",
+        """```json
+{
+  "action": "build",
+  "confidence": 90,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "build_job": {
+    "jobs": [
+      {
+        "type": "sphere",
+        "color": "#0066CC", // Blue
+        "scale": [1, 1, 1],
+        "position": [-2.5, -0.5, 0]
+      },
+      {
+        "type": "tube",
+        "start_color": "#FFD700", // Yellow
+        "end_color": "#FFD700",
+        "scale": [0.3, 1, 0.1],
+        "position": [-2.5, -0.8, 0]
+      },
+      {
+        "type": "sphere",
+        "color": "#FF69B4", // Red
+        "scale": [1, 1, 1],
+        "position": [2.5, -0.5, 0]
+      }
+    ]
+  }
+}
+```""",
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert resolver["source"] == "fallback_intent"
+    assert spec.components == ["sphere", "sphere", "cylinder", "sphere"]
+    assert [primitive.material for primitive in spec.primitives] == ["blue", "blue", "yellow", "red"]
+    assert [primitive.transform.location for primitive in spec.primitives] == [
+        [0.0, -1.25, 0.5],
+        [0.0, 1.25, 0.5],
+        [0.0, 0.0, 0.5],
+        [0.0, 2.5, 0.5],
+    ]
+    assert spec.primitives[2].transform.rotation == [1.570796327, 0.0, 0.0]
+    assert spec.primitives[2].params == {"radius": 0.16, "depth": 2.5}
 
 
 def test_build_spec_fallback_uses_recent_context_for_pronoun_edit():

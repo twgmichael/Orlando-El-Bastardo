@@ -45,6 +45,12 @@ Studio chat now supports:
 - Hidden-by-default assistant JSON output using a per-message disclosure.
 - Hidden-by-default primitive resolver output attached to the build progress
   card.
+- Database-backed chat threads with a left-sidebar thread list and `New Thread`
+  control.
+- Append-only trace events for saved prompts, Ollama requests/responses,
+  assistant JSON, resolver attempts, normalized specs, harness job payloads,
+  job creation, status polling, review artifacts, failures, and inline card
+  snapshots.
 
 The build flow now:
 
@@ -148,14 +154,13 @@ user prompt
 The local LLM can help interpret natural language into the registry, but it
 must not invent new tool abilities or Blender APIs.
 
-## Chat Memory Direction
+## Chat Memory And Trace Progress
 
-The next workflow layer should make `oeb-studio-chat` thread-native. The goal
-is durable local/staging chat memory that preserves both conversation context
-and production trace, so progress and renders survive refreshes and can be
-reviewed later.
+`oeb-studio-chat` is now thread-native. The goal remains durable local/staging
+chat memory that preserves both conversation context and production trace, so
+progress and renders survive refreshes and can be reviewed later.
 
-Add simple database-backed threads:
+Implemented database-backed tables:
 
 ```text
 studio_chat_threads
@@ -187,9 +192,21 @@ studio_chat_build_events
   event_type
   payload
   created_at
+
+studio_chat_trace_events
+  id
+  thread_id
+  message_id
+  job_id
+  event_type
+  source
+  label
+  payload
+  text_snapshot
+  created_at
 ```
 
-The thread API should start small:
+Implemented thread and trace API surface:
 
 ```text
 GET    /api/v1/studio-chat/threads
@@ -199,9 +216,12 @@ PATCH  /api/v1/studio-chat/threads/{thread_id}
 POST   /api/v1/studio-chat/threads/{thread_id}/messages
 POST   /api/v1/studio-chat/threads/{thread_id}/build-jobs
 GET    /api/v1/studio-chat/threads/{thread_id}/events
+GET    /api/v1/studio-chat/threads/{thread_id}/trace
+GET    /api/v1/studio-chat/messages/{message_id}/trace
+GET    /api/v1/studio-chat/jobs/{job_id}/trace
 ```
 
-Expected behavior:
+Current behavior:
 
 - On page load, open the latest active thread or create one.
 - Save each user message before calling Ollama.
@@ -209,7 +229,7 @@ Expected behavior:
 - Save resolver output, build-job creation, render status, artifacts, and
   failures as build events tied to the assistant message.
 - Reconstruct the transcript from persisted messages plus events.
-- Add `New Thread` and `Archive Thread` controls.
+- Add a `New Thread` control.
 - Auto-title threads from the first user prompt.
 - Send only compact recent-thread context to the local LLM.
 - Keep full production provenance in the database.
@@ -228,6 +248,44 @@ Production trace should be stored alongside chat text:
 
 This gives us memory for creative continuity while keeping the harness audit
 trail useful for debugging and staging comparison.
+
+## Material And Quantity Fix
+
+The prompt `Build 2 blue balls.` exposed two deterministic-side problems:
+
+- The local LLM and resolver preserved `blue`, but Blender preview/review
+  renders appeared white because the primitive builder set only
+  `diffuse_color`, not the render/export material node base color.
+- `quantity: 2` was collapsed to one primitive in the direct primitive path.
+
+Fixes landed:
+
+- `primitive_asset_builder.py` now sets Principled BSDF `Base Color` and
+  `Alpha` for named primitive materials.
+- The chat primitive normalization now preserves `quantity` / `count` from
+  assistant JSON or prompt text.
+- The primitive executor also expands raw registry primitive `quantity` /
+  `count`, so direct executor specs remain robust.
+- Blender smoke verification produced two blue spheres, and a review render
+  from the exported GLB preserved the blue material.
+
+## Next Chat Interface TODO
+
+Update `oeb-studio-chat` layout and worker gating:
+
+- Make the center chat/thread cards the only scrolling column.
+- Keep the left thread/settings card fixed.
+- Keep the right raw-debug card fixed.
+- Keep the `Message the local OEB model` composer fixed at the bottom of the
+  center column.
+- Remove the standalone `Review renders ready` status box.
+- Add an explicit render-worker availability indicator:
+  `online` / `offline`.
+- Disable the chat `Send` button whenever no render-capable worker is
+  available.
+- Have render workers mark themselves `busy` while running chat build/review
+  render jobs, and treat busy workers as unavailable for new chat sends unless
+  another render-capable worker is idle.
 
 ## Proposed Primitive Registry Direction
 

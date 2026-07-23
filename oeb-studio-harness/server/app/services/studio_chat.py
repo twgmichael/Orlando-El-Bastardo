@@ -446,6 +446,78 @@ def _coerce_vec3(value: Any, field: str, default: list[float], min_value: float,
     return [_coerce_float(item, f"{field}[{idx}]", min_value, max_value) for idx, item in enumerate(value)]
 
 
+def _quantity_from_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        word_quantities = {
+            "a": 1,
+            "an": 1,
+            "one": 1,
+            "two": 2,
+            "three": 3,
+            "four": 4,
+            "five": 5,
+            "six": 6,
+            "seven": 7,
+            "eight": 8,
+            "nine": 9,
+            "ten": 10,
+        }
+        normalized = value.strip().lower()
+        if normalized in word_quantities:
+            return word_quantities[normalized]
+    try:
+        quantity = int(value)
+    except (TypeError, ValueError):
+        return None
+    return quantity if 1 <= quantity <= 20 else None
+
+
+def _quantity_from_text(text: str, primitive_type: str | None = None) -> int | None:
+    aliases = sorted(
+        [
+            alias
+            for alias, canonical_type in PRIMITIVE_ALIASES.items()
+            if primitive_type is None or canonical_type == primitive_type
+        ],
+        key=len,
+        reverse=True,
+    )
+    alias_pattern = "|".join(re.escape(alias).replace("_", r"[\s_-]+") for alias in aliases)
+    if not alias_pattern:
+        return None
+    quantity_pattern = r"(?P<quantity>\d+|one|two|three|four|five|six|seven|eight|nine|ten)"
+    match = re.search(
+        rf"\b{quantity_pattern}\s+(?:[a-z]+\s+){{0,4}}(?:{alias_pattern})s?\b",
+        text.lower(),
+    )
+    if not match:
+        return None
+    return _quantity_from_value(match.group("quantity"))
+
+
+def _quantity_from_payload(payload: dict[str, Any], creative_request: str, primitive_type: str | None = None) -> int:
+    build_job = payload.get("build_job") if isinstance(payload.get("build_job"), dict) else {}
+    spec = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else {}
+    for source in (build_job, spec, payload):
+        if not isinstance(source, dict):
+            continue
+        for key in ("quantity", "count"):
+            quantity = _quantity_from_value(source.get(key))
+            if quantity:
+                return quantity
+    return _quantity_from_text(creative_request, primitive_type) or 1
+
+
+def _quantity_from_nearby_words(words: list[re.Match[str]], idx: int) -> int:
+    for prev in reversed(words[max(0, idx - 5):idx]):
+        quantity = _quantity_from_value(prev.group(0))
+        if quantity:
+            return quantity
+    return 1
+
+
 def _safe_id(value: Any, fallback: str) -> str:
     raw = str(value or fallback).strip().lower()
     safe = re.sub(r"[^a-z0-9_]+", "_", raw).strip("_")
@@ -553,18 +625,34 @@ def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> d
             allowed = ", ".join(sorted(CANONICAL_PRIMITIVE_TYPES))
             raise ValueError(f"primitives[{idx}].type must be one of: {allowed}")
         transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
-        normalized_primitives.append({
-            "id": _safe_id(primitive.get("id"), f"{primitive_type}_{idx + 1}"),
-            "type": primitive_type,
-            "label": str(primitive.get("label")).strip() if primitive.get("label") else None,
-            "material": _normalize_material(primitive.get("material") or "neutral"),
-            "transform": {
-                "location": _coerce_vec3(transform.get("location"), "transform.location", [0.0, 0.0, 0.5], -50.0, 50.0),
-                "rotation": _coerce_vec3(transform.get("rotation"), "transform.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307),
-                "scale": _coerce_vec3(transform.get("scale"), "transform.scale", [1.0, 1.0, 1.0], 0.01, 20.0),
-            },
-            "params": _normalize_primitive_params(primitive_type, primitive.get("params")),
-        })
+        quantity = _quantity_from_value(primitive.get("quantity")) or _quantity_from_value(primitive.get("count")) or 1
+        base_id = _safe_id(primitive.get("id"), f"{primitive_type}_{idx + 1}")
+        base_location = _coerce_vec3(transform.get("location"), "transform.location", [0.0, 0.0, 0.5], -50.0, 50.0)
+        rotation = _coerce_vec3(transform.get("rotation"), "transform.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307)
+        scale = _coerce_vec3(transform.get("scale"), "transform.scale", [1.0, 1.0, 1.0], 0.01, 20.0)
+        material = _normalize_material(primitive.get("material") or "neutral")
+        params = _normalize_primitive_params(primitive_type, primitive.get("params"))
+        for copy_idx in range(quantity):
+            copy_location = base_location.copy()
+            if quantity > 1:
+                copy_location[1] += (copy_idx - ((quantity - 1) / 2)) * 1.25
+            primitive_id = (
+                base_id
+                if quantity == 1
+                else _safe_id(f"{base_id}_{copy_idx + 1}", f"{primitive_type}_{idx + 1}_{copy_idx + 1}")
+            )
+            normalized_primitives.append({
+                "id": primitive_id,
+                "type": primitive_type,
+                "label": str(primitive.get("label")).strip() if primitive.get("label") else None,
+                "material": material,
+                "transform": {
+                    "location": copy_location,
+                    "rotation": rotation.copy(),
+                    "scale": scale.copy(),
+                },
+                "params": params.copy(),
+            })
 
     normalized_primitives = _apply_explicit_orientation_hints(normalized_primitives, creative_request)
 
@@ -598,18 +686,24 @@ def _primitive_payload_from_parsed(parsed: dict[str, Any], creative_request: str
     build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
     source = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else build_job
     if isinstance(source, dict) and isinstance(source.get("primitives"), list):
+        primitives = source["primitives"]
+        if len(primitives) == 1 and isinstance(primitives[0], dict):
+            quantity = _quantity_from_payload(parsed, creative_request, canonical_primitive_type(primitives[0].get("type")))
+            if quantity > 1 and "quantity" not in primitives[0] and "count" not in primitives[0]:
+                primitives = [{**primitives[0], "quantity": quantity}]
         return {
             "asset_kind": source.get("asset_kind") or source.get("kind") or build_job.get("asset_kind") or parsed.get("asset_kind") or "prop",
             "canonical_id": source.get("canonical_id") or build_job.get("canonical_id") or parsed.get("canonical_id"),
             "name": source.get("name") or build_job.get("name") or parsed.get("name"),
             "style": source.get("style") or build_job.get("style") or parsed.get("style") or creative_request,
-            "primitives": source["primitives"],
+            "primitives": primitives,
         }
     primitive_type = _primitive_type_from_payload(parsed)
     if not primitive_type:
         return None
     material = _material_color_from_payload(parsed) or _material_color_from_text(creative_request) or "neutral"
     canonical_type = canonical_primitive_type(primitive_type) or primitive_type
+    quantity = _quantity_from_payload(parsed, creative_request, canonical_type)
     return {
         "asset_kind": build_job.get("asset_kind") or build_job.get("kind") or parsed.get("kind") or "prop",
         "canonical_id": build_job.get("canonical_id") or parsed.get("canonical_id"),
@@ -621,6 +715,7 @@ def _primitive_payload_from_parsed(parsed: dict[str, Any], creative_request: str
                 "type": canonical_type,
                 "label": f"{material} {canonical_type}" if material != "neutral" else canonical_type,
                 "material": material,
+                "quantity": quantity,
                 "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
                 "params": {},
             }
@@ -681,6 +776,47 @@ def _material_color_from_text(text: str) -> str | None:
     return None
 
 
+def _contains_primitive_alias(text: str) -> bool:
+    for token in re.findall(r"[a-z0-9]+", text.lower()):
+        if canonical_primitive_type(token) or (token.endswith("s") and canonical_primitive_type(token[:-1])):
+            return True
+    return False
+
+
+def _placement_hint_near_primitive(text: str, start: int, end: int) -> str | None:
+    lowered = text.lower()
+    after = lowered[end: end + 120]
+    before = lowered[max(0, start - 80): start]
+
+    between_match = re.search(r"\bbetween\b", after)
+    if between_match:
+        between_prefix = after[:between_match.start()]
+        if not _contains_primitive_alias(between_prefix):
+            return "between"
+    right_match = re.search(r"\bon\s+(?:the\s+)?right\b|\bright\b", after)
+    if right_match:
+        right_prefix = after[:right_match.start()]
+        if not _contains_primitive_alias(right_prefix):
+            return "right"
+    left_match = re.search(r"\bon\s+(?:the\s+)?left\b|\bleft\b", after)
+    if left_match:
+        left_prefix = after[:left_match.start()]
+        if not _contains_primitive_alias(left_prefix):
+            return "left"
+    nearby = f"{before} {after}"
+    if re.search(r"\bbetween\b", before):
+        return "between"
+    if re.search(r"\bon\s+(?:the\s+)?right\b|\bright\b", before):
+        return "right"
+    if re.search(r"\bon\s+(?:the\s+)?left\b|\bleft\b", before):
+        return "left"
+    if re.search(r"\bin\s+front\b|\bfront\b", nearby):
+        return "front"
+    if re.search(r"\bbehind\b|\brear\b|\bback\b", nearby):
+        return "rear"
+    return None
+
+
 def _primitive_mentions_from_text(text: str) -> list[dict[str, Any]]:
     words = list(re.finditer(r"[a-z0-9]+", text.lower()))
     mentions: list[dict[str, Any]] = []
@@ -700,6 +836,8 @@ def _primitive_mentions_from_text(text: str) -> list[dict[str, Any]]:
         mentions.append({
             "type": primitive_type,
             "color": color or "neutral",
+            "quantity": _quantity_from_nearby_words(words, idx),
+            "placement": _placement_hint_near_primitive(text, match.start(), match.end()),
             "direction": _orientation_direction_near_primitive(text, primitive_type, len([
                 mention for mention in mentions if mention["type"] == primitive_type
             ])),
@@ -741,37 +879,67 @@ def _fallback_payload_from_intent(
         if key not in seen_keys:
             unique_mentions.append(mention)
             seen_keys.add(key)
+        else:
+            existing = next(item for item in unique_mentions if (item["type"], item["color"]) == key)
+            existing["quantity"] = max(int(existing.get("quantity") or 1), int(mention.get("quantity") or 1))
+            if not existing.get("placement") and mention.get("placement"):
+                existing["placement"] = mention["placement"]
     if len(unique_mentions) > 1:
         stacked = text_has_any(creative_request, ("top", "above", "stack", "stacked", "vertical"))
+        has_between = any(mention.get("placement") == "between" for mention in unique_mentions)
         primitives = []
         current_top = 0.0
-        for idx, mention in enumerate(unique_mentions):
+        flat_cursor = -1.25
+        primitive_idx = 0
+        for mention in unique_mentions:
             primitive_type = mention["type"]
             material_color = mention["color"]
+            quantity = int(mention.get("quantity") or 1)
             radius = 0.5 if primitive_type == "sphere" else None
             depth = 1.0
-            if stacked:
-                if primitive_type == "sphere":
-                    z = current_top + radius
-                    current_top = z + radius
+            for copy_idx in range(quantity):
+                primitive_idx += 1
+                rotation = [0.0, 0.0, 0.0]
+                if stacked:
+                    y = 0.0
+                    if primitive_type == "sphere":
+                        z = current_top + radius
+                        current_top = z + radius
+                    else:
+                        z = current_top + (depth / 2)
+                        current_top = z + (depth / 2)
                 else:
-                    z = current_top + (depth / 2)
-                    current_top = z + (depth / 2)
-            else:
-                z = 0.5
-            primitive: dict[str, Any] = {
-                "id": f"{primitive_type}_{idx + 1}",
-                "type": primitive_type,
-                "label": f"{material_color} {primitive_type}" if material_color != "neutral" else primitive_type,
-                "material": material_color,
-                "transform": {"location": [0.0, 0.0, z], "rotation": [0.0, 0.0, 0.0], "scale": [1.0, 1.0, 1.0]},
-                "params": {},
-            }
-            if primitive_type == "sphere":
-                primitive["params"]["radius"] = radius
-            if primitive_type in {"cone", "cylinder"}:
-                primitive["params"]["depth"] = depth
-            primitives.append(primitive)
+                    z = 0.5
+                    if mention.get("placement") == "between":
+                        y = 0.0
+                    elif mention.get("placement") == "right":
+                        y = 2.5 + (copy_idx * 1.25)
+                    elif mention.get("placement") == "left":
+                        y = -2.5 - (copy_idx * 1.25)
+                    elif quantity > 1 and has_between:
+                        y = (copy_idx - ((quantity - 1) / 2)) * 2.5
+                    elif quantity > 1:
+                        y = (copy_idx - ((quantity - 1) / 2)) * 1.25
+                    else:
+                        y = flat_cursor
+                        flat_cursor += 1.25
+                params = {}
+                if primitive_type == "sphere":
+                    params["radius"] = radius
+                if primitive_type in {"cone", "cylinder"}:
+                    params["depth"] = 2.5 if mention.get("placement") == "between" else depth
+                if primitive_type == "cylinder" and mention.get("placement") == "between":
+                    params["radius"] = 0.16
+                    rotation = [1.570796327, 0.0, 0.0]
+                primitive: dict[str, Any] = {
+                    "id": f"{primitive_type}_{primitive_idx}",
+                    "type": primitive_type,
+                    "label": f"{material_color} {primitive_type}" if material_color != "neutral" else primitive_type,
+                    "material": material_color,
+                    "transform": {"location": [0.0, y, z], "rotation": rotation, "scale": [1.0, 1.0, 1.0]},
+                    "params": params,
+                }
+                primitives.append(primitive)
 
         primary = unique_mentions[0]
         color_slug = f"_{primary['color']}" if primary["color"] != "neutral" else ""
