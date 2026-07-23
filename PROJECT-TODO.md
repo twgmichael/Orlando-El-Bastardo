@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-23T16:45:00-04:00
+updated: 2026-07-23T18:15:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -65,7 +65,7 @@ visible shot.
      are clearly layered. Include structured detail pass-through for fields
      such as `shape`, `required_features`, `source_phrases`, `materials`, and
      `style_details`.
-   - [ ] Add complete `oeb-studio-chat` trace ledger — keep the normal
+   - [x] Add complete `oeb-studio-chat` trace ledger — keep the normal
      thread/message/build-event tables optimized for chat UI rehydration, but
      add append-only `studio_chat_trace_events` for full audit/reference
      memory. Record every boundary crossing: user prompt saved, Ollama request
@@ -80,6 +80,17 @@ visible shot.
      `GET /api/v1/studio-chat/jobs/{job_id}/trace`. Use one shared
      `record_studio_chat_trace(...)` helper so the ledger stays flexible while
      remaining boring and auditable.
+   - [ ] Update `oeb-studio-chat` working layout and worker gate — make the
+     center chat/thread cards the only scrolling column while the left thread
+     list/settings card and right raw-debug card stay fixed. Keep the
+     `Message the local OEB model` composer fixed at the bottom of the center
+     column. Remove the standalone `Review renders ready` status box. Add an
+     explicit render-worker availability indicator (`online` / `offline`) and
+     disable the chat `Send` button whenever no render-capable worker is
+     available. Have render workers mark themselves busy while running chat
+     build/review render jobs, and have the chat gate treat busy workers as
+     unavailable for new chat sends unless another render-capable worker is
+     idle.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.

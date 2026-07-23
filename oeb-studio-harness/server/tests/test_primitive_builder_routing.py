@@ -133,6 +133,78 @@ def test_registry_primitive_dispatch_uses_material_and_transform(monkeypatch):
     }
 
 
+def test_registry_primitive_dispatch_expands_quantity(monkeypatch):
+    builder = load_builder_module()
+    captured = []
+    mats = {"neutral": "neutral-mat", "blue": "blue-mat"}
+
+    def fake_sphere(name, location, rotation, scale, params, mat):
+        captured.append((name, location, rotation, scale, params, mat))
+        return [name]
+
+    monkeypatch.setitem(builder.PRIMITIVE_BUILDERS, "sphere", fake_sphere)
+
+    objects = builder.primitive_for_registry_instance(
+        {
+            "id": "sphere",
+            "type": "sphere",
+            "material": "blue",
+            "quantity": 2,
+            "transform": {
+                "location": [0, 0, 0.5],
+                "rotation": [0, 0, 0],
+                "scale": [1, 1, 1],
+            },
+        },
+        0,
+        mats,
+    )
+
+    assert objects == ["sphere_1", "sphere_2"]
+    assert captured[0] == ("sphere_1", (0.0, -0.625, 0.5), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), {}, "blue-mat")
+    assert captured[1] == ("sphere_2", (0.0, 0.625, 0.5), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), {}, "blue-mat")
+
+
+def test_material_sets_principled_base_color_for_render_and_export():
+    builder = load_builder_module()
+
+    class FakeInput:
+        def __init__(self):
+            self.default_value = None
+
+    class FakeMaterial:
+        def __init__(self, name):
+            self.name = name
+            self.diffuse_color = None
+            self.use_nodes = False
+            self.node_tree = types.SimpleNamespace(
+                nodes={
+                    "Principled BSDF": types.SimpleNamespace(
+                        inputs={
+                            "Base Color": FakeInput(),
+                            "Alpha": FakeInput(),
+                        }
+                    )
+                }
+            )
+
+    created = []
+
+    def fake_new(name):
+        mat = FakeMaterial(name)
+        created.append(mat)
+        return mat
+
+    builder.bpy.data = types.SimpleNamespace(materials=types.SimpleNamespace(new=fake_new))
+
+    mat = builder.material("component_blue", (0.05, 0.22, 0.85, 1))
+
+    assert mat.diffuse_color == (0.05, 0.22, 0.85, 1)
+    assert mat.use_nodes is True
+    assert mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value == (0.05, 0.22, 0.85, 1)
+    assert mat.node_tree.nodes["Principled BSDF"].inputs["Alpha"].default_value == 1
+
+
 def test_axis_placement_uses_oeb_local_axes():
     builder = load_builder_module()
 
