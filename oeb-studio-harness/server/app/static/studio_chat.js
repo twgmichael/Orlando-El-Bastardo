@@ -4,8 +4,15 @@
   const state = {
     models: [],
     presets: [],
+    threads: [],
+    activeThreadId: null,
     messages: [],
     pollTimers: {},
+    lightbox: {
+      artifacts: [],
+      index: 0,
+      lastFocus: null,
+    },
     raw: {
       request: null,
       response: null,
@@ -17,6 +24,8 @@
   };
 
   const els = {
+    threadList: document.getElementById("thread-list"),
+    newThread: document.getElementById("new-thread"),
     model: document.getElementById("model-select"),
     preset: document.getElementById("preset-select"),
     temperature: document.getElementById("temperature-input"),
@@ -38,6 +47,12 @@
     send: document.getElementById("send-message"),
     debugPanel: document.getElementById("debug-panel"),
     debugOutput: document.getElementById("debug-output"),
+    lightbox: document.getElementById("chat-lightbox"),
+    lightboxImage: document.getElementById("chat-lightbox-image"),
+    lightboxTitle: document.getElementById("chat-lightbox-title"),
+    lightboxPrev: document.getElementById("chat-lightbox-prev"),
+    lightboxNext: document.getElementById("chat-lightbox-next"),
+    lightboxClose: document.getElementById("chat-lightbox-close"),
   };
 
   function option(value, label) {
@@ -49,6 +64,30 @@
 
   function setStatus(text) {
     els.status.textContent = text;
+  }
+
+  function messagePayload(message) {
+    return {
+      role: message.role,
+      content: message.content,
+    };
+  }
+
+  function ollamaMessages() {
+    return state.messages
+      .filter((message) => ["user", "assistant", "system"].includes(message.role))
+      .map(messagePayload);
+  }
+
+  function threadSettingsPayload(title) {
+    return {
+      title: title || null,
+      environment: "local",
+      default_model: els.model.value || null,
+      default_preset_id: els.preset.value || null,
+      system_prompt: els.systemPrompt.value || null,
+      review_views: selectedReviewViews(),
+    };
   }
 
   function showError(message, detail) {
@@ -88,6 +127,55 @@
       return `Build ${build.result.job.status}; phase queued`;
     }
     return "Build job pending";
+  }
+
+  function lightboxArtifactLabel(artifact, index, total) {
+    const view = artifact && artifact.view ? artifact.view.toUpperCase() : "RENDER";
+    return `${view} ${index + 1}/${total}`;
+  }
+
+  function renderLightbox() {
+    const artifact = state.lightbox.artifacts[state.lightbox.index];
+    if (!artifact) return;
+    els.lightboxImage.src = artifact.url;
+    els.lightboxImage.alt = `${artifact.view || "review"} render`;
+    els.lightboxTitle.textContent = lightboxArtifactLabel(
+      artifact,
+      state.lightbox.index,
+      state.lightbox.artifacts.length,
+    );
+    const single = state.lightbox.artifacts.length < 2;
+    els.lightboxPrev.disabled = single;
+    els.lightboxNext.disabled = single;
+  }
+
+  function openLightbox(artifacts, index, sourceElement) {
+    if (!artifacts || !artifacts.length) return;
+    state.lightbox.artifacts = artifacts;
+    state.lightbox.index = Math.max(0, Math.min(index, artifacts.length - 1));
+    state.lightbox.lastFocus = sourceElement || document.activeElement;
+    renderLightbox();
+    els.lightbox.setAttribute("aria-hidden", "false");
+    els.lightboxClose.focus();
+  }
+
+  function closeLightbox() {
+    els.lightbox.setAttribute("aria-hidden", "true");
+    els.lightboxImage.removeAttribute("src");
+    const focusTarget = state.lightbox.lastFocus;
+    state.lightbox.artifacts = [];
+    state.lightbox.index = 0;
+    state.lightbox.lastFocus = null;
+    if (focusTarget && typeof focusTarget.focus === "function") {
+      focusTarget.focus();
+    }
+  }
+
+  function moveLightbox(delta) {
+    const total = state.lightbox.artifacts.length;
+    if (total < 2) return;
+    state.lightbox.index = (state.lightbox.index + delta + total) % total;
+    renderLightbox();
   }
 
   function renderBuildCard(build) {
@@ -142,10 +230,12 @@
     if (status && status.artifacts && status.artifacts.length) {
       const grid = document.createElement("div");
       grid.className = "chat-render-grid";
-      for (const artifact of status.artifacts) {
-        const link = document.createElement("a");
-        link.href = artifact.url;
+      for (const [index, artifact] of status.artifacts.entries()) {
+        const link = document.createElement("button");
+        link.type = "button";
         link.className = "chat-render-thumb";
+        link.setAttribute("aria-label", `Open ${artifact.view} render`);
+        link.addEventListener("click", () => openLightbox(status.artifacts, index, link));
         const image = document.createElement("img");
         image.src = artifact.url;
         image.alt = `${artifact.view} render`;
@@ -232,6 +322,7 @@
 
   function currentSettings() {
     return {
+      thread_id: state.activeThreadId,
       model: els.model.value,
       preset_id: els.preset.value,
       temperature: Number(els.temperature.value),
@@ -280,6 +371,156 @@
     return payload;
   }
 
+  function renderThreadOptions() {
+    els.threadList.innerHTML = "";
+    for (const thread of state.threads) {
+      const label = thread.title || "Studio Chat Thread";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "thread-button";
+      if (thread.id === state.activeThreadId) {
+        button.classList.add("is-active");
+        button.setAttribute("aria-current", "page");
+      }
+      button.dataset.threadId = thread.id;
+      button.textContent = label;
+      button.title = label;
+      button.addEventListener("click", () => {
+        if (thread.id === state.activeThreadId) return;
+        loadThread(thread.id).catch((err) => {
+          showError("Could not load thread", err.message);
+        });
+      });
+      els.threadList.appendChild(button);
+    }
+  }
+
+  function applyThreadSettings(thread) {
+    if (!thread) return;
+    if (thread.default_model && state.models.includes(thread.default_model)) {
+      els.model.value = thread.default_model;
+    }
+    if (thread.default_preset_id && state.presets.some((preset) => preset.id === thread.default_preset_id)) {
+      els.preset.value = thread.default_preset_id;
+      if (thread.system_prompt) {
+        els.systemPrompt.value = thread.system_prompt;
+      } else {
+        applyPreset(thread.default_preset_id);
+      }
+    } else if (thread.system_prompt) {
+      els.systemPrompt.value = thread.system_prompt;
+    }
+  }
+
+  function attachThreadEvents(events) {
+    const byMessageId = new Map();
+    for (const message of state.messages) {
+      if (message.id) byMessageId.set(String(message.id), message);
+    }
+    for (const event of events || []) {
+      const message = byMessageId.get(String(event.message_id || ""));
+      if (!message) continue;
+      if (event.event_type === "resolver") {
+        message.resolver = event.payload && event.payload.resolver_output;
+      }
+      if (event.event_type === "build_created") {
+        message.build = message.build || {};
+        message.build.result = event.payload && event.payload.build_result;
+        message.build.resolver = event.payload && event.payload.resolver_output;
+        message.build.error = null;
+      }
+      if (event.event_type === "review_ready" || event.event_type === "failure") {
+        message.build = message.build || {};
+        message.build.status = event.payload && event.payload.build_status;
+        if (event.event_type === "failure") {
+          message.build.error = "Render pipeline needs attention";
+        }
+      }
+    }
+  }
+
+  function resumeThreadPolling() {
+    stopPolling();
+    for (const message of state.messages) {
+      const jobId = message.build && message.build.result && message.build.result.job && message.build.result.job.id;
+      const status = message.build && message.build.status;
+      if (!jobId) continue;
+      if (status && (status.gallery_ready || status.build_job.status === "failed" || (status.review_job && status.review_job.status === "failed"))) {
+        continue;
+      }
+      startBuildPolling(jobId, message);
+    }
+  }
+
+  async function createThread(title) {
+    const thread = await fetchJson("/api/v1/studio-chat/threads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(threadSettingsPayload(title)),
+    });
+    state.threads.unshift(thread);
+    state.activeThreadId = thread.id;
+    renderThreadOptions();
+    return thread;
+  }
+
+  async function loadThread(threadId) {
+    const detail = await fetchJson(`/api/v1/studio-chat/threads/${threadId}`);
+    state.activeThreadId = detail.thread.id;
+    applyThreadSettings(detail.thread);
+    state.messages = (detail.messages || []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      raw: message.raw || {},
+    }));
+    attachThreadEvents(detail.events || []);
+    renderThreadOptions();
+    renderTranscript();
+    renderDebug();
+    resumeThreadPolling();
+  }
+
+  async function loadThreads() {
+    const payload = await fetchJson("/api/v1/studio-chat/threads");
+    state.threads = payload.threads || [];
+    if (!state.threads.length) {
+      await createThread();
+    }
+    renderThreadOptions();
+    await loadThread(state.activeThreadId || state.threads[0].id);
+  }
+
+  async function ensureThread() {
+    if (state.activeThreadId) return state.activeThreadId;
+    const thread = await createThread();
+    return thread.id;
+  }
+
+  async function saveThreadMessage(role, content, raw) {
+    const threadId = await ensureThread();
+    return fetchJson(`/api/v1/studio-chat/threads/${threadId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, content, raw: raw || {} }),
+    });
+  }
+
+  async function patchActiveThreadSettings(extra) {
+    if (!state.activeThreadId) return null;
+    return fetchJson(`/api/v1/studio-chat/threads/${state.activeThreadId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        default_model: els.model.value || null,
+        default_preset_id: els.preset.value || null,
+        system_prompt: els.systemPrompt.value || null,
+        review_views: selectedReviewViews(),
+        ...(extra || {}),
+      }),
+    });
+  }
+
   async function loadControls() {
     clearError();
     const [modelPayload, presetPayload] = await Promise.all([
@@ -309,7 +550,7 @@
     }
 
     setStatus(`Ollama: ${modelPayload.ollama_base_url}`);
-    renderTranscript();
+    await loadThreads();
     renderDebug();
   }
 
@@ -321,14 +562,36 @@
     els.input.value = "";
     state.raw.build_job = null;
     state.raw.build_status = null;
-    state.messages.push({ role: "user", content });
+    let userMessage = { role: "user", content };
+    try {
+      const savedUser = await saveThreadMessage("user", content, { settings: currentSettings() });
+      userMessage = {
+        id: savedUser.id,
+        role: savedUser.role,
+        content: savedUser.content,
+        raw: savedUser.raw || {},
+      };
+      const updated = await patchActiveThreadSettings();
+      if (updated) {
+        const idx = state.threads.findIndex((thread) => thread.id === updated.id);
+        if (idx >= 0) state.threads[idx] = updated;
+        renderThreadOptions();
+      }
+    } catch (err) {
+      showError("Could not save user message", err.message);
+      setStatus("Thread save failed");
+      return;
+    }
+    state.messages.push(userMessage);
     renderTranscript();
 
     const payload = {
       model: els.model.value,
+      thread_id: state.activeThreadId,
+      message_id: userMessage.id || null,
       preset_id: els.preset.value,
       system_prompt: els.systemPrompt.value,
-      messages: state.messages,
+      messages: ollamaMessages(),
       temperature: Number(els.temperature.value),
       max_tokens: Number(els.maxTokens.value),
       review_views: selectedReviewViews(),
@@ -347,7 +610,17 @@
         body: JSON.stringify(payload),
       });
       state.raw.response = response.raw;
-      state.messages.push(response.message);
+      const savedAssistant = await saveThreadMessage(
+        "assistant",
+        response.message.content,
+        { ollama: response.raw },
+      );
+      state.messages.push({
+        id: savedAssistant.id,
+        role: savedAssistant.role,
+        content: savedAssistant.content,
+        raw: savedAssistant.raw || {},
+      });
       setStatus(`Done: ${response.model}`);
       renderTranscript();
       renderDebug();
@@ -422,14 +695,17 @@
         error: null,
       };
       renderTranscript();
-      const result = await fetchJson("/api/v1/studio-chat/build-jobs", {
+      const threadId = await ensureThread();
+      const result = await fetchJson(`/api/v1/studio-chat/threads/${threadId}/build-jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: els.model.value,
+          thread_id: threadId,
+          message_id: assistant.id || null,
           creative_request: user.content,
           assistant_response: assistant.content,
-          messages: state.messages.slice(-12),
+          messages: ollamaMessages().slice(-12),
           review_views: selectedReviewViews(),
           priority: 0,
           policy: "run_anywhere",
@@ -495,6 +771,19 @@
   }
 
   els.composer.addEventListener("submit", sendMessage);
+  els.newThread.addEventListener("click", async () => {
+    try {
+      clearError();
+      stopPolling();
+      closeLightbox();
+      const thread = await createThread();
+      await loadThread(thread.id);
+      setStatus("New thread ready");
+      els.input.focus();
+    } catch (err) {
+      showError("Could not create thread", err.message);
+    }
+  });
   els.preset.addEventListener("change", () => applyPreset(els.preset.value));
   els.debugToggle.addEventListener("change", renderDebug);
   els.autoBuild.addEventListener("change", renderDebug);
@@ -504,21 +793,48 @@
   els.reviewViews.addEventListener("change", renderDebug);
   els.model.addEventListener("change", renderDebug);
   els.systemPrompt.addEventListener("input", renderDebug);
-  els.clear.addEventListener("click", () => {
+  els.clear.addEventListener("click", async () => {
     stopPolling();
-    state.messages = [];
-    state.raw.request = null;
-    state.raw.response = null;
-    state.raw.build_job = null;
-    state.raw.build_status = null;
-    clearError();
-    renderTranscript();
-    renderDebug();
-    els.input.focus();
+    closeLightbox();
+    try {
+      const thread = await createThread();
+      await loadThread(thread.id);
+      state.raw.request = null;
+      state.raw.response = null;
+      state.raw.build_job = null;
+      state.raw.build_status = null;
+      clearError();
+      renderTranscript();
+      renderDebug();
+      els.input.focus();
+    } catch (err) {
+      showError("Could not start a clear thread", err.message);
+    }
   });
   els.createBuildJob.addEventListener("click", createBuildJob);
   els.exportJson.addEventListener("click", exportJson);
   els.exportMd.addEventListener("click", exportMarkdown);
+  els.lightboxClose.addEventListener("click", closeLightbox);
+  els.lightboxPrev.addEventListener("click", () => moveLightbox(-1));
+  els.lightboxNext.addEventListener("click", () => moveLightbox(1));
+  els.lightbox.addEventListener("click", (event) => {
+    if (event.target && event.target.hasAttribute("data-lightbox-close")) {
+      closeLightbox();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (els.lightbox.getAttribute("aria-hidden") === "true") return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLightbox();
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      moveLightbox(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      moveLightbox(1);
+    }
+  });
 
   loadControls().catch((err) => {
     showError("Could not initialize studio chat", err.message);

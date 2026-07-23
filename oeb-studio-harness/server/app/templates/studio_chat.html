@@ -5,54 +5,59 @@
 {% block content %}
 <section class="chat-shell" data-chat-root>
   <aside class="chat-controls">
-    <div class="control-row">
-      <label for="model-select">Model</label>
-      <select id="model-select"></select>
-    </div>
-    <div class="control-row">
-      <label for="preset-select">Role</label>
-      <select id="preset-select"></select>
-    </div>
-    <div class="control-row">
-      <label for="temperature-input">Temperature</label>
-      <input id="temperature-input" type="number" min="0" max="2" step="0.1" value="0.2">
-    </div>
-    <div class="control-row">
-      <label for="max-tokens-input">Max Tokens</label>
-      <input id="max-tokens-input" type="number" min="1" max="32768" step="128" value="2048">
-    </div>
-    <div class="control-row">
-      <label for="review-views-select">Review Views</label>
-      <select id="review-views-select">
-        <option value="standard" selected>Standard asset views</option>
-        <option value="none">None</option>
-      </select>
-    </div>
-    <div class="review-view-chip-list" aria-label="Selected review views">
-      <span class="cap">top</span>
-      <span class="cap">bottom</span>
-      <span class="cap">left</span>
-      <span class="cap">right</span>
-      <span class="cap">front</span>
-      <span class="cap">rear</span>
-      <span class="cap">action</span>
-    </div>
-    <label class="toggle-row">
-      <input id="debug-toggle" type="checkbox" checked>
-      <span>Debug view</span>
-    </label>
-    <label class="toggle-row">
-      <input id="auto-build-toggle" type="checkbox" checked>
-      <span>Auto build</span>
-    </label>
-    <label class="toggle-row">
-      <input id="stream-toggle" type="checkbox" disabled>
-      <span>Streaming</span>
-    </label>
-    <div class="control-row">
-      <label for="system-prompt">System Prompt</label>
-      <textarea id="system-prompt" rows="14"></textarea>
-    </div>
+    <button type="button" id="new-thread" class="new-thread-button">New Thread</button>
+    <nav id="thread-list" class="thread-list" aria-label="Chat threads"></nav>
+    <details class="settings-panel">
+      <summary>Settings</summary>
+      <div class="control-row">
+        <label for="model-select">Model</label>
+        <select id="model-select"></select>
+      </div>
+      <div class="control-row">
+        <label for="preset-select">Role</label>
+        <select id="preset-select"></select>
+      </div>
+      <div class="control-row">
+        <label for="temperature-input">Temperature</label>
+        <input id="temperature-input" type="number" min="0" max="2" step="0.1" value="0.2">
+      </div>
+      <div class="control-row">
+        <label for="max-tokens-input">Max Tokens</label>
+        <input id="max-tokens-input" type="number" min="1" max="32768" step="128" value="2048">
+      </div>
+      <div class="control-row">
+        <label for="review-views-select">Review Views</label>
+        <select id="review-views-select">
+          <option value="standard" selected>Standard asset views</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      <div class="review-view-chip-list" aria-label="Selected review views">
+        <span class="cap">top</span>
+        <span class="cap">bottom</span>
+        <span class="cap">left</span>
+        <span class="cap">right</span>
+        <span class="cap">front</span>
+        <span class="cap">rear</span>
+        <span class="cap">action</span>
+      </div>
+      <label class="toggle-row">
+        <input id="debug-toggle" type="checkbox" checked>
+        <span>Debug view</span>
+      </label>
+      <label class="toggle-row">
+        <input id="auto-build-toggle" type="checkbox" checked>
+        <span>Auto build</span>
+      </label>
+      <label class="toggle-row">
+        <input id="stream-toggle" type="checkbox" disabled>
+        <span>Streaming</span>
+      </label>
+      <div class="control-row">
+        <label for="system-prompt">System Prompt</label>
+        <textarea id="system-prompt" rows="14"></textarea>
+      </div>
+    </details>
     <div class="chat-actions">
       <button type="button" id="create-build-job" disabled>Create Build Job</button>
       <button type="button" id="clear-chat">Clear</button>
@@ -75,6 +80,19 @@
     <h2>Raw Debug</h2>
     <pre id="debug-output">{}</pre>
   </aside>
+
+  <div id="chat-lightbox" class="lightbox chat-lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Render review image viewer">
+    <button type="button" class="lightbox-backdrop" data-lightbox-close aria-label="Close image viewer"></button>
+    <div class="lightbox-panel chat-lightbox-panel">
+      <div class="lightbox-toolbar">
+        <button type="button" class="lightbox-nav" id="chat-lightbox-prev">Back</button>
+        <div id="chat-lightbox-title" class="chat-lightbox-title"></div>
+        <button type="button" class="lightbox-close" id="chat-lightbox-close">Close</button>
+        <button type="button" class="lightbox-nav" id="chat-lightbox-next">Next</button>
+      </div>
+      <img id="chat-lightbox-image" alt="">
+    </div>
+  </div>
 </section>
 {% endblock %}
 

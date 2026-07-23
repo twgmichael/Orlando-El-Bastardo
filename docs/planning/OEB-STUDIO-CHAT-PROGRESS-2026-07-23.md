@@ -40,7 +40,11 @@ Studio chat now supports:
 - Automatic build-job creation after local LLM responses.
 - Inline build/render progress cards inside the chat transcript.
 - Inline render thumbnails when review artifacts are ready.
+- Inline render lightbox for stepping through review images without navigating
+  away from the chat.
 - Hidden-by-default assistant JSON output using a per-message disclosure.
+- Hidden-by-default primitive resolver output attached to the build progress
+  card.
 
 The build flow now:
 
@@ -143,6 +147,87 @@ user prompt
 
 The local LLM can help interpret natural language into the registry, but it
 must not invent new tool abilities or Blender APIs.
+
+## Chat Memory Direction
+
+The next workflow layer should make `oeb-studio-chat` thread-native. The goal
+is durable local/staging chat memory that preserves both conversation context
+and production trace, so progress and renders survive refreshes and can be
+reviewed later.
+
+Add simple database-backed threads:
+
+```text
+studio_chat_threads
+  id
+  title
+  environment
+  default_model
+  default_preset_id
+  system_prompt
+  review_views
+  created_at
+  updated_at
+  archived_at
+
+studio_chat_messages
+  id
+  thread_id
+  role
+  content
+  raw
+  created_at
+
+studio_chat_build_events
+  id
+  thread_id
+  message_id
+  job_id
+  asset_id
+  event_type
+  payload
+  created_at
+```
+
+The thread API should start small:
+
+```text
+GET    /api/v1/studio-chat/threads
+POST   /api/v1/studio-chat/threads
+GET    /api/v1/studio-chat/threads/{thread_id}
+PATCH  /api/v1/studio-chat/threads/{thread_id}
+POST   /api/v1/studio-chat/threads/{thread_id}/messages
+POST   /api/v1/studio-chat/threads/{thread_id}/build-jobs
+GET    /api/v1/studio-chat/threads/{thread_id}/events
+```
+
+Expected behavior:
+
+- On page load, open the latest active thread or create one.
+- Save each user message before calling Ollama.
+- Save each assistant response after Ollama returns.
+- Save resolver output, build-job creation, render status, artifacts, and
+  failures as build events tied to the assistant message.
+- Reconstruct the transcript from persisted messages plus events.
+- Add `New Thread` and `Archive Thread` controls.
+- Auto-title threads from the first user prompt.
+- Send only compact recent-thread context to the local LLM.
+- Keep full production provenance in the database.
+
+Production trace should be stored alongside chat text:
+
+```json
+{
+  "assistant_json": {},
+  "resolver_output": {},
+  "primitive_spec": {},
+  "job_payload": {},
+  "review_artifacts": []
+}
+```
+
+This gives us memory for creative continuity while keeping the harness audit
+trail useful for debugging and staging comparison.
 
 ## Proposed Primitive Registry Direction
 
