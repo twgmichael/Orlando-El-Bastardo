@@ -9,8 +9,22 @@ from app.config import get_settings
 from app.database import get_db
 from app.routers.conversations import create_conversation_job
 from app.schemas.conversation import ConversationJobRequest, ConversationJobResponse
-from app.schemas.studio_chat import StudioChatRequest, StudioChatResponse
-from app.services.studio_chat import StudioChatLLMConfig, build_studio_chat_trace, post_json
+from app.schemas.studio_chat import (
+    StudioChatModelList,
+    StudioChatOllamaRequest,
+    StudioChatOllamaResponse,
+    StudioChatPresetList,
+    StudioChatRequest,
+    StudioChatResponse,
+)
+from app.services.studio_chat import (
+    StudioChatLLMConfig,
+    build_studio_chat_trace,
+    chat_with_ollama,
+    list_ollama_models,
+    post_json,
+    studio_chat_presets,
+)
 
 router = APIRouter(prefix="/studio-chat", tags=["studio-chat"])
 
@@ -102,6 +116,61 @@ async def _submit_remote(body: StudioChatRequest, trace: dict, target_harness_ur
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Could not reach target harness at {target_harness_url}: {exc}",
+        ) from exc
+
+
+@router.get("/models", response_model=StudioChatModelList)
+async def studio_chat_models():
+    settings = get_settings()
+    try:
+        models = await asyncio.to_thread(list_ollama_models, settings.studio_chat_ollama_url)
+    except urllib.error.URLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not reach Ollama at {settings.studio_chat_ollama_url}: {exc}",
+        ) from exc
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ollama did not return a usable model list: {exc}",
+        ) from exc
+    default_model = settings.studio_chat_model
+    if models and default_model not in models:
+        default_model = next(
+            (model for model in models if model.split(":", 1)[0] == settings.studio_chat_model),
+            models[0],
+        )
+    return StudioChatModelList(
+        models=models,
+        default_model=default_model,
+        ollama_base_url=settings.studio_chat_ollama_url,
+    )
+
+
+@router.get("/presets", response_model=StudioChatPresetList)
+async def studio_chat_role_presets():
+    return StudioChatPresetList(presets=studio_chat_presets())
+
+
+@router.post("/chat", response_model=StudioChatOllamaResponse)
+async def studio_chat_ollama(body: StudioChatOllamaRequest):
+    if body.stream:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Streaming is not implemented in the first lightweight slice; send stream=false.",
+        )
+    settings = get_settings()
+    try:
+        return await asyncio.to_thread(chat_with_ollama, settings.studio_chat_ollama_url, body)
+    except urllib.error.URLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not reach Ollama at {settings.studio_chat_ollama_url}: {exc}",
+        ) from exc
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ollama did not return a usable chat response: {exc}",
         ) from exc
 
 
