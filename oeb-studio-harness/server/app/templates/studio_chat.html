@@ -42,6 +42,10 @@
       <span>Debug view</span>
     </label>
     <label class="toggle-row">
+      <input id="auto-build-toggle" type="checkbox" checked>
+      <span>Auto build</span>
+    </label>
+    <label class="toggle-row">
       <input id="stream-toggle" type="checkbox" disabled>
       <span>Streaming</span>
     </label>
@@ -50,6 +54,7 @@
       <textarea id="system-prompt" rows="14"></textarea>
     </div>
     <div class="chat-actions">
+      <button type="button" id="create-build-job" disabled>Create Build Job</button>
       <button type="button" id="clear-chat">Clear</button>
       <button type="button" id="export-json">Export JSON</button>
       <button type="button" id="export-md">Export Markdown</button>

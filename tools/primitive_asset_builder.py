@@ -59,6 +59,14 @@ def cylinder(name, location, radius, depth, mat, rotation=(0, 0, 0)):
     return obj
 
 
+def cone(name, location, radius, depth, mat, rotation=(0, 0, 0)):
+    bpy.ops.mesh.primitive_cone_add(vertices=32, radius1=radius, radius2=0, depth=depth, location=location, rotation=rotation)
+    obj = bpy.context.object
+    obj.name = name
+    obj.data.materials.append(mat)
+    return obj
+
+
 def sphere(name, location, scale, mat):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, location=location)
     obj = bpy.context.object
@@ -79,6 +87,43 @@ def torus(name, location, major_radius, minor_radius, mat, rotation=(0, 0, 0)):
     )
     obj = bpy.context.object
     obj.name = name
+    obj.data.materials.append(mat)
+    return obj
+
+
+def plane(name, location, scale, mat, rotation=(0, 0, 0)):
+    bpy.ops.mesh.primitive_plane_add(size=1, location=location, rotation=rotation)
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = scale
+    obj.data.materials.append(mat)
+    return obj
+
+
+def wedge(name, location, scale, mat, rotation=(0, 0, 0)):
+    verts = [
+        (-0.5, -0.5, -0.5),
+        (0.5, -0.5, -0.5),
+        (0.5, 0.5, -0.5),
+        (-0.5, 0.5, -0.5),
+        (-0.5, -0.5, 0.5),
+        (-0.5, 0.5, 0.5),
+    ]
+    faces = [
+        (0, 1, 2, 3),
+        (0, 4, 5, 3),
+        (0, 1, 4),
+        (1, 2, 5, 4),
+        (2, 3, 5),
+    ]
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(verts, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.location = location
+    obj.rotation_euler = rotation
+    obj.scale = scale
     obj.data.materials.append(mat)
     return obj
 
@@ -179,7 +224,7 @@ def safe_object_name(text, fallback):
 
 def semantic_name(component):
     name = str(component).lower().replace("-", "_").replace(" ", "_")
-    for prefix in ("cube_", "cylinder_", "sphere_", "cone_", "torus_"):
+    for prefix in ("box_", "cube_", "cylinder_", "sphere_", "cone_", "torus_", "plane_", "wedge_"):
         if name.startswith(prefix):
             return name[len(prefix):], prefix[:-1]
     return name, None
@@ -267,6 +312,11 @@ def category_for_name(name, shape_hint):
 
 
 def material_for_category(category, tokens, mat):
+    for color_key in ("blue", "red", "yellow", "orange", "purple", "black", "white", "gray"):
+        if has_any(tokens, (color_key,)):
+            return mat[color_key]
+    if has_any(tokens, ("grey",)):
+        return mat["gray"]
     if has_any(tokens, ("wood", "wooden", "desk", "table", "cabinet", "dresser", "bench", "shelf")):
         return mat["wood"]
     if has_any(tokens, ("glass", "window", "screen", "monitor", "mirror")):
@@ -392,6 +442,8 @@ def scene_object_category(obj):
         return "tree"
     if category == "path":
         return "path"
+    if category in {"cube", "sphere", "cylinder", "cone"}:
+        return category
     if category == "surface":
         return "wall_panel" if has_any(tokens, ("panel", "plate")) else "table"
     if category == "machine" and has_any(tokens, ("engine", "motor", "thruster", "exhaust", "nozzle")):
@@ -663,6 +715,102 @@ def scene_plan_objects(spec):
     return []
 
 
+def registry_primitives(spec):
+    primitives = spec.get("primitives")
+    if isinstance(primitives, list):
+        return [primitive for primitive in primitives if isinstance(primitive, dict)]
+    return []
+
+
+def vec3(value, default):
+    if isinstance(value, list) and len(value) == 3:
+        try:
+            return tuple(float(item) for item in value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def material_for_registry_primitive(primitive, mat):
+    material_key = str(primitive.get("material") or "neutral").lower()
+    if material_key == "grey":
+        material_key = "gray"
+    if material_key == "metallic":
+        material_key = "metal"
+    return mat.get(material_key, mat["neutral"])
+
+
+def _registry_box(name, location, rotation, scale, params, mat):
+    obj = cube(name, location, scale, mat)
+    obj.rotation_euler = rotation
+    return [obj]
+
+
+def _registry_sphere(name, location, rotation, scale, params, mat):
+    radius = float(params.get("radius", 0.5))
+    obj = sphere(name, location, (scale[0] * radius, scale[1] * radius, scale[2] * radius), mat)
+    obj.rotation_euler = rotation
+    return [obj]
+
+
+def _registry_cylinder(name, location, rotation, scale, params, mat):
+    radius = float(params.get("radius", 0.35))
+    depth = float(params.get("depth", 1.0))
+    obj = cylinder(name, location, radius, depth, mat, rotation=rotation)
+    obj.scale = (scale[0], scale[1], scale[2])
+    return [obj]
+
+
+def _registry_cone(name, location, rotation, scale, params, mat):
+    radius = float(params.get("radius", 0.4))
+    depth = float(params.get("depth", 1.0))
+    obj = cone(name, location, radius, depth, mat, rotation=rotation)
+    obj.scale = (scale[0], scale[1], scale[2])
+    return [obj]
+
+
+def _registry_torus(name, location, rotation, scale, params, mat):
+    major_radius = float(params.get("major_radius", 0.45))
+    minor_radius = float(params.get("minor_radius", 0.08))
+    obj = torus(name, location, major_radius, minor_radius, mat, rotation=rotation)
+    obj.scale = scale
+    return [obj]
+
+
+def _registry_plane(name, location, rotation, scale, params, mat):
+    return [plane(name, location, scale, mat, rotation=rotation)]
+
+
+def _registry_wedge(name, location, rotation, scale, params, mat):
+    return [wedge(name, location, scale, mat, rotation=rotation)]
+
+
+PRIMITIVE_BUILDERS = {
+    "box": _registry_box,
+    "cube": _registry_box,
+    "sphere": _registry_sphere,
+    "cylinder": _registry_cylinder,
+    "cone": _registry_cone,
+    "torus": _registry_torus,
+    "plane": _registry_plane,
+    "wedge": _registry_wedge,
+}
+
+
+def primitive_for_registry_instance(primitive, idx, mat):
+    primitive_type = str(primitive.get("type") or "").lower()
+    builder = PRIMITIVE_BUILDERS.get(primitive_type)
+    if not builder:
+        raise ValueError(f"Unsupported primitive type: {primitive_type}")
+    transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
+    name = safe_object_name(primitive.get("id"), f"{primitive_type}_{idx + 1}")
+    location = vec3(transform.get("location"), (0.0, 0.0, 0.5))
+    rotation = vec3(transform.get("rotation"), (0.0, 0.0, 0.0))
+    scale = vec3(transform.get("scale"), (1.0, 1.0, 1.0))
+    params = primitive.get("params") if isinstance(primitive.get("params"), dict) else {}
+    return builder(name, location, rotation, scale, params, material_for_registry_primitive(primitive, mat))
+
+
 def layout_items_for_spec(spec):
     objects = scene_plan_objects(spec)
     if objects:
@@ -703,6 +851,14 @@ def primitive_for_scene_object(obj, idx, mat):
             objects.append(cylinder(obj_name, (x, y, z), 0.18, 0.58, mat["metal"], rotation=(0, 1.5708, 0)))
         elif category == "wall_panel":
             objects.append(cube(obj_name, (x, y, z), (0.62, 0.05, 0.42), mat_choice))
+        elif category in {"box", "cube"}:
+            objects.append(cube(obj_name, (x, y, z), (0.72, 0.72, 0.72), mat_choice))
+        elif category == "sphere":
+            objects.append(sphere(obj_name, (x, y, z), (0.42, 0.42, 0.42), mat_choice))
+        elif category == "cylinder":
+            objects.append(cylinder(obj_name, (x, y, z), 0.28, 0.82, mat_choice))
+        elif category == "cone":
+            objects.append(cone(obj_name, (x, y, z), 0.34, 0.82, mat_choice))
         elif category == "table":
             objects.extend(make_table_like(
                 obj_name,
@@ -740,6 +896,14 @@ def make_component_layout_scene(spec):
         "wood": material("component_wood", (0.42, 0.25, 0.12, 1)),
         "glass": material("component_glass_blue", (0.14, 0.45, 0.8, 0.72)),
         "green": material("component_green", (0.1, 0.34, 0.12, 1)),
+        "blue": material("component_blue", (0.05, 0.22, 0.85, 1)),
+        "red": material("component_red", (0.78, 0.08, 0.06, 1)),
+        "yellow": material("component_yellow", (1.0, 0.78, 0.08, 1)),
+        "orange": material("component_orange", (0.95, 0.38, 0.06, 1)),
+        "purple": material("component_purple", (0.45, 0.14, 0.72, 1)),
+        "black": material("component_black", (0.02, 0.02, 0.025, 1)),
+        "white": material("component_white", (0.92, 0.92, 0.88, 1)),
+        "gray": material("component_gray", (0.45, 0.46, 0.48, 1)),
         "bark": material("component_bark", (0.26, 0.13, 0.06, 1)),
         "path": material("component_path", (0.55, 0.46, 0.33, 1)),
         "glow": material("component_warm_glow", (1.0, 0.74, 0.28, 1)),
@@ -750,12 +914,17 @@ def make_component_layout_scene(spec):
         cube(name, location, scale, mats[mat_key])
         for name, location, scale, mat_key in layout_shell_descriptors(spec)
     ]
-    layout_items = layout_items_for_spec(spec)
-    for idx, item in enumerate(layout_items[:10]):
-        if item["source"] == "scene_object":
-            objects.extend(primitive_for_scene_object(item["value"], idx, mats))
-        else:
-            objects.extend(primitive_for_component(item["value"], idx, mats))
+    primitives = registry_primitives(spec)
+    if primitives:
+        for idx, primitive in enumerate(primitives[:100]):
+            objects.extend(primitive_for_registry_instance(primitive, idx, mats))
+    else:
+        layout_items = layout_items_for_spec(spec)
+        for idx, item in enumerate(layout_items[:10]):
+            if item["source"] == "scene_object":
+                objects.extend(primitive_for_scene_object(item["value"], idx, mats))
+            else:
+                objects.extend(primitive_for_component(item["value"], idx, mats))
 
     action_view = canonical_camera_views()["action"]
     add_preview_setup(
@@ -798,6 +967,7 @@ def main():
         "kind": spec.get("kind"),
         "style": spec.get("style"),
         "creative_request": spec.get("creative_request"),
+        "primitives": spec.get("primitives", []),
         "components": spec.get("components", []),
         "scene_plan": spec.get("scene_plan"),
         "repaired_scene_plan": spec.get("repaired_scene_plan"),

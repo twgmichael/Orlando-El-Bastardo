@@ -57,6 +57,15 @@ Be precise about likely failure boundaries. Do not imply that you can run shell
 commands or mutate the harness from this chat. When more evidence is needed,
 name the exact endpoint, log, setting, or job identifier to check next."""
 
+PRIMITIVE_SHAPE_RESOLVER_PROMPT = """You are the OEB primitive shape resolver.
+Convert the user's creative request and assistant draft JSON into a strict
+PrimitiveRegistry v0.1 build spec. Use only registry primitive types, material
+names, transforms, and numeric params. Do not write Blender code or invent APIs.
+When a request is vague, set needs_clarification true with one short question.
+When art direction is ambiguous, set escalation_reason. Return only JSON with:
+version, needs_clarification, clarification_question, escalation_reason,
+asset_kind, canonical_id, name, primitives."""
+
 
 STUDIO_CHAT_PRESETS = [
     StudioChatPreset(
@@ -96,6 +105,14 @@ STUDIO_CHAT_PRESETS = [
         label="Harness Debug",
         description="Reason about local harness and worker issues without side effects.",
         system_prompt=HARNESS_DEBUG_HELPER_PROMPT,
+        temperature=0.1,
+        max_tokens=2048,
+    ),
+    StudioChatPreset(
+        id="primitive_shape_resolver",
+        label="Primitive Resolver",
+        description="Resolve creative requests into PrimitiveRegistry v0.1 specs.",
+        system_prompt=PRIMITIVE_SHAPE_RESOLVER_PROMPT,
         temperature=0.1,
         max_tokens=2048,
     ),
@@ -238,6 +255,761 @@ def chat_with_ollama(
             "response": raw_response,
         },
     )
+
+
+PRIMITIVE_REGISTRY_V01 = {
+    "version": "0.1",
+    "primitive_types": {
+        "box": {
+            "aliases": ["cube", "block", "rectangular_prism"],
+            "params": {},
+        },
+        "sphere": {
+            "aliases": ["ball", "orb"],
+            "params": {"radius": {"min": 0.01, "max": 20.0, "default": 0.5}},
+        },
+        "cylinder": {
+            "aliases": ["tube", "post", "column"],
+            "params": {
+                "radius": {"min": 0.01, "max": 20.0, "default": 0.35},
+                "depth": {"min": 0.01, "max": 40.0, "default": 1.0},
+                "vertices": {"min": 3, "max": 128, "default": 32},
+            },
+        },
+        "cone": {
+            "aliases": ["traffic_cone", "spike"],
+            "params": {
+                "radius": {"min": 0.01, "max": 20.0, "default": 0.4},
+                "depth": {"min": 0.01, "max": 40.0, "default": 1.0},
+                "vertices": {"min": 3, "max": 128, "default": 32},
+            },
+        },
+        "torus": {
+            "aliases": ["ring", "donut"],
+            "params": {
+                "major_radius": {"min": 0.01, "max": 20.0, "default": 0.45},
+                "minor_radius": {"min": 0.005, "max": 5.0, "default": 0.08},
+            },
+        },
+        "plane": {
+            "aliases": ["flat_plane", "ground_plane", "surface"],
+            "params": {},
+        },
+        "wedge": {
+            "aliases": ["ramp", "triangular_prism"],
+            "params": {},
+        },
+    },
+    "materials": [
+        "neutral",
+        "blue",
+        "red",
+        "green",
+        "yellow",
+        "orange",
+        "purple",
+        "black",
+        "white",
+        "gray",
+        "metal",
+        "wood",
+        "glass",
+    ],
+    "transform": {
+        "location": {"length": 3, "min": -50.0, "max": 50.0},
+        "rotation": {"length": 3, "min": -6.283185307, "max": 6.283185307},
+        "scale": {"length": 3, "min": 0.01, "max": 20.0},
+    },
+}
+PRIMITIVE_ALIASES = {
+    alias: primitive_type
+    for primitive_type, config in PRIMITIVE_REGISTRY_V01["primitive_types"].items()
+    for alias in [primitive_type, *config.get("aliases", [])]
+}
+PRIMITIVE_TYPES = set(PRIMITIVE_ALIASES)
+CANONICAL_PRIMITIVE_TYPES = set(PRIMITIVE_REGISTRY_V01["primitive_types"])
+MATERIAL_COLOR_WORDS = {
+    "blue",
+    "red",
+    "green",
+    "yellow",
+    "orange",
+    "purple",
+    "black",
+    "white",
+    "gray",
+    "grey",
+    "metal",
+    "metallic",
+    "wood",
+    "glass",
+}
+
+
+def _balanced_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text[start:], start=start):
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
+
+
+def parse_assistant_json(text: str) -> dict[str, Any]:
+    try:
+        parsed = extract_json(text)
+    except json.JSONDecodeError as exc:
+        balanced = _balanced_json_object(text)
+        if not balanced:
+            raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
+        try:
+            parsed = json.loads(balanced)
+        except json.JSONDecodeError:
+            raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("assistant response JSON must be an object")
+    return parsed
+
+
+def _first_text_value(*values: Any, fallback: str = "") -> str:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return fallback
+
+
+def primitive_registry() -> dict[str, Any]:
+    return json.loads(json.dumps(PRIMITIVE_REGISTRY_V01))
+
+
+def canonical_primitive_type(value: Any) -> str | None:
+    key = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return PRIMITIVE_ALIASES.get(key)
+
+
+def _coerce_float(value: Any, field: str, min_value: float, max_value: float) -> float:
+    try:
+        coerced = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be numeric") from exc
+    if coerced < min_value or coerced > max_value:
+        raise ValueError(f"{field} must be between {min_value} and {max_value}")
+    return coerced
+
+
+def _coerce_int(value: Any, field: str, min_value: int, max_value: int) -> int:
+    try:
+        coerced = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be an integer") from exc
+    if coerced < min_value or coerced > max_value:
+        raise ValueError(f"{field} must be between {min_value} and {max_value}")
+    return coerced
+
+
+def _coerce_vec3(value: Any, field: str, default: list[float], min_value: float, max_value: float) -> list[float]:
+    if value is None:
+        return default.copy()
+    if not isinstance(value, list) or len(value) != 3:
+        raise ValueError(f"{field} must be a 3-number array")
+    return [_coerce_float(item, f"{field}[{idx}]", min_value, max_value) for idx, item in enumerate(value)]
+
+
+def _safe_id(value: Any, fallback: str) -> str:
+    raw = str(value or fallback).strip().lower()
+    safe = re.sub(r"[^a-z0-9_]+", "_", raw).strip("_")
+    if not safe or not re.match(r"^[a-z][a-z0-9_]{0,63}$", safe):
+        safe = fallback
+    return safe[:64]
+
+
+def _normalize_material(value: Any) -> str:
+    material = _material_color_from_text(str(value or "")) or str(value or "").strip().lower()
+    if material == "grey":
+        material = "gray"
+    if material == "metallic":
+        material = "metal"
+    if material in PRIMITIVE_REGISTRY_V01["materials"]:
+        return material
+    raise ValueError(f"material must be one of: {', '.join(PRIMITIVE_REGISTRY_V01['materials'])}")
+
+
+def _normalize_primitive_params(primitive_type: str, params: Any) -> dict[str, Any]:
+    if params is None:
+        params = {}
+    if not isinstance(params, dict):
+        raise ValueError("primitive params must be an object")
+    normalized: dict[str, Any] = {}
+    allowed = PRIMITIVE_REGISTRY_V01["primitive_types"][primitive_type].get("params", {})
+    for key, bounds in allowed.items():
+        if key not in params:
+            continue
+        if key == "vertices":
+            normalized[key] = _coerce_int(params[key], f"params.{key}", int(bounds["min"]), int(bounds["max"]))
+        else:
+            normalized[key] = _coerce_float(params[key], f"params.{key}", float(bounds["min"]), float(bounds["max"]))
+    unknown = sorted(set(params) - set(allowed))
+    if unknown:
+        raise ValueError(f"unsupported params for {primitive_type}: {', '.join(unknown)}")
+    return normalized
+
+
+def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("primitive resolver output must be an object")
+    primitives = payload.get("primitives")
+    if not isinstance(primitives, list) or not primitives:
+        raise ValueError("primitive resolver output must include non-empty primitives")
+
+    normalized_primitives: list[dict[str, Any]] = []
+    for idx, primitive in enumerate(primitives):
+        if not isinstance(primitive, dict):
+            raise ValueError(f"primitives[{idx}] must be an object")
+        primitive_type = canonical_primitive_type(primitive.get("type"))
+        if not primitive_type:
+            allowed = ", ".join(sorted(CANONICAL_PRIMITIVE_TYPES))
+            raise ValueError(f"primitives[{idx}].type must be one of: {allowed}")
+        transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
+        normalized_primitives.append({
+            "id": _safe_id(primitive.get("id"), f"{primitive_type}_{idx + 1}"),
+            "type": primitive_type,
+            "label": str(primitive.get("label")).strip() if primitive.get("label") else None,
+            "material": _normalize_material(primitive.get("material") or "neutral"),
+            "transform": {
+                "location": _coerce_vec3(transform.get("location"), "transform.location", [0.0, 0.0, 0.5], -50.0, 50.0),
+                "rotation": _coerce_vec3(transform.get("rotation"), "transform.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307),
+                "scale": _coerce_vec3(transform.get("scale"), "transform.scale", [1.0, 1.0, 1.0], 0.01, 20.0),
+            },
+            "params": _normalize_primitive_params(primitive_type, primitive.get("params")),
+        })
+
+    primary_type = normalized_primitives[0]["type"]
+    primary_material = normalized_primitives[0]["material"]
+    material_slug = "" if primary_material == "neutral" else f"_{primary_material}"
+    default_id = f"prop_{primary_type}{material_slug}_A"
+    canonical_id = _safe_id(payload.get("canonical_id"), default_id)
+    name = _first_text_value(
+        payload.get("name"),
+        fallback=f"{primary_material.title()} {primary_type.title()}" if material_slug else f"{primary_type.title()} Primitive",
+    )
+    asset_kind = _first_text_value(payload.get("asset_kind"), payload.get("kind"), fallback="prop")
+    if asset_kind not in {"asset", "prop", "vehicle", "location", "set", "character"}:
+        raise ValueError("asset_kind must be asset, prop, vehicle, location, set, or character")
+
+    return {
+        "version": "0.1",
+        "needs_clarification": bool(payload.get("needs_clarification", False)),
+        "clarification_question": payload.get("clarification_question"),
+        "escalation_reason": payload.get("escalation_reason"),
+        "asset_kind": asset_kind,
+        "canonical_id": canonical_id,
+        "name": name,
+        "style": _first_text_value(payload.get("style"), fallback=creative_request),
+        "primitives": normalized_primitives,
+    }
+
+
+def _primitive_payload_from_parsed(parsed: dict[str, Any], creative_request: str) -> dict[str, Any] | None:
+    build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
+    source = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else build_job
+    if isinstance(source, dict) and isinstance(source.get("primitives"), list):
+        return {
+            "asset_kind": source.get("asset_kind") or source.get("kind") or build_job.get("asset_kind") or parsed.get("asset_kind") or "prop",
+            "canonical_id": source.get("canonical_id") or build_job.get("canonical_id") or parsed.get("canonical_id"),
+            "name": source.get("name") or build_job.get("name") or parsed.get("name"),
+            "style": source.get("style") or build_job.get("style") or parsed.get("style") or creative_request,
+            "primitives": source["primitives"],
+        }
+    primitive_type = _primitive_type_from_payload(parsed)
+    if not primitive_type:
+        return None
+    material = _material_color_from_payload(parsed) or _material_color_from_text(creative_request) or "neutral"
+    canonical_type = canonical_primitive_type(primitive_type) or primitive_type
+    return {
+        "asset_kind": build_job.get("asset_kind") or build_job.get("kind") or parsed.get("kind") or "prop",
+        "canonical_id": build_job.get("canonical_id") or parsed.get("canonical_id"),
+        "name": build_job.get("name") or parsed.get("name"),
+        "style": build_job.get("style") or parsed.get("style") or creative_request,
+        "primitives": [
+            {
+                "id": canonical_type,
+                "type": canonical_type,
+                "label": f"{material} {canonical_type}" if material != "neutral" else canonical_type,
+                "material": material,
+                "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                "params": {},
+            }
+        ],
+    }
+
+
+def _primitive_type_from_payload(payload: dict[str, Any]) -> str | None:
+    action = str(payload.get("action") or "").lower()
+    build_job = payload.get("build_job") if isinstance(payload.get("build_job"), dict) else {}
+    candidates = [
+        build_job.get("type"),
+        build_job.get("primitive"),
+        payload.get("type"),
+        payload.get("primitive"),
+    ]
+    if "sphere" in action:
+        candidates.append("sphere")
+    for candidate in candidates:
+        value = canonical_primitive_type(candidate)
+        if value:
+            return value
+    return None
+
+
+def _material_color_from_payload(payload: dict[str, Any]) -> str | None:
+    build_job = payload.get("build_job") if isinstance(payload.get("build_job"), dict) else {}
+    spec = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else {}
+    candidates = [
+        build_job.get("material"),
+        build_job.get("color"),
+        payload.get("material"),
+        payload.get("color"),
+    ]
+    for source in (build_job, spec, payload):
+        materials = source.get("materials") if isinstance(source, dict) else None
+        if isinstance(materials, dict):
+            candidates.extend(materials.values())
+        style_details = source.get("style_details") if isinstance(source, dict) else None
+        if isinstance(style_details, list):
+            candidates.extend(style_details)
+    for candidate in candidates:
+        color = _material_color_from_text(str(candidate or ""))
+        if color:
+            return color
+    return None
+
+
+def _material_color_from_text(text: str) -> str | None:
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    for token in tokens:
+        if token in MATERIAL_COLOR_WORDS:
+            if token == "grey":
+                return "gray"
+            if token == "metallic":
+                return "metal"
+            return token
+    return None
+
+
+def _primitive_mentions_from_text(text: str) -> list[dict[str, Any]]:
+    words = list(re.finditer(r"[a-z0-9]+", text.lower()))
+    mentions: list[dict[str, Any]] = []
+    for idx, match in enumerate(words):
+        token = match.group(0)
+        primitive_type = canonical_primitive_type(token)
+        if not primitive_type and token.endswith("s"):
+            primitive_type = canonical_primitive_type(token[:-1])
+        if not primitive_type:
+            continue
+        color = None
+        for prev in reversed(words[max(0, idx - 4):idx]):
+            prev_token = prev.group(0)
+            if prev_token in MATERIAL_COLOR_WORDS:
+                color = "gray" if prev_token == "grey" else "metal" if prev_token == "metallic" else prev_token
+                break
+        mentions.append({
+            "type": primitive_type,
+            "color": color or "neutral",
+            "start": match.start(),
+        })
+    return mentions
+
+
+def _primitive_type_from_text(text: str) -> str | None:
+    mentions = _primitive_mentions_from_text(text)
+    if mentions:
+        return mentions[0]["type"]
+    return None
+
+
+def _primitive_type_from_messages(messages: list[StudioChatMessage] | None) -> str | None:
+    if not messages:
+        return None
+    for message in reversed(messages):
+        primitive_type = _primitive_type_from_text(message.content)
+        if primitive_type:
+            return primitive_type
+        match = re.search(r"\bprop_(sphere|cube|box|cylinder|cone|torus|plane|wedge)\b", message.content.lower())
+        if match:
+            return canonical_primitive_type(match.group(1))
+    return None
+
+
+def _fallback_payload_from_intent(
+    creative_request: str,
+    messages: list[StudioChatMessage] | None,
+    reason: str,
+) -> dict[str, Any]:
+    primitive_mentions = _primitive_mentions_from_text(creative_request)
+    unique_mentions = []
+    seen_keys = set()
+    for mention in primitive_mentions:
+        key = (mention["type"], mention["color"])
+        if key not in seen_keys:
+            unique_mentions.append(mention)
+            seen_keys.add(key)
+    if len(unique_mentions) > 1:
+        stacked = text_has_any(creative_request, ("top", "above", "stack", "stacked", "vertical"))
+        primitives = []
+        current_top = 0.0
+        for idx, mention in enumerate(unique_mentions):
+            primitive_type = mention["type"]
+            material_color = mention["color"]
+            radius = 0.5 if primitive_type == "sphere" else None
+            depth = 1.0
+            if stacked:
+                if primitive_type == "sphere":
+                    z = current_top + radius
+                    current_top = z + radius
+                else:
+                    z = current_top + (depth / 2)
+                    current_top = z + (depth / 2)
+            else:
+                z = 0.5
+            primitive: dict[str, Any] = {
+                "id": f"{primitive_type}_{idx + 1}",
+                "type": primitive_type,
+                "label": f"{material_color} {primitive_type}" if material_color != "neutral" else primitive_type,
+                "material": material_color,
+                "transform": {"location": [0.0, 0.0, z], "rotation": [0.0, 0.0, 0.0], "scale": [1.0, 1.0, 1.0]},
+                "params": {},
+            }
+            if primitive_type == "sphere":
+                primitive["params"]["radius"] = radius
+            if primitive_type in {"cone", "cylinder"}:
+                primitive["params"]["depth"] = depth
+            primitives.append(primitive)
+
+        primary = unique_mentions[0]
+        color_slug = f"_{primary['color']}" if primary["color"] != "neutral" else ""
+        return {
+            "action": "fallback_intent",
+            "confidence": 65,
+            "clarification_question": None,
+            "escalation_reason": None,
+            "fallback_reason": reason,
+            "build_job": {
+                "asset_kind": "prop",
+                "canonical_id": f"prop_{primary['type']}{color_slug}_compound_A",
+                "name": "Compound Primitive",
+                "style": creative_request,
+                "primitives": primitives,
+            },
+        }
+
+    primitive_type = _primitive_type_from_text(creative_request) or _primitive_type_from_messages(messages)
+    if not primitive_type:
+        raise ValueError(
+            "assistant response was malformed and the prompt did not identify a buildable primitive"
+        )
+    material_color = _material_color_from_text(creative_request)
+    build_job: dict[str, Any] = {
+        "type": primitive_type,
+        "asset_kind": "prop",
+        "canonical_id": f"prop_{primitive_type}_{material_color}_A" if material_color else f"prop_{primitive_type}_A",
+        "name": f"{material_color.title()} {primitive_type.title()}" if material_color else primitive_type.title(),
+    }
+    if material_color:
+        build_job["materials"] = {"primary": material_color}
+        build_job["style_details"] = [material_color]
+    return {
+        "action": "fallback_intent",
+        "confidence": 60,
+        "clarification_question": None,
+        "escalation_reason": None,
+        "fallback_reason": reason,
+        "build_job": build_job,
+    }
+
+
+def _scene_plan_for_primitive(
+    primitive_type: str,
+    creative_request: str,
+    material_color: str | None = None,
+) -> dict[str, Any]:
+    label = f"{material_color} {primitive_type}" if material_color else primitive_type
+    scene_object = {
+        "id": primitive_type,
+        "label": label,
+        "category": primitive_type,
+        "count": 1,
+        "placement": "center",
+        "shape": {"primary_form": primitive_type},
+        "source_phrases": [creative_request],
+    }
+    if material_color:
+        scene_object["materials"] = {"primary": material_color}
+        scene_object["style_details"] = [material_color]
+    return {
+        "scene_type": f"{primitive_type}_asset",
+        "style": creative_request,
+        "objects": [scene_object],
+        "relationships": [],
+    }
+
+
+def _resolver_payload(
+    creative_request: str,
+    assistant_response: str,
+    registry: dict[str, Any],
+    validation_error: str | None = None,
+    previous_response: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    user_content = {
+        "creative_request": creative_request,
+        "assistant_json_or_text": assistant_response,
+        "primitive_registry": registry,
+    }
+    if validation_error:
+        user_content["validation_error"] = validation_error
+    if previous_response:
+        user_content["previous_response"] = previous_response
+    return {
+        "messages": [
+            {"role": "system", "content": PRIMITIVE_SHAPE_RESOLVER_PROMPT},
+            {"role": "user", "content": json.dumps(user_content, indent=2)},
+        ],
+        "stream": False,
+        "options": {"temperature": 0.1, "num_predict": 2048},
+    }
+
+
+def resolve_primitive_spec(
+    ollama_url: str,
+    model: str,
+    creative_request: str,
+    assistant_json: str,
+    max_retries: int = 1,
+) -> dict[str, Any]:
+    retries = max(0, min(int(max_retries), 2))
+    registry = primitive_registry()
+    attempts: list[dict[str, Any]] = []
+    validation_error: str | None = None
+    previous_response: dict[str, Any] | None = None
+
+    for attempt in range(retries + 1):
+        payload = _resolver_payload(
+            creative_request,
+            assistant_json,
+            registry,
+            validation_error=validation_error,
+            previous_response=previous_response,
+        )
+        payload["model"] = model
+        raw_response = post_json(f"{ollama_url.rstrip('/')}/api/chat", payload, timeout=120)
+        message = raw_response.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str):
+            validation_error = "resolver response did not include message.content"
+            attempts.append({"attempt": attempt + 1, "error": validation_error, "raw": raw_response})
+            continue
+        try:
+            parsed = parse_assistant_json(content)
+            resolved = validate_primitive_spec(parsed, creative_request)
+            attempts.append({"attempt": attempt + 1, "parsed": parsed, "resolved": resolved})
+            return {
+                "ok": True,
+                "source": "ollama_resolver",
+                "attempts": attempts,
+                "resolved": resolved,
+                "registry_version": registry["version"],
+            }
+        except ValueError as exc:
+            validation_error = str(exc)
+            previous_response = {"content": content}
+            attempts.append({"attempt": attempt + 1, "error": validation_error, "content": content})
+
+    return {
+        "ok": False,
+        "source": "ollama_resolver",
+        "attempts": attempts,
+        "error": validation_error or "resolver failed",
+        "registry_version": registry["version"],
+    }
+
+
+def _spec_from_resolved_primitive(
+    creative_request: str,
+    resolved: dict[str, Any],
+) -> PrimitiveBuildSpec:
+    primitive_types = [primitive["type"] for primitive in resolved["primitives"]]
+    scene_plan = {
+        "scene_type": "primitive_asset",
+        "style": resolved.get("style") or creative_request,
+        "objects": [
+            {
+                "id": primitive["id"],
+                "label": primitive.get("label") or primitive["type"],
+                "category": primitive["type"],
+                "count": 1,
+                "placement": "center",
+                "shape": {"primary_form": primitive["type"]},
+                "materials": {"primary": primitive.get("material", "neutral")},
+                "source_phrases": [creative_request],
+            }
+            for primitive in resolved["primitives"]
+        ],
+        "relationships": [],
+    }
+    return PrimitiveBuildSpec.model_validate({
+        "canonical_id": resolved["canonical_id"],
+        "name": resolved["name"],
+        "kind": resolved["asset_kind"],
+        "style": resolved.get("style") or creative_request,
+        "creative_request": creative_request,
+        "build_method": "blender_primitives",
+        "primitives": resolved["primitives"],
+        "components": primitive_types,
+        "scene_plan": scene_plan,
+        "repaired_scene_plan": scene_plan,
+        "deliverables": ["glb", "preview_render", "asset_review_renders", "review_page"],
+    })
+
+
+def build_spec_with_primitive_resolver(
+    creative_request: str,
+    assistant_response: str,
+    messages: list[StudioChatMessage] | None = None,
+    ollama_url: str | None = None,
+    model: str | None = None,
+    resolver_retries: int = 1,
+) -> tuple[PrimitiveBuildSpec, dict[str, Any], dict[str, Any] | None]:
+    try:
+        parsed = parse_assistant_json(assistant_response)
+    except ValueError:
+        parsed = _fallback_payload_from_intent(
+            creative_request,
+            messages,
+            reason="assistant_json_invalid",
+        )
+
+    direct_payload = _primitive_payload_from_parsed(parsed, creative_request)
+    if direct_payload:
+        try:
+            resolved = validate_primitive_spec(direct_payload, creative_request)
+            return _spec_from_resolved_primitive(creative_request, resolved), parsed, {
+                "ok": True,
+                "source": "fallback_intent" if parsed.get("action") == "fallback_intent" else "assistant_json",
+                "resolved": resolved,
+                "registry_version": PRIMITIVE_REGISTRY_V01["version"],
+            }
+        except ValueError:
+            pass
+
+    resolver_output: dict[str, Any] | None = None
+    if ollama_url and model:
+        resolver_output = resolve_primitive_spec(
+            ollama_url,
+            model,
+            creative_request,
+            assistant_response,
+            max_retries=resolver_retries,
+        )
+        if resolver_output.get("ok") and isinstance(resolver_output.get("resolved"), dict):
+            return (
+                _spec_from_resolved_primitive(creative_request, resolver_output["resolved"]),
+                parsed,
+                resolver_output,
+            )
+
+    spec, legacy_parsed = build_spec_from_assistant_response(creative_request, assistant_response, messages)
+    if resolver_output is None:
+        resolver_output = {
+            "ok": False,
+            "source": "legacy_fallback",
+            "error": "resolver not configured",
+            "registry_version": PRIMITIVE_REGISTRY_V01["version"],
+        }
+    return spec, legacy_parsed, resolver_output
+
+
+def build_spec_from_assistant_response(
+    creative_request: str,
+    assistant_response: str,
+    messages: list[StudioChatMessage] | None = None,
+) -> tuple[PrimitiveBuildSpec, dict[str, Any]]:
+    try:
+        parsed = parse_assistant_json(assistant_response)
+    except ValueError:
+        parsed = _fallback_payload_from_intent(
+            creative_request,
+            messages,
+            reason="assistant_json_invalid",
+        )
+    build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
+    spec_source = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else None
+    if spec_source is None:
+        spec_source = build_job if build_job else parsed
+
+    primitive_type = _primitive_type_from_payload(parsed)
+    if primitive_type:
+        material_color = _material_color_from_payload(parsed) or _material_color_from_text(creative_request)
+        scene_plan = _scene_plan_for_primitive(primitive_type, creative_request, material_color)
+        canonical_id = _first_text_value(
+            spec_source.get("canonical_id") if isinstance(spec_source, dict) else None,
+            build_job.get("canonical_id"),
+            parsed.get("canonical_id"),
+            fallback=f"prop_{primitive_type}_{material_color}_A" if material_color else f"prop_{primitive_type}_A",
+        )
+        name = _first_text_value(
+            spec_source.get("name") if isinstance(spec_source, dict) else None,
+            build_job.get("name"),
+            parsed.get("name"),
+            fallback=f"{material_color.title()} {primitive_type.title()}" if material_color else f"{primitive_type.title()} Test A",
+        )
+        spec_payload = {
+            "canonical_id": canonical_id,
+            "name": name,
+            "kind": _first_text_value(
+                build_job.get("asset_kind"),
+                build_job.get("kind"),
+                parsed.get("asset_kind"),
+                parsed.get("kind"),
+                fallback="prop",
+            ),
+            "style": _first_text_value(
+                spec_source.get("style") if isinstance(spec_source, dict) else None,
+                build_job.get("style"),
+                parsed.get("style"),
+                fallback=creative_request,
+            ),
+            "creative_request": creative_request,
+            "build_method": "blender_primitives",
+            "components": [primitive_type],
+            "scene_plan": scene_plan,
+            "repaired_scene_plan": scene_plan,
+            "deliverables": ["glb", "preview_render", "asset_review_renders", "review_page"],
+        }
+        return PrimitiveBuildSpec.model_validate(spec_payload), parsed
+
+    if not isinstance(spec_source, dict):
+        raise ValueError("assistant response does not contain a build_job or spec object")
+    normalized = normalize_spec(creative_request, dict(spec_source))
+    return PrimitiveBuildSpec.model_validate(normalized), parsed
 
 
 def extract_json(text: str) -> dict:

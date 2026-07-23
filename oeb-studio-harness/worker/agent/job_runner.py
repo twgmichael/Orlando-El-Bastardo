@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -162,15 +163,27 @@ class JobRunner:
                         review_metadata=review_metadata,
                         **info,
                     )
-                except Exception:
+                except Exception as exc:
                     if is_asset_review or is_scene_render:
                         label = "Scene render" if is_scene_render else "Review render"
-                        reason = f"{label} artifact byte upload failed for {artifact_file.name}"
+                        error_detail = f"{type(exc).__name__}: {exc}"
+                        reason = f"{label} artifact byte upload failed for {artifact_file.name}: {error_detail}"
                         log.exception("%s; failing job %s", reason, job_id)
                         await self._client.fail_job(
                             job_id,
                             reason=reason,
-                            log_output=result.log_output,
+                            log_output="\n".join([
+                                result.log_output or "",
+                                f"Artifact upload exception for {artifact_file}:",
+                                traceback.format_exc(),
+                            ]).strip(),
+                            output_summary={
+                                "adapter": adapter.name,
+                                **result_summary,
+                                "artifact_upload_error": error_detail,
+                                "failed_artifact": str(artifact_file),
+                                "rendered_artifacts": [str(path) for path in result.artifacts],
+                            },
                         )
                         return
                     log.warning(
@@ -187,13 +200,24 @@ class JobRunner:
                     )
                 uploaded.append(reg)
                 log.info("Uploaded artifact %s for job %s", artifact_file.name, job_id)
-            except Exception:
+            except Exception as exc:
                 log.exception("Failed to register artifact %s", artifact_path)
                 if is_asset_review or is_scene_render:
                     await self._client.fail_job(
                         job_id,
-                        reason=f"Render artifact registration failed for {artifact_path}",
-                        log_output=result.log_output,
+                        reason=f"Render artifact registration failed for {artifact_path}: {type(exc).__name__}: {exc}",
+                        log_output="\n".join([
+                            result.log_output or "",
+                            f"Artifact registration exception for {artifact_path}:",
+                            traceback.format_exc(),
+                        ]).strip(),
+                        output_summary={
+                            "adapter": adapter.name,
+                            **result_summary,
+                            "artifact_registration_error": f"{type(exc).__name__}: {exc}",
+                            "failed_artifact": str(artifact_path),
+                            "rendered_artifacts": [str(path) for path in result.artifacts],
+                        },
                     )
                     return
 

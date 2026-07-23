@@ -37,6 +37,21 @@ class ScenePlan(BaseModel):
     relationships: list[SpatialRelationship] = Field(default_factory=list)
 
 
+class PrimitiveTransform(BaseModel):
+    location: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.5])
+    rotation: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
+    scale: list[float] = Field(default_factory=lambda: [1.0, 1.0, 1.0])
+
+
+class PrimitiveInstance(BaseModel):
+    id: str
+    type: str
+    label: Optional[str] = None
+    material: str = "neutral"
+    transform: PrimitiveTransform = Field(default_factory=PrimitiveTransform)
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
 class PrimitiveBuildSpec(BaseModel):
     canonical_id: str
     name: str
@@ -44,6 +59,7 @@ class PrimitiveBuildSpec(BaseModel):
     style: str
     creative_request: Optional[str] = None
     build_method: str = "blender_primitives"
+    primitives: list[PrimitiveInstance] = Field(default_factory=list)
     components: list[str] = Field(default_factory=list)
     scene_plan: Optional[ScenePlan] = None
     repaired_scene_plan: Optional[ScenePlan] = None

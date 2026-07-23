@@ -5,10 +5,16 @@ from app.schemas.studio_chat import (
 )
 from app.services import studio_chat
 from app.services.studio_chat import (
+    build_spec_from_assistant_response,
+    build_spec_with_primitive_resolver,
     chat_with_ollama,
     list_ollama_models,
     ollama_chat_payload,
+    parse_assistant_json,
+    primitive_registry,
+    resolve_primitive_spec,
     studio_chat_presets,
+    validate_primitive_spec,
 )
 
 
@@ -16,11 +22,14 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     presets = {preset.id: preset for preset in studio_chat_presets()}
 
     asset_builder = presets["asset_builder_translator"]
+    primitive_resolver = presets["primitive_shape_resolver"]
 
     assert "strict JSON" in asset_builder.system_prompt
     assert "+X front" in asset_builder.system_prompt
     assert "Do not write Blender code" in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
+    assert "PrimitiveRegistry v0.1" in primitive_resolver.system_prompt
+    assert primitive_resolver.temperature == 0.1
 
 
 def test_ollama_chat_payload_keeps_system_prompt_and_history_visible():
@@ -71,6 +80,176 @@ def test_review_views_normalize_back_to_rear():
     )
 
     assert body.review_views == ["front", "rear", "action"]
+
+
+def test_parse_assistant_json_accepts_fenced_json():
+    parsed = parse_assistant_json(
+        """```json
+{"action": "render_sphere", "build_job": {"type": "sphere"}}
+```"""
+    )
+
+    assert parsed["action"] == "render_sphere"
+    assert parsed["build_job"]["type"] == "sphere"
+
+
+def test_build_spec_from_assistant_response_preserves_sphere_scene_object():
+    spec, parsed = build_spec_from_assistant_response(
+        "Render a sphere",
+        """{
+          "action": "render_sphere",
+          "build_job": {
+            "type": "sphere",
+            "canonical_id": "prop_sphere_test_A",
+            "name": "Sphere Test A",
+            "asset_kind": "prop"
+          }
+        }""",
+    )
+
+    assert parsed["action"] == "render_sphere"
+    assert spec.canonical_id == "prop_sphere_test_A"
+    assert spec.kind == "prop"
+    assert spec.components == ["sphere"]
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].category == "sphere"
+    assert spec.scene_plan.objects[0].shape == {"primary_form": "sphere"}
+    assert "asset_review_renders" in spec.deliverables
+
+
+def test_validate_primitive_spec_normalizes_cube_alias_to_box():
+    resolved = validate_primitive_spec(
+        {
+            "asset_kind": "prop",
+            "canonical_id": "prop_cube_blue_A",
+            "name": "Blue Cube",
+            "primitives": [
+                {
+                    "id": "main_cube",
+                    "type": "cube",
+                    "material": "blue",
+                    "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                }
+            ],
+        },
+        "Build a blue cube.",
+    )
+
+    assert primitive_registry()["version"] == "0.1"
+    assert resolved["primitives"][0]["type"] == "box"
+    assert resolved["primitives"][0]["material"] == "blue"
+
+
+def test_build_spec_with_primitive_resolver_prefers_assistant_primitives():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build a blue cube.",
+        """{
+          "action": "build",
+          "build_job": {
+            "canonical_id": "prop_cube_blue_A",
+            "name": "Blue Cube",
+            "primitives": [
+              {"id": "main_cube", "type": "cube", "material": "blue"}
+            ]
+          }
+        }""",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "assistant_json"
+    assert spec.primitives[0].type == "box"
+    assert spec.primitives[0].material == "blue"
+    assert spec.components == ["box"]
+
+
+def test_malformed_multi_primitive_response_falls_back_to_compound_primitives():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build a yellow cone with a white sphere on top, keep both vertical.",
+        """```json
+{
+  "action": "build",
+  "build_job": {
+    "type": "cone",
+    "color": "yellow",
+    "height": 2.0, // bad local-model comment
+    "type": "sphere",
+    "color": "white",
+    "position": [0, 0, 2]
+  }
+}
+```""",
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert resolver["source"] == "fallback_intent"
+    assert spec.components == ["cone", "sphere"]
+    assert [primitive.type for primitive in spec.primitives] == ["cone", "sphere"]
+    assert [primitive.material for primitive in spec.primitives] == ["yellow", "white"]
+    assert spec.primitives[1].transform.location[2] > spec.primitives[0].transform.location[2]
+
+
+def test_resolve_primitive_spec_retries_once_after_invalid_output(monkeypatch):
+    calls = []
+
+    def fake_post_json(url, payload, token=None, timeout=60):
+        calls.append(payload)
+        content = (
+            '{"version":"0.1","primitives":[{"type":"imaginary"}]}'
+            if len(calls) == 1
+            else '{"version":"0.1","asset_kind":"prop","canonical_id":"prop_cone_yellow_A","name":"Yellow Cone","primitives":[{"id":"main_cone","type":"cone","material":"yellow"}]}'
+        )
+        return {"message": {"role": "assistant", "content": content}, "done": True}
+
+    monkeypatch.setattr(studio_chat, "post_json", fake_post_json)
+
+    resolved = resolve_primitive_spec(
+        "http://ollama.test",
+        "oeb-qwen2.5-3b",
+        "Build a yellow cone.",
+        '{"action":"build","build_job":{"type":"cone"}}',
+        max_retries=1,
+    )
+
+    assert resolved["ok"] is True
+    assert len(calls) == 2
+    assert "validation_error" in calls[1]["messages"][1]["content"]
+    assert resolved["resolved"]["primitives"][0]["type"] == "cone"
+
+
+def test_build_spec_falls_back_from_malformed_json_for_blue_cube():
+    spec, parsed = build_spec_from_assistant_response(
+        "Make the cube blue.",
+        '{"action":"edit_asset","build_job":{"type":"cube" "materials":{"primary":"blue"}}}',
+        messages=[],
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert parsed["fallback_reason"] == "assistant_json_invalid"
+    assert spec.canonical_id == "prop_box_blue_A"
+    assert spec.kind == "prop"
+    assert spec.components == ["box"]
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].category == "box"
+    assert spec.scene_plan.objects[0].materials == {"primary": "blue"}
+    assert "blue" in spec.scene_plan.objects[0].style_details
+
+
+def test_build_spec_fallback_uses_recent_context_for_pronoun_edit():
+    spec, parsed = build_spec_from_assistant_response(
+        "Make it blue.",
+        "not json",
+        messages=[
+            StudioChatMessage(role="user", content="Build a cube."),
+            StudioChatMessage(role="assistant", content='{"action":"render_cube","build_job":{"type":"cube"}}'),
+        ],
+    )
+
+    assert parsed["action"] == "fallback_intent"
+    assert parsed["build_job"]["type"] == "box"
+    assert spec.canonical_id == "prop_box_blue_A"
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].category == "box"
+    assert spec.scene_plan.objects[0].materials == {"primary": "blue"}
 
 
 def test_list_ollama_models_sorts_names_and_ignores_malformed_entries(monkeypatch):

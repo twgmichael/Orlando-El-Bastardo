@@ -8,11 +8,13 @@ from app.database import get_db
 from app.auth import require_admin, require_worker, require_admin_or_worker
 from app.config import get_settings
 from app.models.artifact import Artifact
+from app.models.asset import Asset
 from app.models.job import Job, JobAttempt, JobLease
 from app.models.worker import Worker, WorkerCapability
 from app.models.audit import AuditEvent
 from app.models.user import ApiToken
 from app.services.asset_review import (
+    ReviewAsset,
     asset_review_gallery_url,
     create_asset_review_render_job as create_review_render_job_record,
     missing_uploaded_views,
@@ -32,6 +34,100 @@ from app.schemas.job import (
 )
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _build_review_asset_path(raw_path: str, build_job_id: uuid.UUID) -> str:
+    return raw_path.replace("{job_id}", str(build_job_id))
+
+
+async def _create_post_build_review_job(
+    db: AsyncSession,
+    *,
+    build_job: Job,
+    now: datetime,
+) -> Job | None:
+    payload = build_job.payload or {}
+    review_config = payload.get("post_build_review")
+    if not isinstance(review_config, dict) or not review_config.get("enabled"):
+        return None
+
+    asset_id = str(review_config.get("asset_id") or "").strip()
+    asset_path = str(review_config.get("asset_path") or "").strip()
+    if not asset_id or not asset_path:
+        return None
+
+    concrete_asset_path = _build_review_asset_path(asset_path, build_job.id)
+    asset_name = str(review_config.get("asset_name") or asset_id)
+    asset_kind = str(review_config.get("asset_kind") or "asset")
+    existing_asset_result = await db.execute(select(Asset).where(Asset.canonical_id == asset_id))
+    asset_record = existing_asset_result.scalar_one_or_none()
+    if asset_record:
+        asset_record.name = asset_record.name or asset_name
+        asset_record.kind = asset_record.kind or asset_kind
+        asset_record.file_path = concrete_asset_path
+        asset_record.format = "glb"
+        asset_record.status = "available"
+        asset_record.updated_at = now
+        asset_record.asset_metadata = {
+            **(asset_record.asset_metadata or {}),
+            "source_build_job_id": str(build_job.id),
+            "gallery_url": review_config.get("gallery_url") or asset_review_gallery_url(asset_id),
+        }
+    else:
+        asset_record = Asset(
+            canonical_id=asset_id,
+            name=asset_name,
+            kind=asset_kind,
+            file_path=concrete_asset_path,
+            format="glb",
+            status="available",
+            provenance={"source": "studio_chat_build_job", "job_id": str(build_job.id)},
+            tags=["studio-chat", "primitive-build"],
+            asset_metadata={
+                "source_build_job_id": str(build_job.id),
+                "gallery_url": review_config.get("gallery_url") or asset_review_gallery_url(asset_id),
+            },
+        )
+        db.add(asset_record)
+
+    existing_review_result = await db.execute(
+        select(Job).where(
+            Job.payload["job_type"].as_string() == "asset.review_render",
+            Job.payload["parent_build_job_id"].as_string() == str(build_job.id),
+        )
+    )
+    existing_review = existing_review_result.scalar_one_or_none()
+    if existing_review:
+        return existing_review
+
+    views = review_config.get("views") or ["top", "bottom", "left", "right", "front", "back", "action"]
+    review_job = await create_review_render_job_record(
+        db,
+        asset=ReviewAsset(asset_id=asset_id, asset_path=concrete_asset_path, name=asset_name),
+        views=views,
+        quality=str(review_config.get("quality") or "preview"),
+        priority=int(review_config.get("priority") or 10),
+        actor_id="studio-chat",
+    )
+    review_job.payload = {
+        **(review_job.payload or {}),
+        "parent_build_job_id": str(build_job.id),
+    }
+    db.add(AuditEvent(
+        event_type="studio_chat.post_build_review_created",
+        actor_type="system",
+        actor_id="harness",
+        resource_type="job",
+        resource_id=str(review_job.id),
+        details={
+            "build_job_id": str(build_job.id),
+            "asset_id": asset_id,
+            "asset_path": concrete_asset_path,
+            "views": views,
+            "gallery_url": asset_review_gallery_url(asset_id),
+        },
+    ))
+    return review_job
 
 
 @router.post("/asset-review-renders", response_model=JobSummary, status_code=status.HTTP_201_CREATED,
@@ -417,6 +513,15 @@ async def complete_job(
 
     job.status = "completed"
     job.updated_at = now
+    post_build_review_job = await _create_post_build_review_job(db, build_job=job, now=now)
+    if post_build_review_job:
+        summary = dict(body.output_summary or {})
+        summary["post_build_review_job_id"] = str(post_build_review_job.id)
+        summary["asset_review_url"] = asset_review_gallery_url(
+            (job.payload or {}).get("post_build_review", {}).get("asset_id")
+        )
+        if attempt:
+            attempt.output_summary = summary
 
     db.add(AuditEvent(
         event_type="job.completed",

@@ -89,6 +89,50 @@ def test_orientation_standard_is_explicit_builder_contract():
     }
 
 
+def test_registry_primitive_dispatch_uses_material_and_transform(monkeypatch):
+    builder = load_builder_module()
+    captured = {}
+    mats = {"neutral": "neutral-mat", "blue": "blue-mat"}
+
+    def fake_box(name, location, rotation, scale, params, mat):
+        captured.update({
+            "name": name,
+            "location": location,
+            "rotation": rotation,
+            "scale": scale,
+            "params": params,
+            "mat": mat,
+        })
+        return ["box-object"]
+
+    monkeypatch.setitem(builder.PRIMITIVE_BUILDERS, "box", fake_box)
+
+    objects = builder.primitive_for_registry_instance(
+        {
+            "id": "main_cube",
+            "type": "box",
+            "material": "blue",
+            "transform": {
+                "location": [1, 2, 3],
+                "rotation": [0, 0, 1.57],
+                "scale": [2, 2, 2],
+            },
+        },
+        0,
+        mats,
+    )
+
+    assert objects == ["box-object"]
+    assert captured == {
+        "name": "main_cube",
+        "location": (1.0, 2.0, 3.0),
+        "rotation": (0.0, 0.0, 1.57),
+        "scale": (2.0, 2.0, 2.0),
+        "params": {},
+        "mat": "blue-mat",
+    }
+
+
 def test_axis_placement_uses_oeb_local_axes():
     builder = load_builder_module()
 
@@ -204,6 +248,88 @@ def test_scene_object_tokens_include_structured_detail_fields():
     assert "wood" in tokens
     assert "thin" in tokens
     assert "legs" in tokens
+
+
+def test_primitive_scene_object_uses_named_color_material(monkeypatch):
+    builder = load_builder_module()
+    created = []
+    blue_material = object()
+
+    def fake_cube(name, location, scale, mat):
+        created.append(("cube", name, location, scale, mat))
+        return types.SimpleNamespace(name=name)
+
+    monkeypatch.setattr(builder, "cube", fake_cube)
+
+    obj = {
+        "id": "cube",
+        "label": "blue cube",
+        "category": "cube",
+        "count": 1,
+        "placement": "center",
+        "shape": {"primary_form": "cube"},
+        "source_phrases": ["Build a blue cube."],
+        "materials": {"primary": "blue"},
+        "style_details": ["blue"],
+    }
+    mats = {
+        "blue": blue_material,
+        "neutral": object(),
+        "wood": object(),
+        "glass": object(),
+        "metal": object(),
+        "green": object(),
+        "glow": object(),
+        "dark": object(),
+        "soft": object(),
+    }
+
+    assert builder.scene_object_category(obj) == "cube"
+
+    builder.primitive_for_scene_object(obj, 0, mats)
+
+    assert created == [("cube", "cube", (0, 0, 0.35), (0.72, 0.72, 0.72), blue_material)]
+
+
+def test_cone_scene_object_routes_to_cone_primitive(monkeypatch):
+    builder = load_builder_module()
+    created = []
+    yellow_material = object()
+
+    def fake_cone(name, location, radius, depth, mat, rotation=(0, 0, 0)):
+        created.append(("cone", name, location, radius, depth, mat, rotation))
+        return types.SimpleNamespace(name=name)
+
+    monkeypatch.setattr(builder, "cone", fake_cone)
+
+    obj = {
+        "id": "cone",
+        "label": "yellow cone",
+        "category": "cone",
+        "count": 1,
+        "placement": "center",
+        "shape": {"primary_form": "cone"},
+        "source_phrases": ["Build a yellow cone."],
+        "materials": {"primary": "yellow"},
+        "style_details": ["yellow"],
+    }
+    mats = {
+        "yellow": yellow_material,
+        "neutral": object(),
+        "wood": object(),
+        "glass": object(),
+        "metal": object(),
+        "green": object(),
+        "glow": object(),
+        "dark": object(),
+        "soft": object(),
+    }
+
+    assert builder.scene_object_category(obj) == "cone"
+
+    builder.primitive_for_scene_object(obj, 0, mats)
+
+    assert created == [("cone", "cone", (0, 0, 0.35), 0.34, 0.82, yellow_material, (0, 0, 0))]
 
 
 def test_structured_rounded_corner_table_builds_rounded_corner_parts(monkeypatch):
