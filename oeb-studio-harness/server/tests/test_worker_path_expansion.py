@@ -203,6 +203,47 @@ def test_blender_adapter_falls_back_to_config_timeout_when_payload_omits_timeout
     assert result.output_summary["blender_timeout_source"] == "adapter_default"
 
 
+def test_blender_adapter_fails_when_expected_script_artifacts_are_missing(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tools_dir = workspace / "tools"
+    tools_dir.mkdir()
+    (tools_dir / "build.py").write_text("# test script\n", encoding="utf-8")
+    output_root = tmp_path / "output"
+
+    adapter = BlenderCLIAdapter(
+        BlenderAdapterConfig(executable="blender", timeout_seconds=321),
+        output_root=str(output_root),
+        workspace_root=str(workspace),
+    )
+
+    def fake_run(cmd, cwd=None, timeout_seconds=None):
+        return "Traceback: script failed but Blender returned 0", 0
+
+    monkeypatch.setattr(adapter, "_run", fake_run)
+
+    result = adapter.execute({
+        "id": "job-459",
+        "required_capabilities": ["blender.command_line"],
+        "payload": {
+            "script_file": "{workspace_root}/tools/build.py",
+            "cwd": "{workspace_root}",
+            "output_path": "{output_root}/jobs/{job_id}/renders/asset_previews/prop_cone_yellow_A.png",
+            "artifact_paths": [
+                "{output_root}/jobs/{job_id}/assets/props/prop_cone_yellow_A.glb",
+                "{output_root}/jobs/{job_id}/renders/asset_previews/prop_cone_yellow_A.png",
+            ],
+            "artifact_type": "asset_build",
+        },
+    })
+
+    assert not result.success
+    assert result.error.startswith("Script completed without expected artifacts")
+    assert result.output_summary["frames_rendered"] == 0
+    assert len(result.output_summary["missing_artifacts"]) == 2
+    assert "prop_cone_yellow_A.glb" in result.output_summary["log_tail"] or "Traceback" in result.output_summary["log_tail"]
+
+
 def test_blender_adapter_reports_scene_render_failure_diagnostics(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

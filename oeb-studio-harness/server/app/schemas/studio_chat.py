@@ -96,3 +96,57 @@ class StudioChatOllamaResponse(BaseModel):
     message: StudioChatOllamaMessage
     done: bool
     raw: dict[str, Any]
+
+
+class StudioChatBuildJobRequest(BaseModel):
+    model: str | None = None
+    creative_request: str
+    assistant_response: str
+    messages: list[StudioChatMessage] = Field(default_factory=list)
+    review_views: list[str] = Field(default_factory=lambda: STANDARD_REVIEW_VIEWS.copy())
+    priority: int = 0
+    policy: str = "run_anywhere"
+
+    @field_validator("review_views")
+    @classmethod
+    def build_review_views_must_be_known(cls, value: list[str]) -> list[str]:
+        return StudioChatOllamaRequest.review_views_must_be_known(value)
+
+
+class StudioChatBuildJobResponse(BaseModel):
+    job: JobSummary
+    review_url: str
+    asset_review_url: str
+    spec: PrimitiveBuildSpec
+    review_views: list[str]
+    resolver: dict[str, Any] | None = None
+    review_render_requested: bool = True
+
+
+class StudioChatPrimitiveResolveRequest(BaseModel):
+    model: str | None = None
+    creative_request: str
+    assistant_response: str = ""
+    max_retries: int = Field(default=1, ge=0, le=2)
+
+
+class StudioChatPrimitiveResolveResponse(BaseModel):
+    resolved: dict[str, Any]
+    registry: dict[str, Any]
+
+
+class StudioChatReviewArtifact(BaseModel):
+    view: str
+    filename: str
+    url: str
+
+
+class StudioChatBuildJobStatusResponse(BaseModel):
+    build_job: JobSummary
+    build_review_url: str
+    asset_review_url: str
+    review_job: JobSummary | None = None
+    gallery_ready: bool = False
+    missing_views: list[str] = Field(default_factory=list)
+    artifacts: list[StudioChatReviewArtifact] = Field(default_factory=list)
+    phase: str = "queued"

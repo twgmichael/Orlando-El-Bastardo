@@ -23,3 +23,15 @@
     groups: docker
     append: true
   become: true
+
+- name: Ensure harness runtime directories are writable by harness user
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ oeb_studio_harness_user }}"
+    group: "{{ oeb_studio_harness_group }}"
+    mode: "0755"
+  loop:
+    - "{{ oeb_studio_harness_root }}"
+    - "{{ oeb_studio_harness_root }}/artifacts"
+  become: true

@@ -1,32 +1,64 @@
 import asyncio
 import urllib.error
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
 from app.config import get_settings
 from app.database import get_db
-from app.routers.conversations import create_conversation_job
+from app.models.artifact import Artifact
+from app.models.audit import AuditEvent
+from app.models.job import Job
+from app.routers.conversations import _build_job_payload, create_conversation_job
 from app.schemas.conversation import ConversationJobRequest, ConversationJobResponse
 from app.schemas.studio_chat import (
+    StudioChatBuildJobRequest,
+    StudioChatBuildJobResponse,
+    StudioChatBuildJobStatusResponse,
     StudioChatModelList,
     StudioChatOllamaRequest,
     StudioChatOllamaResponse,
+    StudioChatPrimitiveResolveRequest,
+    StudioChatPrimitiveResolveResponse,
+    StudioChatReviewArtifact,
     StudioChatPresetList,
     StudioChatRequest,
     StudioChatResponse,
 )
+from app.schemas.job import JobSummary
+from app.services.asset_review import image_artifacts_by_view, missing_uploaded_views
 from app.services.studio_chat import (
     StudioChatLLMConfig,
+    build_spec_with_primitive_resolver,
     build_studio_chat_trace,
     chat_with_ollama,
     list_ollama_models,
     post_json,
+    primitive_registry,
+    resolve_primitive_spec,
     studio_chat_presets,
 )
 
 router = APIRouter(prefix="/studio-chat", tags=["studio-chat"])
+
+
+def _review_render_views(review_views: list[str]) -> list[str]:
+    return ["back" if view == "rear" else view for view in review_views]
+
+
+def _chat_review_views(review_views: list[str]) -> list[str]:
+    return ["rear" if view == "back" else view for view in review_views]
+
+
+def _artifact_url(artifact: Artifact) -> str:
+    return artifact.public_url or f"/review/artifacts/{artifact.id}"
+
+
+def _asset_review_url(asset_id: str) -> str:
+    return f"/review/assets/{asset_id}"
 
 
 def _absolute_url(base_url: str, path_or_url: str) -> str:
@@ -172,6 +204,180 @@ async def studio_chat_ollama(body: StudioChatOllamaRequest):
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Ollama did not return a usable chat response: {exc}",
         ) from exc
+
+
+@router.post("/primitive-resolver", response_model=StudioChatPrimitiveResolveResponse)
+async def studio_chat_primitive_resolver(body: StudioChatPrimitiveResolveRequest):
+    settings = get_settings()
+    try:
+        resolved = await asyncio.to_thread(
+            resolve_primitive_spec,
+            settings.studio_chat_ollama_url,
+            body.model or settings.studio_chat_model,
+            body.creative_request,
+            body.assistant_response,
+            body.max_retries,
+        )
+    except urllib.error.URLError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not reach Ollama at {settings.studio_chat_ollama_url}: {exc}",
+        ) from exc
+    return StudioChatPrimitiveResolveResponse(
+        resolved=resolved,
+        registry=primitive_registry(),
+    )
+
+
+@router.post(
+    "/build-jobs",
+    response_model=StudioChatBuildJobResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_studio_chat_build_job(
+    body: StudioChatBuildJobRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    settings = get_settings()
+    try:
+        spec, parsed_response, resolver_output = build_spec_with_primitive_resolver(
+            body.creative_request,
+            body.assistant_response,
+            body.messages,
+            settings.studio_chat_ollama_url,
+            body.model or settings.studio_chat_model,
+            resolver_retries=1,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    payload = _build_job_payload(body.creative_request, spec)
+    review_url = ""
+    asset_review_url = f"/review/assets/{spec.canonical_id}"
+    asset_path_template = payload["payload"]["artifact_paths"][0]
+    payload["payload"] = {
+        **payload["payload"],
+        "post_build_review": {
+            "enabled": True,
+            "asset_id": spec.canonical_id,
+            "asset_name": spec.name,
+            "asset_kind": spec.kind,
+            "asset_path": asset_path_template,
+            "views": _review_render_views(body.review_views),
+            "quality": "preview",
+            "priority": body.priority + 10,
+            "gallery_url": asset_review_url,
+        },
+        "studio_chat": {
+            "source": "oeb-studio-chat",
+            "assistant_response": parsed_response,
+            "primitive_resolver": resolver_output,
+            "review_views": body.review_views,
+        },
+    }
+    job = Job(
+        title=payload["title"],
+        description=payload["description"],
+        llm_response=body.assistant_response,
+        required_capabilities=payload["required_capabilities"],
+        policy=body.policy,
+        priority=body.priority,
+        payload=payload["payload"],
+        is_idempotent=True,
+    )
+    db.add(job)
+    await db.flush()
+    review_url = f"/review/jobs/{job.id}"
+    job.payload = {
+        **job.payload,
+        "review_url": review_url,
+    }
+    db.add(AuditEvent(
+        event_type="studio_chat.build_job_created",
+        actor_type="user",
+        actor_id="studio-chat",
+        resource_type="job",
+        resource_id=str(job.id),
+        details={
+            "canonical_id": spec.canonical_id,
+            "review_url": review_url,
+            "asset_review_url": asset_review_url,
+            "review_views": body.review_views,
+        },
+    ))
+    await db.commit()
+    await db.refresh(job)
+    return StudioChatBuildJobResponse(
+        job=job,
+        review_url=review_url,
+        asset_review_url=asset_review_url,
+        spec=spec,
+        review_views=body.review_views,
+        resolver=resolver_output,
+    )
+
+
+@router.get("/build-jobs/{job_id}/status", response_model=StudioChatBuildJobStatusResponse)
+async def studio_chat_build_job_status(
+    job_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    build_result = await db.execute(select(Job).where(Job.id == job_id))
+    build_job = build_result.scalar_one_or_none()
+    if not build_job:
+        raise HTTPException(status_code=404, detail="Build job not found")
+
+    payload = build_job.payload or {}
+    review_config = payload.get("post_build_review") if isinstance(payload.get("post_build_review"), dict) else {}
+    if not review_config:
+        raise HTTPException(status_code=404, detail="Job is not a studio-chat build job")
+
+    asset_id = str(review_config.get("asset_id") or "")
+    review_result = await db.execute(
+        select(Job)
+        .where(
+            Job.payload["job_type"].as_string() == "asset.review_render",
+            Job.payload["parent_build_job_id"].as_string() == str(build_job.id),
+        )
+        .order_by(Job.created_at.desc())
+    )
+    review_job = review_result.scalars().first()
+    artifacts: list[StudioChatReviewArtifact] = []
+    missing_views = _chat_review_views(review_config.get("views") or [])
+    gallery_ready = False
+    phase = build_job.status
+
+    if review_job:
+        phase = f"review_{review_job.status}"
+        artifact_result = await db.execute(
+            select(Artifact).where(Artifact.job_id == review_job.id).order_by(Artifact.created_at)
+        )
+        review_artifacts = artifact_result.scalars().all()
+        by_view = image_artifacts_by_view(asset_id, review_artifacts)
+        missing_views = _chat_review_views(missing_uploaded_views(review_job, review_artifacts))
+        gallery_ready = review_job.status == "completed" and not missing_views
+        artifacts = [
+            StudioChatReviewArtifact(
+                view=_chat_review_views([view])[0],
+                filename=artifact.filename,
+                url=_artifact_url(artifact),
+            )
+            for view, artifact in by_view.items()
+        ]
+        artifacts.sort(key=lambda artifact: artifact.view)
+    elif build_job.status == "completed":
+        phase = "review_pending"
+
+    return StudioChatBuildJobStatusResponse(
+        build_job=JobSummary.model_validate(build_job),
+        build_review_url=str(payload.get("review_url") or f"/review/jobs/{build_job.id}"),
+        asset_review_url=_asset_review_url(asset_id),
+        review_job=JobSummary.model_validate(review_job) if review_job else None,
+        gallery_ready=gallery_ready,
+        missing_views=missing_views,
+        artifacts=artifacts,
+        phase=phase,
+    )
 
 
 @router.post("", response_model=StudioChatResponse, dependencies=[Depends(require_admin)])

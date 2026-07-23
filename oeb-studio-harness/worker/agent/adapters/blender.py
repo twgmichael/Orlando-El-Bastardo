@@ -267,10 +267,29 @@ class BlenderCLIAdapter(Adapter):
         rendered: list[Path] = []
         artifact_paths = payload.get("artifact_paths") or []
         if artifact_paths:
+            missing_artifacts: list[Path] = []
             for artifact_path in artifact_paths:
                 resolved = self._resolve_runtime_path(str(artifact_path), "artifact_path", cwd=cwd, job_id=job_id)
                 if resolved.exists():
                     rendered.append(resolved)
+                else:
+                    missing_artifacts.append(resolved)
+            if missing_artifacts:
+                summary = {
+                    "script_file": str(script),
+                    "frames_rendered": len(rendered),
+                    "expected_artifacts": [str(path) for path in rendered + missing_artifacts],
+                    "missing_artifacts": [str(path) for path in missing_artifacts],
+                    "command": shlex.join(cmd),
+                    "cwd": cwd,
+                    "log_tail": self._log_tail(log_output),
+                }
+                return AdapterResult(
+                    success=False,
+                    error=f"Script completed without expected artifacts: {', '.join(path.name for path in missing_artifacts)}",
+                    log_output=log_output,
+                    output_summary=summary,
+                )
         elif out:
             rendered = sorted(out.parent.glob(f"{out.stem}*")) or ([out] if out.exists() else [])
 
