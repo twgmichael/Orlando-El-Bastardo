@@ -1,4 +1,5 @@
 import json
+import math
 import re
 from typing import Any
 import urllib.request
@@ -18,19 +19,25 @@ created assets, or run tools. When production work is requested, explain the
 smallest next buildable step or ask one concise clarifying question."""
 
 ASSET_BUILDER_TRANSLATOR_PROMPT = """You are the OEB local asset-builder translator.
-Translate approved creative asset requests into strict JSON specs for later
-deterministic workers. The local coordinate frame is +X front, -X rear/back,
--Y left, +Y right, +Z up, -Z down. Emit small buildable primitive jobs. Ask a
-clarifying question when the request is vague. Escalate ambiguous art direction,
-reference interpretation, or visual judgment. Do not write Blender code, submit
-jobs, invent unavailable assets, or add scene shells for standalone assets. Cone
-tips point +Z by default; "pointing down" is rotation [3.141592654, 0, 0].
+Translate approved creative asset requests into valid JSON asset intent for
+later deterministic workers. The local coordinate frame is +X front, -X
+rear/back, -Y left, +Y right, +Z up, -Z down. Describe the intended asset,
+parts, materials, orientation, relationships, construction notes, and semantic
+geometry.
+Do not collapse objects into generic boxes unless the user explicitly asks for a box.
+Ask a clarifying question when the request is vague. Escalate
+ambiguous art direction, reference interpretation, or visual judgment.
+Do not write Blender code.
+Do not submit jobs, invent unavailable assets, or add scene shells for standalone assets.
+Cone tips point +Z by default; "pointing down" is
+rotation [3.141592654, 0, 0].
 When review renders are requested and no custom view list is supplied, use
 review_views: ["top", "bottom", "left", "right", "front", "rear", "action"].
 Use all seven views exactly, including "action". Missing "action" is invalid.
 Use semantic view names only; do not invent axis/side pairs.
 Return only JSON with: action, confidence, clarification_question,
-escalation_reason, build_job."""
+escalation_reason, asset_intent. The JSON schema is strict only at the
+container level; asset_intent may be rich and descriptive."""
 
 ASSET_EDIT_TRANSLATOR_PROMPT = """You are the OEB local asset-edit translator.
 Translate conversational edits into strict JSON deltas against named assets and
@@ -69,6 +76,34 @@ When a request is vague, set needs_clarification true with one short question.
 When art direction is ambiguous, set escalation_reason. Return only JSON with:
 version, needs_clarification, clarification_question, escalation_reason,
 asset_kind, canonical_id, name, primitives."""
+
+ASSET_INTENT_NORMALIZER_PROMPT = """You are the OEB asset-intent normalizer.
+Normalize rich asset_intent into a compiler-friendly construction graph for the
+deterministic harness. Do not invent new assets. Preserve user intent, named
+parts, materials, relationships, and construction notes. Do not write Blender
+code or primitive build ops. Return JSON only.
+
+Required construction graph shape:
+{
+  "construction_graph": {
+    "units": "relative",
+    "elements": [
+      {
+        "id": "stable_element_id",
+        "kind": "stroke",
+        "from": [0, -0.5, 1],
+        "to": [0, 0.5, 1],
+        "thickness": 0.12,
+        "material": "neutral",
+        "role": "short role"
+      }
+    ],
+    "construction_notes": "short note"
+  },
+  "parts": [
+    {"id": "stable_part_id", "role": "short role"}
+  ]
+}"""
 
 
 STUDIO_CHAT_PRESETS = [
@@ -742,6 +777,21 @@ def _primitive_payload_from_parsed(parsed: dict[str, Any], creative_request: str
     }
 
 
+def _asset_intent_from_parsed(parsed: dict[str, Any]) -> dict[str, Any] | None:
+    asset_intent = parsed.get("asset_intent")
+    if isinstance(asset_intent, dict):
+        return asset_intent
+    build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
+    nested_intent = build_job.get("asset_intent")
+    if isinstance(nested_intent, dict):
+        return nested_intent
+    spec = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else {}
+    nested_intent = spec.get("asset_intent") if isinstance(spec, dict) else None
+    if isinstance(nested_intent, dict):
+        return nested_intent
+    return None
+
+
 def _primitive_type_from_payload(payload: dict[str, Any]) -> str | None:
     action = str(payload.get("action") or "").lower()
     build_job = payload.get("build_job") if isinstance(payload.get("build_job"), dict) else {}
@@ -761,6 +811,25 @@ def _primitive_type_from_payload(payload: dict[str, Any]) -> str | None:
 
 
 def _payload_is_broad_asset_intent(parsed: dict[str, Any], creative_request: str) -> bool:
+    asset_intent = _asset_intent_from_parsed(parsed)
+    if isinstance(asset_intent, dict):
+        intent_type = normalize_id(asset_intent.get("type") or asset_intent.get("kind"), "")
+        if intent_type not in CANONICAL_PRIMITIVE_TYPES:
+            return True
+        if any(
+            key in asset_intent
+            for key in (
+                "parts",
+                "relationships",
+                "construction_notes",
+                "construction_graph",
+                "semantic_geometry",
+                "features",
+                "required_features",
+                "description",
+            )
+        ):
+            return True
     build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
     spec = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else build_job
     raw_type = normalize_id(spec.get("type") if isinstance(spec, dict) else parsed.get("type"), "")
@@ -1137,6 +1206,166 @@ def resolve_primitive_spec(
     }
 
 
+def _asset_intent_normalizer_payload(
+    creative_request: str,
+    asset_intent: dict[str, Any],
+    validation_error: str | None = None,
+    previous_response: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    user_content: dict[str, Any] = {
+        "task": (
+            "Normalize this asset_intent into a compiler-friendly construction graph. "
+            "Do not invent new assets. Preserve user intent and parts."
+        ),
+        "required_construction_graph_shape": {
+            "construction_graph": {
+                "units": "relative",
+                "elements": [
+                    {
+                        "id": "stable_element_id",
+                        "kind": "stroke",
+                        "from": [0, -0.5, 1],
+                        "to": [0, 0.5, 1],
+                        "thickness": 0.12,
+                        "material": "neutral",
+                        "role": "short role",
+                    }
+                ],
+                "construction_notes": "short note",
+            },
+            "parts": [{"id": "stable_part_id", "role": "short role"}],
+        },
+        "user_prompt": creative_request,
+        "current_asset_intent": asset_intent,
+    }
+    if validation_error:
+        user_content["validation_error"] = validation_error
+    if previous_response:
+        user_content["previous_response"] = previous_response
+    return {
+        "messages": [
+            {"role": "system", "content": ASSET_INTENT_NORMALIZER_PROMPT},
+            {"role": "user", "content": json.dumps(user_content, indent=2)},
+        ],
+        "stream": False,
+        "options": {"temperature": 0.1, "num_predict": 2048},
+    }
+
+
+def _merge_asset_intent_normalization(
+    asset_intent: dict[str, Any],
+    normalized: dict[str, Any],
+) -> dict[str, Any]:
+    merged = json.loads(json.dumps(asset_intent))
+    construction_graph = normalized.get("construction_graph")
+    if isinstance(construction_graph, dict):
+        merged["construction_graph"] = construction_graph
+    semantic_geometry = normalized.get("semantic_geometry")
+    if isinstance(semantic_geometry, dict):
+        merged["semantic_geometry"] = semantic_geometry
+    normalized_parts = normalized.get("parts")
+    if normalized_parts is not None:
+        if merged.get("parts") and normalized_parts != merged.get("parts"):
+            merged["compiler_parts"] = normalized_parts
+        else:
+            merged["parts"] = normalized_parts
+    for key in ("relationships", "materials", "construction_notes", "description", "orientation"):
+        value = normalized.get(key)
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
+def _validate_asset_intent_normalization(
+    creative_request: str,
+    asset_intent: dict[str, Any],
+    normalized: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(normalized, dict):
+        raise ValueError("normalizer response must be an object")
+    construction_graph = normalized.get("construction_graph")
+    if not isinstance(construction_graph, dict):
+        raise ValueError("normalizer response must include construction_graph object")
+
+    merged = _merge_asset_intent_normalization(asset_intent, normalized)
+    if not _compile_construction_graph_primitives(creative_request, merged):
+        raise ValueError("normalized construction_graph is still not compiler-friendly")
+    return merged
+
+
+def resolve_asset_intent_normalization(
+    ollama_url: str,
+    model: str,
+    creative_request: str,
+    asset_intent: dict[str, Any],
+    max_retries: int = 1,
+) -> dict[str, Any]:
+    retries = max(0, min(int(max_retries), 2))
+    attempts: list[dict[str, Any]] = []
+    validation_error: str | None = None
+    previous_response: dict[str, Any] | None = None
+
+    for attempt in range(retries + 1):
+        payload = _asset_intent_normalizer_payload(
+            creative_request,
+            asset_intent,
+            validation_error=validation_error,
+            previous_response=previous_response,
+        )
+        payload["model"] = model
+        raw_response = post_json(f"{ollama_url.rstrip('/')}/api/chat", payload, timeout=120)
+        message = raw_response.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str):
+            validation_error = "asset intent normalizer response did not include message.content"
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "error": validation_error,
+                "raw": raw_response,
+            })
+            continue
+        try:
+            parsed = parse_assistant_json(content)
+            normalized_asset_intent = _validate_asset_intent_normalization(
+                creative_request,
+                asset_intent,
+                parsed,
+            )
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "raw": raw_response,
+                "content": content,
+                "parsed": parsed,
+                "normalized_asset_intent": normalized_asset_intent,
+            })
+            return {
+                "ok": True,
+                "source": "asset_intent_feedback_loop",
+                "attempts": attempts,
+                "normalized_asset_intent": normalized_asset_intent,
+                "error": None,
+            }
+        except ValueError as exc:
+            validation_error = str(exc)
+            previous_response = {"content": content}
+            attempts.append({
+                "attempt": attempt + 1,
+                "request": payload,
+                "raw": raw_response,
+                "error": validation_error,
+                "content": content,
+            })
+
+    return {
+        "ok": False,
+        "source": "asset_intent_feedback_loop",
+        "attempts": attempts,
+        "error": validation_error or "asset intent normalizer failed",
+    }
+
+
 def _spec_from_resolved_primitive(
     creative_request: str,
     resolved: dict[str, Any],
@@ -1232,6 +1461,43 @@ def build_spec_with_primitive_resolver(
             "error": "broad asset intent normalized without geometry resolver" if broad_asset_intent else "resolver not configured",
             "registry_version": PRIMITIVE_REGISTRY_V01["version"],
         }
+
+    if broad_asset_intent and ollama_url and model and not spec.primitives:
+        asset_intent = spec.asset_intent or _asset_intent_from_parsed(parsed) or {}
+        if asset_intent and (
+            isinstance(asset_intent.get("semantic_geometry"), dict)
+            or isinstance(asset_intent.get("construction_graph"), dict)
+        ):
+            intent_normalizer_output = resolve_asset_intent_normalization(
+                ollama_url,
+                model,
+                creative_request,
+                asset_intent,
+                max_retries=resolver_retries,
+            )
+            resolver_output = {
+                **intent_normalizer_output,
+                "registry_version": PRIMITIVE_REGISTRY_V01["version"],
+            }
+            if intent_normalizer_output.get("ok") and isinstance(
+                intent_normalizer_output.get("normalized_asset_intent"),
+                dict,
+            ):
+                repaired_parsed = {
+                    **parsed,
+                    "asset_intent": intent_normalizer_output["normalized_asset_intent"],
+                }
+                spec, legacy_parsed = build_spec_from_assistant_response(
+                    creative_request,
+                    json.dumps(repaired_parsed),
+                    messages,
+                )
+                if not spec.primitives:
+                    resolver_output = {
+                        **resolver_output,
+                        "ok": False,
+                        "error": "asset intent normalized but did not compile into executable build ops",
+                    }
     return spec, legacy_parsed, resolver_output
 
 
@@ -1248,12 +1514,29 @@ def build_spec_from_assistant_response(
             messages,
             reason="assistant_json_invalid",
         )
+    asset_intent = _asset_intent_from_parsed(parsed)
     build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
     spec_source = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else None
+    if asset_intent is not None:
+        spec_source = {
+            **asset_intent,
+            "asset_intent": asset_intent,
+            "canonical_id": parsed.get("canonical_id") or build_job.get("canonical_id") or asset_intent.get("canonical_id"),
+            "name": parsed.get("name") or build_job.get("name") or asset_intent.get("name"),
+            "asset_kind": (
+                parsed.get("asset_kind")
+                or parsed.get("kind")
+                or build_job.get("asset_kind")
+                or build_job.get("kind")
+                or asset_intent.get("asset_kind")
+                or asset_intent.get("kind")
+            ),
+            "style": parsed.get("style") or build_job.get("style") or asset_intent.get("style"),
+        }
     if spec_source is None:
         spec_source = build_job if build_job else parsed
 
-    primitive_type = _primitive_type_from_payload(parsed)
+    primitive_type = None if asset_intent is not None else _primitive_type_from_payload(parsed)
     if primitive_type:
         material_color = _material_color_from_payload(parsed) or _material_color_from_text(creative_request)
         scene_plan = _scene_plan_for_primitive(primitive_type, creative_request, material_color)
@@ -1693,90 +1976,69 @@ def _asset_intent_hints_from_request(request: str) -> dict[str, Any]:
     }
 
 
-def _letter_from_semantic_geometry(request: str, spec: dict) -> str | None:
-    candidates = [
-        spec.get("geometry"),
-        spec.get("letter"),
-        spec.get("character"),
-    ]
-    shape = spec.get("shape") if isinstance(spec.get("shape"), dict) else {}
-    candidates.extend([shape.get("silhouette"), shape.get("primary_form")])
-    for candidate in candidates:
-        text = str(candidate or "").strip().lower()
-        if match := re.fullmatch(r"(?:capital_)?letter_([a-z])", text):
-            return match.group(1)
-        if match := re.fullmatch(r"([a-z])", text):
-            return match.group(1)
-    return None
+def _construction_graph_from_spec(spec: dict) -> dict[str, Any] | None:
+    graph = spec.get("construction_graph")
+    if isinstance(graph, dict):
+        return graph
+    semantic_geometry = spec.get("semantic_geometry") if isinstance(spec.get("semantic_geometry"), dict) else {}
+    graph = semantic_geometry.get("construction_graph") if isinstance(semantic_geometry, dict) else None
+    return graph if isinstance(graph, dict) else None
 
 
-def _stroke_box(
-    letter: str,
-    stroke_id: str,
-    label: str,
-    location: list[float],
-    scale: list[float],
-    rotation: list[float] | None = None,
-    material: str = "neutral",
-) -> dict[str, Any]:
+def _construction_graph_vec3(value: Any, field_name: str) -> list[float]:
+    return _coerce_vec3(value, field_name, [0.0, 0.0, 0.0], -20.0, 20.0)
+
+
+def _construction_graph_stroke_to_primitive(element: dict[str, Any], idx: int) -> dict[str, Any]:
+    start = _construction_graph_vec3(element.get("from"), "construction_graph.elements[].from")
+    end = _construction_graph_vec3(element.get("to"), "construction_graph.elements[].to")
+    delta = [end[axis] - start[axis] for axis in range(3)]
+    length = math.sqrt(sum(component * component for component in delta))
+    if length < 0.01:
+        raise ValueError("construction graph stroke length must be at least 0.01")
+    thickness = _coerce_float(element.get("thickness"), "construction_graph.elements[].thickness", 0.01, 5.0)
+    material = _normalize_material(element.get("material") or "neutral")
+    element_id = _safe_id(element.get("id"), f"stroke_{idx + 1}")
+    center = [(start[axis] + end[axis]) / 2.0 for axis in range(3)]
+    rotation_x = math.atan2(delta[1], delta[2]) if abs(delta[1]) > 0.000001 or abs(delta[2]) > 0.000001 else 0.0
     return {
-        "id": f"letter_{letter}_{stroke_id}",
+        "id": element_id,
         "type": "box",
-        "label": label,
+        "label": str(element.get("role") or element.get("label") or element_id).strip(),
         "material": material,
         "transform": {
-            "location": location,
-            "rotation": rotation or [0.0, 0.0, 0.0],
-            "scale": scale,
+            "location": center,
+            "rotation": [rotation_x, 0.0, 0.0],
+            "scale": [thickness, thickness, length],
         },
         "params": {},
+        "construction_element": {
+            "kind": "stroke",
+            "from": start,
+            "to": end,
+            "thickness": thickness,
+        },
     }
 
 
-def _letter_stroke_primitives(letter: str, material: str = "neutral") -> list[dict[str, Any]]:
-    depth = 0.16
-    stroke = 0.18
-    height = 1.8
-    top = 1.72
-    mid = 0.96
-    bottom = 0.2
-    primitives_by_letter = {
-        "t": [
-            _stroke_box("t", "vertical", "vertical center stroke", [0.0, 0.0, 0.86], [depth, stroke, height], material=material),
-            _stroke_box("t", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.25, stroke], material=material),
-        ],
-        "v": [
-            _stroke_box("v", "left_diagonal", "left diagonal stroke", [0.0, -0.32, 0.86], [depth, stroke, height], [0.42, 0.0, 0.0], material),
-            _stroke_box("v", "right_diagonal", "right diagonal stroke", [0.0, 0.32, 0.86], [depth, stroke, height], [-0.42, 0.0, 0.0], material),
-        ],
-        "e": [
-            _stroke_box("e", "vertical", "left vertical stroke", [0.0, -0.5, 0.96], [depth, stroke, height], material=material),
-            _stroke_box("e", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.15, stroke], material=material),
-            _stroke_box("e", "middle_bar", "horizontal middle stroke", [0.0, -0.02, mid], [depth, 1.0, stroke], material=material),
-            _stroke_box("e", "bottom_bar", "horizontal bottom stroke", [0.0, 0.0, bottom], [depth, 1.15, stroke], material=material),
-        ],
-        "f": [
-            _stroke_box("f", "vertical", "left vertical stroke", [0.0, -0.5, 0.96], [depth, stroke, height], material=material),
-            _stroke_box("f", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.15, stroke], material=material),
-            _stroke_box("f", "middle_bar", "horizontal middle stroke", [0.0, -0.08, mid], [depth, 0.95, stroke], material=material),
-        ],
-        "a": [
-            _stroke_box("a", "left_diagonal", "left diagonal stroke", [0.0, -0.28, 0.9], [depth, stroke, height], [-0.34, 0.0, 0.0], material),
-            _stroke_box("a", "right_diagonal", "right diagonal stroke", [0.0, 0.28, 0.9], [depth, stroke, height], [0.34, 0.0, 0.0], material),
-            _stroke_box("a", "crossbar", "middle cross stroke", [0.0, 0.0, 0.92], [depth, 0.72, stroke], material=material),
-        ],
-    }
-    return json.loads(json.dumps(primitives_by_letter.get(letter, [])))
-
-
-def _compile_semantic_geometry_primitives(request: str, spec: dict) -> list[dict[str, Any]]:
+def _compile_construction_graph_primitives(request: str, spec: dict) -> list[dict[str, Any]]:
     if isinstance(spec.get("primitives"), list) and spec["primitives"]:
         return []
-    letter = _letter_from_semantic_geometry(request, spec)
-    if not letter:
+    graph = _construction_graph_from_spec(spec)
+    if not graph:
         return []
-    material = _normalize_material(spec.get("material") or spec.get("color") or "neutral")
-    return _letter_stroke_primitives(letter, material)
+    elements = graph.get("elements")
+    if not isinstance(elements, list) or not elements:
+        raise ValueError("construction_graph.elements must be a non-empty list")
+    primitives = []
+    for idx, element in enumerate(elements):
+        if not isinstance(element, dict):
+            raise ValueError(f"construction_graph.elements[{idx}] must be an object")
+        kind = normalize_id(element.get("kind"), "")
+        if kind != "stroke":
+            raise ValueError(f"unsupported construction graph element kind: {kind or '<missing>'}")
+        primitives.append(_construction_graph_stroke_to_primitive(element, idx))
+    return primitives
 
 
 def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
@@ -1788,9 +2050,25 @@ def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
     inherited_materials = spec.get("materials") if isinstance(spec.get("materials"), dict) else {}
     source_objects = spec.get("objects") if isinstance(spec.get("objects"), list) else []
     source_parts = spec.get("parts") if isinstance(spec.get("parts"), list) else []
+    semantic_geometry = spec.get("semantic_geometry") if isinstance(spec.get("semantic_geometry"), dict) else {}
+    construction_graph = spec.get("construction_graph") if isinstance(spec.get("construction_graph"), dict) else {}
     objects = []
     for idx, item in enumerate([*source_objects, *source_parts]):
         objects.append(_object_from_asset_part(item, idx, request, inherited_materials))
+    if semantic_geometry and objects and not any(
+        isinstance(obj.get("shape"), dict) and obj["shape"].get("semantic_geometry")
+        for obj in objects
+        if isinstance(obj, dict)
+    ):
+        objects[0].setdefault("shape", {})
+        objects[0]["shape"].setdefault("semantic_geometry", semantic_geometry)
+    if construction_graph and objects and not any(
+        isinstance(obj.get("shape"), dict) and obj["shape"].get("construction_graph")
+        for obj in objects
+        if isinstance(obj, dict)
+    ):
+        objects[0].setdefault("shape", {})
+        objects[0]["shape"].setdefault("construction_graph", construction_graph)
 
     request_hints = _asset_intent_hints_from_request(request)
     features = _list_from_value(spec.get("features") or spec.get("required_features"))
@@ -1802,12 +2080,34 @@ def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
         features.append("asymmetric_greebles")
         style_details.append(str(greebles))
 
-    if not objects and (features or style_details or inherited_materials or spec.get("shape") or spec.get("type")):
+    if not objects and (
+        features
+        or style_details
+        or inherited_materials
+        or spec.get("shape")
+        or construction_graph
+        or semantic_geometry
+        or spec.get("type")
+    ):
         label = str(spec.get("name") or spec.get("label") or "asset")
         raw_category = normalize_id(spec.get("category") or spec.get("type") or "", "")
         category = infer_kind(request, spec) if raw_category in {"", "primitive", "asset", "object"} else raw_category
         shape = spec.get("shape") if isinstance(spec.get("shape"), dict) else {}
         shape = {**request_hints["shape"], **shape}
+        if semantic_geometry:
+            semantic_type = normalize_id(semantic_geometry.get("type"), "")
+            if semantic_type == "letter":
+                character = str(
+                    semantic_geometry.get("character")
+                    or semantic_geometry.get("letter")
+                    or semantic_geometry.get("value")
+                    or ""
+                ).strip().lower()
+                if character:
+                    shape.setdefault("silhouette", f"letter_{character}")
+            shape.setdefault("semantic_geometry", semantic_geometry)
+        if construction_graph:
+            shape.setdefault("construction_graph", construction_graph)
         if not shape and spec.get("type"):
             shape = {"primary_form": str(spec["type"])}
         elif spec.get("type") and "primary_form" not in shape and normalize_id(spec.get("type"), "") not in {"primitive", "asset", "object"}:
@@ -1842,7 +2142,8 @@ def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
 
 
 def normalize_spec(request: str, spec: dict) -> dict:
-    source_intent = json.loads(json.dumps(spec))
+    source_intent_value = spec.get("asset_intent") if isinstance(spec.get("asset_intent"), dict) else spec
+    source_intent = json.loads(json.dumps(source_intent_value))
     canonical_id = str(spec.get("canonical_id", "")).strip()
     inferred_kind = infer_kind(request, spec)
     shape = preserved_shape_phrase(request)
@@ -1864,7 +2165,7 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
     spec["asset_intent"] = source_intent
 
-    compiled_primitives = _compile_semantic_geometry_primitives(request, spec)
+    compiled_primitives = _compile_construction_graph_primitives(request, spec)
     if compiled_primitives:
         spec["primitives"] = compiled_primitives
         spec["deliverables"] = ["glb", "preview_render", "asset_review_renders", "review_page"]

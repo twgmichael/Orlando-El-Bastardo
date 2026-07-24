@@ -26,7 +26,10 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     asset_builder = presets["asset_builder_translator"]
     primitive_resolver = presets["primitive_shape_resolver"]
 
-    assert "strict JSON" in asset_builder.system_prompt
+    assert "valid JSON asset intent" in asset_builder.system_prompt
+    assert "Do not collapse objects into generic boxes unless the user explicitly asks for a box" in asset_builder.system_prompt
+    assert "small buildable primitive jobs" not in asset_builder.system_prompt
+    assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt
     assert "+X front" in asset_builder.system_prompt
     assert "Do not write Blender code" in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
@@ -266,20 +269,26 @@ def test_broad_asset_intent_skips_geometry_resolver_and_preserves_letter_a_verti
     assert any("letter_a" in component for component in spec.components)
 
 
-def test_semantic_letter_t_geometry_compiles_to_stroke_primitives():
+def test_construction_graph_compiles_generic_letter_z_from_data():
     spec, parsed, resolver = build_spec_with_primitive_resolver(
-        "Build the letter T.",
+        "Build the letter Z.",
         """```json
 {
   "action": "build",
   "confidence": 1,
   "clarification_question": null,
   "escalation_reason": null,
-  "build_job": {
-    "type": "primitive",
-    "geometry": "T",
-    "scale": [0.5, 2, 0.5],
-    "position": [-0.75, 1, -0.25]
+  "asset_intent": {
+    "name": "Block letter Z",
+    "construction_graph": {
+      "units": "relative",
+      "elements": [
+        {"id": "top_stroke", "kind": "stroke", "from": [0, -0.55, 1.4], "to": [0, 0.55, 1.4], "thickness": 0.14, "material": "neutral"},
+        {"id": "diagonal_stroke", "kind": "stroke", "from": [0, 0.55, 1.4], "to": [0, -0.55, 0.2], "thickness": 0.14, "material": "neutral"},
+        {"id": "bottom_stroke", "kind": "stroke", "from": [0, -0.55, 0.2], "to": [0, 0.55, 0.2], "thickness": 0.14, "material": "neutral"}
+      ],
+      "construction_notes": "A block Z made from top, diagonal, and bottom strokes."
+    }
   }
 }
 ```""",
@@ -289,16 +298,14 @@ def test_semantic_letter_t_geometry_compiles_to_stroke_primitives():
 
     assert parsed["action"] == "build"
     assert resolver["source"] == "asset_intent_normalizer"
-    assert spec.asset_intent["geometry"] == "T"
-    assert [primitive.id for primitive in spec.primitives] == ["letter_t_vertical", "letter_t_top_bar"]
-    assert [primitive.type for primitive in spec.primitives] == ["box", "box"]
-    assert spec.primitives[0].label == "vertical center stroke"
-    assert spec.primitives[1].label == "horizontal top stroke"
-    assert "letter_t_top_bar" in spec.components
+    assert [primitive.id for primitive in spec.primitives] == ["top_stroke", "diagonal_stroke", "bottom_stroke"]
+    assert [primitive.type for primitive in spec.primitives] == ["box", "box", "box"]
+    assert spec.primitives[1].transform.rotation[0] < 0
+    assert "diagonal_stroke" in spec.components
     assert "asset_review_renders" in spec.deliverables
 
 
-def test_semantic_letter_v_geometry_compiles_to_diagonal_strokes():
+def test_construction_graph_compiles_generic_diagonal_strokes():
     spec, parsed, resolver = build_spec_with_primitive_resolver(
         "Build a capital letter V.",
         """```json
@@ -307,9 +314,15 @@ def test_semantic_letter_v_geometry_compiles_to_diagonal_strokes():
   "confidence": 1,
   "clarification_question": null,
   "escalation_reason": null,
-  "build_job": {
-    "type": "primitive",
-    "geometry": "V"
+  "asset_intent": {
+    "name": "Block letter V",
+    "construction_graph": {
+      "units": "relative",
+      "elements": [
+        {"id": "left_stroke", "kind": "stroke", "from": [0, -0.5, 1.4], "to": [0, 0, 0.2], "thickness": 0.14},
+        {"id": "right_stroke", "kind": "stroke", "from": [0, 0.5, 1.4], "to": [0, 0, 0.2], "thickness": 0.14}
+      ]
+    }
   }
 }
 ```""",
@@ -319,11 +332,132 @@ def test_semantic_letter_v_geometry_compiles_to_diagonal_strokes():
 
     assert parsed["action"] == "build"
     assert resolver["source"] == "asset_intent_normalizer"
-    assert [primitive.id for primitive in spec.primitives] == ["letter_v_left_diagonal", "letter_v_right_diagonal"]
+    assert [primitive.id for primitive in spec.primitives] == ["left_stroke", "right_stroke"]
     assert spec.primitives[0].transform.rotation[0] > 0
     assert spec.primitives[1].transform.rotation[0] < 0
     assert spec.scene_plan is not None
-    assert spec.scene_plan.objects[0].shape["silhouette"] == "capital_letter_v"
+    assert spec.scene_plan.objects[0].shape["construction_graph"]["elements"][0]["id"] == "left_stroke"
+
+
+def test_rich_asset_intent_construction_graph_preserves_parts_and_compiles():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build the letter C.",
+        """```json
+{
+  "action": "build",
+  "confidence": 0.92,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "asset_intent": {
+    "name": "capital letter C",
+    "kind": "asset",
+    "description": "A freestanding block-style capital C with the open side facing right.",
+    "construction_graph": {
+      "units": "relative",
+      "elements": [
+        {"id": "left_spine", "kind": "stroke", "from": [0, -0.5, 1.4], "to": [0, -0.5, 0.2], "thickness": 0.14},
+        {"id": "upper_stroke", "kind": "stroke", "from": [0, -0.5, 1.4], "to": [0, 0.45, 1.4], "thickness": 0.14},
+        {"id": "lower_stroke", "kind": "stroke", "from": [0, -0.5, 0.2], "to": [0, 0.45, 0.2], "thickness": 0.14}
+      ]
+    },
+    "materials": [{"target": "whole_asset", "material": "neutral"}],
+    "parts": [
+      {"id": "left_spine", "role": "vertical spine"},
+      {"id": "upper_stroke", "role": "top horizontal stroke"},
+      {"id": "lower_stroke", "role": "bottom horizontal stroke"}
+    ],
+    "relationships": [
+      {"subject": "upper_stroke", "relation": "attached_to", "target": "left_spine"},
+      {"subject": "lower_stroke", "relation": "attached_to", "target": "left_spine"}
+    ],
+    "construction_notes": "Compile semantic letter intent into deterministic strokes downstream."
+  }
+}
+```""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert spec.asset_intent["construction_graph"]["elements"][0]["id"] == "left_spine"
+    assert spec.asset_intent["parts"][0]["id"] == "left_spine"
+    assert [primitive.id for primitive in spec.primitives] == ["left_spine", "upper_stroke", "lower_stroke"]
+    assert all(primitive.type == "box" for primitive in spec.primitives)
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].shape["construction_graph"]["elements"][0]["id"] == "left_spine"
+    assert "asset_review_renders" in spec.deliverables
+
+
+def test_asset_intent_feedback_loop_repairs_directional_intent_to_construction_graph(monkeypatch):
+    requests = []
+
+    def fake_post_json(url, payload, token=None, timeout=60):
+        requests.append(payload)
+        return {
+            "message": {
+                "content": """{
+                  "construction_graph": {
+                    "units": "relative",
+                    "elements": [
+                      {"id": "top_stroke", "kind": "stroke", "from": [0, -0.55, 1.4], "to": [0, 0.55, 1.4], "thickness": 0.14},
+                      {"id": "diagonal_stroke", "kind": "stroke", "from": [0, 0.55, 1.4], "to": [0, -0.55, 0.2], "thickness": 0.14},
+                      {"id": "bottom_stroke", "kind": "stroke", "from": [0, -0.55, 0.2], "to": [0, 0.55, 0.2], "thickness": 0.14}
+                    ],
+                    "construction_notes": "A Z made from top, diagonal, and bottom strokes."
+                  },
+                  "parts": [
+                    {"id": "top_stroke", "role": "top stroke"},
+                    {"id": "diagonal_stroke", "role": "diagonal stroke"},
+                    {"id": "bottom_stroke", "role": "bottom stroke"}
+                  ]
+                }"""
+            },
+            "done": True,
+        }
+
+    monkeypatch.setattr(studio_chat, "post_json", fake_post_json)
+
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build the letter Z.",
+        """{
+          "action": "build",
+          "asset_intent": {
+            "name": "Z-shaped structure",
+            "parts": [
+              {"name": "top", "orientation": {"x": 0, "y": 1, "z": 0}},
+              {"name": "diagonal", "orientation": {"x": 0, "y": -1, "z": -1}},
+              {"name": "bottom", "orientation": {"x": 0, "y": 1, "z": 0}}
+            ],
+            "construction_notes": "Directional-part geometry for a Z.",
+            "semantic_geometry": {
+              "top": {"x": 0, "y": 1, "z": 0},
+              "diagonal": {"x": 0, "y": -1, "z": -1},
+              "bottom": {"x": 0, "y": 1, "z": 0}
+            }
+          },
+          "clarification_question": null,
+          "escalation_reason": null,
+          "confidence": 1
+        }""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+        resolver_retries=1,
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["ok"] is True
+    assert resolver["source"] == "asset_intent_feedback_loop"
+    assert len(resolver["attempts"]) == 1
+    assert "Normalize this asset_intent into a compiler-friendly construction graph" in (
+        requests[0]["messages"][1]["content"]
+    )
+    assert spec.asset_intent["semantic_geometry"]["diagonal"] == {"x": 0, "y": -1, "z": -1}
+    assert spec.asset_intent["construction_graph"]["elements"][1]["id"] == "diagonal_stroke"
+    assert spec.asset_intent["parts"][0]["name"] == "top"
+    assert spec.asset_intent["compiler_parts"][0]["id"] == "top_stroke"
+    assert [primitive.id for primitive in spec.primitives] == ["top_stroke", "diagonal_stroke", "bottom_stroke"]
+    assert "asset_review_renders" in spec.deliverables
 
 
 def test_asset_intent_without_style_gets_defensive_defaults_and_preserves_fields():
