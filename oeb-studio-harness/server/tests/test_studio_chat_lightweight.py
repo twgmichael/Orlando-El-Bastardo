@@ -30,7 +30,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "+X front" in asset_builder.system_prompt
     assert "Do not write Blender code" in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
-    assert "PrimitiveRegistry v0.1" in primitive_resolver.system_prompt
+    assert "Preserve asset intent" in primitive_resolver.system_prompt
     assert primitive_resolver.temperature == 0.1
 
 
@@ -180,6 +180,31 @@ def test_validate_primitive_spec_expands_quantity_with_stable_offsets():
     assert resolved["primitives"][1]["transform"]["location"] == [0.0, 0.625, 0.5]
 
 
+def test_validate_primitive_spec_coerces_primitive_kind_and_top_level_transform_aliases():
+    resolved = validate_primitive_spec(
+        {
+            "asset_kind": "primitive",
+            "canonical_id": "ship_letter_a_A",
+            "name": "A Letter Start",
+            "primitives": [
+                {
+                    "id": "draft_mark",
+                    "type": "cone",
+                    "size": [0.5, 2, 0.5],
+                    "position": [-1, -1, 0.75],
+                    "rotation": [3.141592654, 0, 0],
+                }
+            ],
+        },
+        "We are going to build a spaceship. Start with the letter A on the vertical.",
+    )
+
+    assert resolved["asset_kind"] == "vehicle"
+    assert resolved["asset_intent"]["asset_kind"] == "primitive"
+    assert resolved["primitives"][0]["transform"]["location"] == [-1.0, -1.0, 0.75]
+    assert resolved["primitives"][0]["transform"]["scale"] == [0.5, 2.0, 0.5]
+
+
 def test_build_spec_with_primitive_resolver_prefers_assistant_primitives():
     spec, parsed, resolver = build_spec_with_primitive_resolver(
         "Build a blue cube.",
@@ -200,6 +225,100 @@ def test_build_spec_with_primitive_resolver_prefers_assistant_primitives():
     assert spec.primitives[0].type == "box"
     assert spec.primitives[0].material == "blue"
     assert spec.components == ["box"]
+
+
+def test_broad_asset_intent_skips_geometry_resolver_and_preserves_letter_a_vertical(monkeypatch):
+    def fail_if_called(url, payload, token=None, timeout=60):
+        raise AssertionError("broad asset prompt should not call the geometry resolver")
+
+    monkeypatch.setattr(studio_chat, "post_json", fail_if_called)
+
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "We are going to build a spaceship. Start with the letter A on the vertical.",
+        """```json
+{
+  "action": "build",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "build_job": {
+    "type": "primitive",
+    "size": [0.5, 2, 0.5],
+    "position": [-1, -1, 0.75],
+    "rotation": [3.141592654, 0, 0]
+  }
+}
+```""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert spec.kind == "vehicle"
+    assert spec.asset_intent["type"] == "primitive"
+    assert spec.scene_plan is not None
+    scene_object = spec.scene_plan.objects[0]
+    assert scene_object.category == "vehicle"
+    assert scene_object.shape["silhouette"] == "letter_a"
+    assert "letter_a_silhouette" in scene_object.required_features
+    assert scene_object.orientation == {"axis": "vertical", "direction": "+Z"}
+    assert any("letter_a" in component for component in spec.components)
+
+
+def test_asset_intent_without_style_gets_defensive_defaults_and_preserves_fields():
+    spec, parsed = build_spec_from_assistant_response(
+        "Build a strange green usable item with asymmetric greebles.",
+        """{
+          "action": "build",
+          "build_job": {
+            "type": "primitive",
+            "size": "small",
+            "materials": {"primary": "green"},
+            "features": ["handle", "asymmetric greebles"]
+          }
+        }""",
+    )
+
+    assert parsed["action"] == "build"
+    assert spec.style == "Build a strange green usable item with asymmetric greebles."
+    assert spec.kind == "asset"
+    assert spec.asset_intent["type"] == "primitive"
+    assert spec.asset_intent["materials"] == {"primary": "green"}
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].materials == {"primary": "green"}
+    assert "handle" in spec.scene_plan.objects[0].required_features
+    assert "asymmetric greebles" in spec.scene_plan.objects[0].required_features
+    assert spec.components
+
+
+def test_asset_intent_parts_compile_to_scene_components_before_build_ops():
+    spec, parsed = build_spec_from_assistant_response(
+        "Build a small repair drone with two side arms and a lens.",
+        """{
+          "action": "build",
+          "build_job": {
+            "asset_kind": "prop",
+            "name": "Repair Drone",
+            "materials": {"primary": "metal"},
+            "parts": [
+              {"id": "body", "label": "compact body", "shape": {"primary_form": "rounded_box"}},
+              {"id": "side_arm", "label": "side arm", "count": 2, "materials": {"primary": "metal"}},
+              {"id": "lens", "label": "front lens", "materials": {"primary": "glass"}}
+            ],
+            "features": ["usable handle"]
+          }
+        }""",
+    )
+
+    assert parsed["action"] == "build"
+    assert spec.name == "Repair Drone"
+    assert spec.style == "Build a small repair drone with two side arms and a lens."
+    assert spec.scene_plan is not None
+    assert [obj.id for obj in spec.scene_plan.objects] == ["body", "side_arm", "lens"]
+    assert spec.scene_plan.objects[1].count == 2
+    assert spec.scene_plan.objects[2].materials == {"primary": "glass"}
+    assert len(spec.components) == 3
 
 
 def test_malformed_multi_primitive_response_falls_back_to_compound_primitives():

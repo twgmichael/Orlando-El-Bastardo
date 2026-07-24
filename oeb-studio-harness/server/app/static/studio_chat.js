@@ -47,6 +47,7 @@
     send: document.getElementById("send-message"),
     debugPanel: document.getElementById("debug-panel"),
     debugOutput: document.getElementById("debug-output"),
+    copyDebug: document.getElementById("copy-debug"),
     lightbox: document.getElementById("chat-lightbox"),
     lightboxImage: document.getElementById("chat-lightbox-image"),
     lightboxTitle: document.getElementById("chat-lightbox-title"),
@@ -63,7 +64,10 @@
   }
 
   function setStatus(text) {
-    els.status.textContent = text;
+    state.raw.ui_status = text;
+    if (els.status) {
+      els.status.textContent = text;
+    }
   }
 
   function messagePayload(message) {
@@ -342,6 +346,38 @@
     els.debugPanel.hidden = !els.debugToggle.checked;
     state.raw.settings = currentSettings();
     els.debugOutput.textContent = JSON.stringify(state.raw, null, 2);
+  }
+
+  function selectRawDebugText() {
+    const selection = window.getSelection();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(els.debugOutput);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  async function copyRawDebug() {
+    const text = els.debugOutput.textContent || "";
+    if (!text) {
+      setStatus("Raw debug is empty");
+      return;
+    }
+    selectRawDebugText();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        document.execCommand("copy");
+      }
+      els.copyDebug.classList.add("is-copied");
+      setStatus("Raw debug copied");
+      window.setTimeout(() => {
+        els.copyDebug.classList.remove("is-copied");
+      }, 1200);
+    } catch (err) {
+      showError("Could not copy raw debug", err.message);
+    }
   }
 
   function applyPreset(presetId) {
@@ -814,6 +850,7 @@
   els.createBuildJob.addEventListener("click", createBuildJob);
   els.exportJson.addEventListener("click", exportJson);
   els.exportMd.addEventListener("click", exportMarkdown);
+  els.copyDebug.addEventListener("click", copyRawDebug);
   els.lightboxClose.addEventListener("click", closeLightbox);
   els.lightboxPrev.addEventListener("click", () => moveLightbox(-1));
   els.lightboxNext.addEventListener("click", () => moveLightbox(1));
