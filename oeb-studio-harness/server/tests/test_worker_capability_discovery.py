@@ -7,7 +7,7 @@ def test_discovery_removes_gpu_capability_when_nvidia_probe_fails(tmp_path, monk
     cfg = WorkerConfig(
         worker_id="render-test-01",
         platform="linux-x64",
-        capabilities=["blender.final_render", "gpu.cycles_render"],
+        capabilities=["blender.final_render", "gpu.cycles_render", "gpu.texture_bake"],
         workspace_root=str(tmp_path),
     )
     monkeypatch.setattr("agent.capabilities.probe_blender_executable", lambda _executable: {"ok": True})
@@ -18,8 +18,14 @@ def test_discovery_removes_gpu_capability_when_nvidia_probe_fails(tmp_path, monk
 
     assert "blender.final_render" in capabilities
     assert "gpu.cycles_render" not in capabilities
-    assert resources["desired_capabilities"] == ["blender.final_render", "gpu.cycles_render"]
+    assert "gpu.texture_bake" not in capabilities
+    assert resources["desired_capabilities"] == [
+        "blender.final_render",
+        "gpu.cycles_render",
+        "gpu.texture_bake",
+    ]
     assert resources["degraded_capabilities"]["gpu.cycles_render"] == "NVML mismatch"
+    assert resources["degraded_capabilities"]["gpu.texture_bake"] == "NVML mismatch"
 
 
 def test_discovery_keeps_gpu_capability_when_runtime_probes_pass(tmp_path, monkeypatch):
@@ -40,6 +46,27 @@ def test_discovery_keeps_gpu_capability_when_runtime_probes_pass(tmp_path, monke
 
     assert "gpu.cycles_render" in capabilities
     assert resources["degraded_capabilities"] == {}
+
+
+def test_discovery_degrades_only_cycles_when_blender_gpu_probe_fails(tmp_path, monkeypatch):
+    cfg = WorkerConfig(
+        worker_id="render-test-01",
+        platform="linux-x64",
+        capabilities=["blender.final_render", "gpu.cycles_render", "gpu.texture_bake"],
+        workspace_root=str(tmp_path),
+    )
+    monkeypatch.setattr("agent.capabilities.probe_blender_executable", lambda _executable: {"ok": True})
+    monkeypatch.setattr("agent.capabilities.probe_nvidia_smi", lambda: {"ok": True, "gpus": ["GTX 1660 SUPER"]})
+    monkeypatch.setattr(
+        "agent.capabilities.probe_blender_gpu_devices",
+        lambda _executable: {"ok": False, "error": "No CUDA devices"},
+    )
+
+    capabilities, resources = discover_worker_capabilities(cfg)
+
+    assert "gpu.cycles_render" not in capabilities
+    assert "gpu.texture_bake" in capabilities
+    assert resources["degraded_capabilities"] == {"gpu.cycles_render": "No CUDA devices"}
 
 
 def test_blender_adapter_requires_runtime_gpu_metadata_for_gpu_jobs():
