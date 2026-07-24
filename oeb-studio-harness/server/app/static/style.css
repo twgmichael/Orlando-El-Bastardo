@@ -559,6 +559,73 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.assistant-waiting-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  color: var(--muted);
+}
+
+.assistant-waiting-label {
+  font-size: 11px;
+}
+
+.assistant-thinking-bubbles {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex: 0 0 48px;
+}
+
+.assistant-thinking-bubbles span {
+  position: absolute;
+  bottom: 5px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--running);
+  border-radius: 50%;
+  opacity: 0;
+  transform-origin: center;
+  animation: assistant-bubble-pop 1.45s ease-in-out infinite;
+}
+
+.assistant-thinking-bubbles span:nth-child(1) {
+  left: 4px;
+  animation-delay: 0s;
+}
+
+.assistant-thinking-bubbles span:nth-child(2) {
+  left: 18px;
+  animation-delay: .18s;
+}
+
+.assistant-thinking-bubbles span:nth-child(3) {
+  left: 32px;
+  animation-delay: .36s;
+}
+
+@keyframes assistant-bubble-pop {
+  0% {
+    transform: translateY(7px) scale(.35);
+    opacity: 0;
+  }
+
+  22% {
+    opacity: 1;
+  }
+
+  64% {
+    transform: translateY(-5px) scale(1);
+    opacity: .95;
+  }
+
+  100% {
+    transform: translateY(-12px) scale(1.45);
+    opacity: 0;
+  }
+}
+
 .assistant-json-details {
   white-space: normal;
 }
