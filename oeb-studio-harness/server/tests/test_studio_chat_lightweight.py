@@ -28,6 +28,9 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
 
     assert "valid JSON asset intent" in asset_builder.system_prompt
     assert "Do not collapse objects into generic boxes unless the user explicitly asks for a box" in asset_builder.system_prompt
+    assert "Use objects[] for object lists" in asset_builder.system_prompt
+    assert "Do not output the literal placeholder" in asset_builder.system_prompt
+    assert '"relationships"' in asset_builder.system_prompt
     assert "small buildable primitive jobs" not in asset_builder.system_prompt
     assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt
     assert "+X front" in asset_builder.system_prompt
@@ -458,6 +461,141 @@ def test_asset_intent_feedback_loop_repairs_directional_intent_to_construction_g
     assert spec.asset_intent["compiler_parts"][0]["id"] == "top_stroke"
     assert [primitive.id for primitive in spec.primitives] == ["top_stroke", "diagonal_stroke", "bottom_stroke"]
     assert "asset_review_renders" in spec.deliverables
+
+
+def test_multi_asset_intent_assets_array_normalizes_to_typed_objects():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build two blue tubes with a yellow ball between them and a red cube on the right.",
+        """```json
+{
+  "action": "build",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "asset_intent": {
+    "assets": [
+      {
+        "name": "blue_tube_1",
+        "parts": [{"type": "tube", "color": "blue"}],
+        "orientation": {"position": [0, -1.5, 0.5], "rotation": [0, 0, 0]}
+      },
+      {
+        "name": "blue_tube_2",
+        "parts": [{"type": "tube", "color": "blue"}],
+        "orientation": {"position": [0, 1.5, 0.5], "rotation": [0, 0, 0]}
+      },
+      {
+        "name": "yellow_ball",
+        "parts": [{"type": "sphere", "color": "yellow"}],
+        "orientation": {"position": [0, 0, 0.5], "rotation": [0, 0, 0]}
+      },
+      {
+        "name": "red_cube",
+        "parts": [{"type": "cube", "color": "red"}],
+        "orientation": {"position": [0, 3, 0.5], "rotation": [0, 0, 0]}
+      }
+    ]
+  }
+}
+```""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert spec.name == "Compound Asset"
+    assert spec.asset_intent["source_assets"][0]["name"] == "blue_tube_1"
+    assert [obj.id for obj in spec.scene_plan.objects] == [
+        "blue_tube_1",
+        "blue_tube_2",
+        "yellow_ball",
+        "red_cube",
+    ]
+    assert [primitive.type for primitive in spec.primitives] == ["cylinder", "cylinder", "sphere", "box"]
+    assert [primitive.material for primitive in spec.primitives] == ["blue", "blue", "yellow", "red"]
+    assert spec.primitives[3].transform.location == [0.0, 3.0, 0.5]
+    assert "asset_review_renders" in spec.deliverables
+
+
+def test_multi_object_intent_repairs_placeholder_types_and_null_relationship_targets():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build two blue tubes with a yellow ball between them and a red cube on the right.",
+        """{
+          "action": "translate",
+          "confidence": 1,
+          "clarification_question": null,
+          "escalation_reason": null,
+          "asset_intent": {
+            "name": "blue_tubes_yellow_ball_red_cube",
+            "kind": "set",
+            "description": "Two blue tubes with a yellow ball between them and a red cube on the right.",
+            "objects": [
+              {
+                "id": "tube1",
+                "type": "custom semantic type",
+                "material": "blue",
+                "count": 1,
+                "placement": "center",
+                "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+                "description": "left blue tube"
+              },
+              {
+                "id": "tube2",
+                "type": "custom semantic type",
+                "material": "blue",
+                "count": 1,
+                "placement": "center",
+                "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+                "description": "right blue tube"
+              },
+              {
+                "id": "yellow_ball",
+                "type": "custom semantic type",
+                "material": "yellow",
+                "count": 1,
+                "placement": "between",
+                "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+                "description": "yellow ball"
+              },
+              {
+                "id": "red_cube",
+                "type": "custom semantic type",
+                "material": "red",
+                "count": 1,
+                "placement": "right_of_group",
+                "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+                "description": "red cube"
+              }
+            ],
+            "relationships": [
+              {"subject": "tube1", "relation": "left_of", "target": "tube2", "targets": ["tube2"]},
+              {"subject": "yellow_ball", "relation": "between", "target": "tube2", "targets": ["tube2"]},
+              {"subject": "red_cube", "relation": "right_of_group", "target": null, "targets": ["tube1", "tube2"]}
+            ],
+            "construction_notes": "Ensure tubes are blue, ball is yellow, and cube is red.",
+            "construction_graph": null
+          }
+        }""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "translate"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert spec.kind == "set"
+    assert [primitive.type for primitive in spec.primitives] == ["cylinder", "cylinder", "sphere", "box"]
+    assert [primitive.material for primitive in spec.primitives] == ["blue", "blue", "yellow", "red"]
+    assert spec.primitives[0].transform.location == [0.0, -1.5, 0.5]
+    assert spec.primitives[1].transform.location == [0.0, 1.5, 0.5]
+    assert spec.primitives[2].transform.location == [0.0, 0.0, 0.5]
+    assert spec.primitives[3].transform.location == [0.0, 3.0, 0.5]
+    assert [(rel.subject, rel.relation, rel.target) for rel in spec.scene_plan.relationships] == [
+        ("tube1", "left_of", "tube2"),
+        ("yellow_ball", "between", "tube2"),
+        ("red_cube", "right_of_group", "tube1"),
+        ("red_cube", "right_of_group", "tube2"),
+    ]
 
 
 def test_asset_intent_without_style_gets_defensive_defaults_and_preserves_fields():

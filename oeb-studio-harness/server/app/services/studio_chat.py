@@ -25,6 +25,33 @@ rear/back, -Y left, +Y right, +Z up, -Z down. Describe the intended asset,
 parts, materials, orientation, relationships, construction notes, and semantic
 geometry.
 Do not collapse objects into generic boxes unless the user explicitly asks for a box.
+For arrangements or multi-object requests, prefer this asset_intent shape:
+{
+  "name": "short human-readable asset name",
+  "kind": "asset|prop|vehicle|location|set|character",
+  "description": "one sentence preserving the prompt",
+  "objects": [
+    {
+      "id": "stable_snake_case_id",
+      "type": "tube|sphere|cube|custom semantic type",
+      "material": "neutral|blue|red|green|yellow|orange|purple|black|white|gray|metal|wood|glass",
+      "count": 1,
+      "placement": "left|right|center|between|right_of_group|custom",
+      "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+      "description": "short object role"
+    }
+  ],
+  "relationships": [
+    {"subject": "object_id", "relation": "between|right_of|left_of|on_top_of|attached_to", "target": "object_id", "targets": ["object_id"]}
+  ],
+  "construction_notes": "short note",
+  "construction_graph": null
+}
+Use objects[] for object lists; do not use assets[] unless the user is asking
+for multiple separate library assets. Default unspecified materials to neutral.
+When the user names a concrete simple object, use that concrete type value
+directly, e.g. tube, sphere, cube. Do not output the literal placeholder
+"custom semantic type".
 Ask a clarifying question when the request is vague. Escalate
 ambiguous art direction, reference interpretation, or visual judgment.
 Do not write Blender code.
@@ -792,6 +819,87 @@ def _asset_intent_from_parsed(parsed: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_asset_intent_object(item: Any, idx: int) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {"id": f"object_{idx + 1}", "label": str(item), "type": "asset"}
+    normalized = json.loads(json.dumps(item))
+    raw_id = normalized.get("id") or normalized.get("name") or normalized.get("label") or f"object_{idx + 1}"
+    normalized["id"] = normalize_id(raw_id, f"object_{idx + 1}")
+    normalized.setdefault("label", str(normalized.get("name") or raw_id))
+
+    parts = normalized.get("parts") if isinstance(normalized.get("parts"), list) else []
+    primary_part = next((part for part in parts if isinstance(part, dict)), {})
+    if "type" not in normalized and primary_part.get("type"):
+        normalized["type"] = primary_part["type"]
+    if "material" not in normalized:
+        if primary_part.get("material"):
+            normalized["material"] = primary_part["material"]
+        elif primary_part.get("color"):
+            normalized["material"] = primary_part["color"]
+    if "color" in normalized and "material" not in normalized:
+        normalized["material"] = normalized["color"]
+    object_text = " ".join(
+        str(normalized.get(key) or "")
+        for key in ("id", "name", "label", "description", "type")
+    ).lower()
+    raw_type = normalize_id(normalized.get("type"), "")
+    if raw_type in {"custom", "custom_semantic_type", "semantic_type", "object", "asset", "part"}:
+        inferred_type = _primitive_type_from_text(object_text)
+        if inferred_type:
+            normalized["type"] = inferred_type
+    placement = normalize_id(normalized.get("placement"), "")
+    if placement in {"", "center", "custom"}:
+        if re.search(r"\bright\b", object_text):
+            normalized["placement"] = "right"
+        elif re.search(r"\bleft\b", object_text):
+            normalized["placement"] = "left"
+        elif re.search(r"\bbetween\b", object_text):
+            normalized["placement"] = "between"
+
+    orientation = normalized.get("orientation") if isinstance(normalized.get("orientation"), dict) else {}
+    if "position" in orientation and "position" not in normalized:
+        normalized["position"] = orientation["position"]
+    if "rotation" in orientation and "rotation" not in normalized:
+        normalized["rotation"] = orientation["rotation"]
+    if normalized.get("semantic_geometry") and "description" not in normalized:
+        normalized["description"] = str(normalized["semantic_geometry"])
+    return normalized
+
+
+def _normalize_asset_intent_structure(asset_intent: dict[str, Any], creative_request: str) -> dict[str, Any]:
+    normalized = json.loads(json.dumps(asset_intent))
+    assets = normalized.get("assets")
+    if isinstance(assets, list) and assets:
+        existing_objects = normalized.get("objects") if isinstance(normalized.get("objects"), list) else []
+        normalized["objects"] = [
+            *existing_objects,
+            *[_normalize_asset_intent_object(item, idx) for idx, item in enumerate(assets)],
+        ]
+        normalized["source_assets"] = assets
+        normalized.pop("assets", None)
+    elif isinstance(normalized.get("objects"), list):
+        normalized["objects"] = [
+            _normalize_asset_intent_object(item, idx)
+            for idx, item in enumerate(normalized["objects"])
+        ]
+    normalized["name"] = _first_text_value(
+        normalized.get("name"),
+        normalized.get("title"),
+        fallback="Compound Asset" if normalized.get("objects") else "Asset Concept",
+    )
+    normalized["kind"] = _first_text_value(
+        normalized.get("kind"),
+        normalized.get("asset_kind"),
+        fallback=infer_kind(creative_request, normalized),
+    )
+    normalized["description"] = _first_text_value(
+        normalized.get("description"),
+        normalized.get("style"),
+        fallback=creative_request,
+    )
+    return normalized
+
+
 def _primitive_type_from_payload(payload: dict[str, Any]) -> str | None:
     action = str(payload.get("action") or "").lower()
     build_job = payload.get("build_job") if isinstance(payload.get("build_job"), dict) else {}
@@ -1515,6 +1623,8 @@ def build_spec_from_assistant_response(
             reason="assistant_json_invalid",
         )
     asset_intent = _asset_intent_from_parsed(parsed)
+    if asset_intent is not None:
+        asset_intent = _normalize_asset_intent_structure(asset_intent, creative_request)
     build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
     spec_source = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else None
     if asset_intent is not None:
@@ -2041,6 +2151,166 @@ def _compile_construction_graph_primitives(request: str, spec: dict) -> list[dic
     return primitives
 
 
+def _placement_location(placement: Any, idx: int) -> list[float] | None:
+    placement_id = normalize_id(placement, "")
+    placements = {
+        "left": [0.0, -1.5, 0.5],
+        "right": [0.0, 1.5, 0.5],
+        "center": [0.0, 0.0, 0.5],
+        "middle": [0.0, 0.0, 0.5],
+        "between": [0.0, 0.0, 0.5],
+        "between_tubes": [0.0, 0.0, 0.5],
+        "right_of_group": [0.0, 3.0, 0.5],
+        "left_of_group": [0.0, -3.0, 0.5],
+    }
+    if placement_id in placements:
+        return placements[placement_id].copy()
+    if placement_id:
+        return [0.0, (idx - 1) * 1.5, 0.5]
+    return None
+
+
+def _primitive_type_from_object(obj: dict[str, Any]) -> str | None:
+    candidates = [
+        obj.get("type"),
+        obj.get("primitive"),
+        obj.get("category"),
+    ]
+    shape = obj.get("shape") if isinstance(obj.get("shape"), dict) else {}
+    candidates.extend([shape.get("primary_form"), shape.get("silhouette")])
+    parts = obj.get("parts") if isinstance(obj.get("parts"), list) else []
+    for part in parts:
+        if isinstance(part, dict):
+            candidates.extend([part.get("type"), part.get("primitive"), part.get("category")])
+    for candidate in candidates:
+        primitive_type = canonical_primitive_type(candidate)
+        if primitive_type:
+            return primitive_type
+    return None
+
+
+def _material_from_object(obj: dict[str, Any]) -> str:
+    candidates = [obj.get("material"), obj.get("color")]
+    materials = obj.get("materials") if isinstance(obj.get("materials"), dict) else {}
+    candidates.extend(materials.values())
+    parts = obj.get("parts") if isinstance(obj.get("parts"), list) else []
+    for part in parts:
+        if isinstance(part, dict):
+            candidates.extend([part.get("material"), part.get("color")])
+    for candidate in candidates:
+        if candidate:
+            try:
+                return _normalize_material(candidate)
+            except ValueError:
+                color = _material_color_from_text(str(candidate))
+                if color:
+                    return color
+    return "neutral"
+
+
+def _location_from_object(obj: dict[str, Any], idx: int) -> list[float]:
+    transform = obj.get("transform") if isinstance(obj.get("transform"), dict) else {}
+    orientation = obj.get("orientation") if isinstance(obj.get("orientation"), dict) else {}
+    value = (
+        transform.get("location")
+        or obj.get("location")
+        or obj.get("position")
+        or orientation.get("location")
+        or orientation.get("position")
+    )
+    placement_location = _placement_location(obj.get("placement"), idx)
+    if (
+        value is not None
+        and placement_location is not None
+        and _coerce_vec3(value, "object.location", [0.0, 0.0, 0.5], -50.0, 50.0) == [0.0, 0.0, 0.0]
+        and normalize_id(obj.get("placement"), "") not in {"", "center", "middle"}
+    ):
+        return placement_location
+    if value is not None:
+        return _coerce_vec3(value, "object.location", [0.0, 0.0, 0.5], -50.0, 50.0)
+    if placement_location is not None:
+        return placement_location
+    return [0.0, (idx - 1) * 1.5, 0.5]
+
+
+def _rotation_from_object(obj: dict[str, Any]) -> list[float]:
+    transform = obj.get("transform") if isinstance(obj.get("transform"), dict) else {}
+    orientation = obj.get("orientation") if isinstance(obj.get("orientation"), dict) else {}
+    value = transform.get("rotation") or obj.get("rotation") or orientation.get("rotation")
+    return _coerce_vec3(value, "object.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307)
+
+
+def _scale_from_object(obj: dict[str, Any], primitive_type: str) -> list[float]:
+    transform = obj.get("transform") if isinstance(obj.get("transform"), dict) else {}
+    value = transform.get("scale") or obj.get("scale") or obj.get("size")
+    default = [1.0, 1.0, 1.0]
+    if primitive_type == "cylinder":
+        default = [0.4, 0.4, 1.4]
+    return _coerce_vec3(value, "object.scale", default, 0.01, 20.0)
+
+
+def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str, Any]]:
+    if isinstance(spec.get("primitives"), list) and spec["primitives"]:
+        return []
+    objects = spec.get("objects") if isinstance(spec.get("objects"), list) else []
+    if not objects:
+        return []
+    primitives: list[dict[str, Any]] = []
+    for idx, obj in enumerate(objects):
+        if not isinstance(obj, dict):
+            continue
+        primitive_type = _primitive_type_from_object(obj)
+        if not primitive_type:
+            continue
+        object_id = _safe_id(obj.get("id") or obj.get("name") or obj.get("label"), f"{primitive_type}_{idx + 1}")
+        material = _material_from_object(obj)
+        primitives.append({
+            "id": object_id,
+            "type": primitive_type,
+            "label": str(obj.get("label") or obj.get("name") or object_id),
+            "material": material,
+            "transform": {
+                "location": _location_from_object(obj, idx),
+                "rotation": _rotation_from_object(obj),
+                "scale": _scale_from_object(obj, primitive_type),
+            },
+            "params": {},
+        })
+    return primitives
+
+
+def _normalize_scene_relationships(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for idx, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        subject = _first_text_value(item.get("subject"), item.get("source"), fallback="")
+        relation = _first_text_value(item.get("relation"), item.get("type"), fallback="related_to")
+        targets = item.get("targets")
+        target_values = targets if isinstance(targets, list) else [item.get("target")]
+        for target_idx, target_value in enumerate(target_values):
+            target = _first_text_value(target_value, fallback="")
+            if not subject or not target:
+                continue
+            item_key = (
+                normalize_id(subject, f"subject_{idx + 1}"),
+                normalize_id(relation, "related_to"),
+                normalize_id(target, f"target_{idx + 1}_{target_idx + 1}"),
+            )
+            if item_key in seen:
+                continue
+            seen.add(item_key)
+            normalized.append({
+                "subject": item_key[0],
+                "relation": item_key[1],
+                "target": item_key[2],
+            })
+    return normalized
+
+
 def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
     existing = spec.get("scene_plan") or spec.get("repaired_scene_plan")
     if isinstance(existing, dict):
@@ -2137,7 +2407,7 @@ def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
         "scene_type": str(spec.get("scene_type") or spec.get("type") or infer_kind(request, spec)),
         "style": spec.get("style") or request,
         "objects": objects,
-        "relationships": spec.get("relationships") if isinstance(spec.get("relationships"), list) else [],
+        "relationships": _normalize_scene_relationships(spec.get("relationships")),
     }
 
 
@@ -2145,7 +2415,8 @@ def normalize_spec(request: str, spec: dict) -> dict:
     source_intent_value = spec.get("asset_intent") if isinstance(spec.get("asset_intent"), dict) else spec
     source_intent = json.loads(json.dumps(source_intent_value))
     canonical_id = str(spec.get("canonical_id", "")).strip()
-    inferred_kind = infer_kind(request, spec)
+    requested_kind = normalize_id(spec.get("asset_kind") or spec.get("kind"), "")
+    inferred_kind = requested_kind if requested_kind in ALLOWED_ASSET_KINDS else infer_kind(request, spec)
     shape = preserved_shape_phrase(request)
     if (
         not re.fullmatch(r"[a-z]+_[a-z0-9_]+_A", canonical_id)
@@ -2166,6 +2437,8 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["asset_intent"] = source_intent
 
     compiled_primitives = _compile_construction_graph_primitives(request, spec)
+    if not compiled_primitives:
+        compiled_primitives = _compile_typed_object_primitives(request, spec)
     if compiled_primitives:
         spec["primitives"] = compiled_primitives
         spec["deliverables"] = ["glb", "preview_render", "asset_review_renders", "review_page"]
