@@ -202,6 +202,11 @@ GPU-accelerated review-render jobs completed end-to-end.
   heartbeat, reported git SHA, capabilities, Blender executable, and GPU health
   before returning the worker to the eligible pool. See
   `docs/planning/SCENE-RENDER-JOB-TYPE-PLAN.md`.
+- [ ] Add automatic render worker update discovery by git SHA — harness should
+  store the desired worker git SHA, compare it against each worker heartbeat,
+  and return an update instruction automatically when an idle worker is behind,
+  instead of requiring a manual `tools/update_worker.py --target-git-sha ...`
+  request.
 - [x] Show worker IP address on Studio Harness index — display workers as
   `worker-id (ip-address)` so operators can quickly identify and troubleshoot
   render machines from the dashboard.
