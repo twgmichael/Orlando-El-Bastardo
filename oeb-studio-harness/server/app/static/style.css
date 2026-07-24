@@ -474,6 +474,59 @@ button:disabled {
   margin-bottom: .25rem;
 }
 
+.build-stacked-blocks {
+  position: relative;
+  width: 34px;
+  height: 24px;
+  flex: 0 0 34px;
+}
+
+.build-stacked-blocks span {
+  position: absolute;
+  left: 9px;
+  width: 16px;
+  height: 6px;
+  border: 1px solid rgba(245, 158, 11, .95);
+  background: rgba(245, 158, 11, .18);
+  box-shadow: 0 0 10px rgba(245, 158, 11, .16);
+  opacity: 0;
+  transform: translateY(12px) scale(.88);
+  animation: build-block-stack 1.35s ease-in-out infinite;
+}
+
+.build-stacked-blocks span:nth-child(1) {
+  bottom: 2px;
+  animation-delay: 0s;
+}
+
+.build-stacked-blocks span:nth-child(2) {
+  bottom: 9px;
+  animation-delay: .16s;
+}
+
+.build-stacked-blocks span:nth-child(3) {
+  bottom: 16px;
+  animation-delay: .32s;
+}
+
+@keyframes build-block-stack {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(.88);
+  }
+
+  28%,
+  72% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-2px) scale(.96);
+  }
+}
+
 .build-job-links {
   display: flex;
   flex-wrap: wrap;

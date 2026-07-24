@@ -1693,6 +1693,92 @@ def _asset_intent_hints_from_request(request: str) -> dict[str, Any]:
     }
 
 
+def _letter_from_semantic_geometry(request: str, spec: dict) -> str | None:
+    candidates = [
+        spec.get("geometry"),
+        spec.get("letter"),
+        spec.get("character"),
+    ]
+    shape = spec.get("shape") if isinstance(spec.get("shape"), dict) else {}
+    candidates.extend([shape.get("silhouette"), shape.get("primary_form")])
+    for candidate in candidates:
+        text = str(candidate or "").strip().lower()
+        if match := re.fullmatch(r"(?:capital_)?letter_([a-z])", text):
+            return match.group(1)
+        if match := re.fullmatch(r"([a-z])", text):
+            return match.group(1)
+    return None
+
+
+def _stroke_box(
+    letter: str,
+    stroke_id: str,
+    label: str,
+    location: list[float],
+    scale: list[float],
+    rotation: list[float] | None = None,
+    material: str = "neutral",
+) -> dict[str, Any]:
+    return {
+        "id": f"letter_{letter}_{stroke_id}",
+        "type": "box",
+        "label": label,
+        "material": material,
+        "transform": {
+            "location": location,
+            "rotation": rotation or [0.0, 0.0, 0.0],
+            "scale": scale,
+        },
+        "params": {},
+    }
+
+
+def _letter_stroke_primitives(letter: str, material: str = "neutral") -> list[dict[str, Any]]:
+    depth = 0.16
+    stroke = 0.18
+    height = 1.8
+    top = 1.72
+    mid = 0.96
+    bottom = 0.2
+    primitives_by_letter = {
+        "t": [
+            _stroke_box("t", "vertical", "vertical center stroke", [0.0, 0.0, 0.86], [depth, stroke, height], material=material),
+            _stroke_box("t", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.25, stroke], material=material),
+        ],
+        "v": [
+            _stroke_box("v", "left_diagonal", "left diagonal stroke", [0.0, -0.32, 0.86], [depth, stroke, height], [0.42, 0.0, 0.0], material),
+            _stroke_box("v", "right_diagonal", "right diagonal stroke", [0.0, 0.32, 0.86], [depth, stroke, height], [-0.42, 0.0, 0.0], material),
+        ],
+        "e": [
+            _stroke_box("e", "vertical", "left vertical stroke", [0.0, -0.5, 0.96], [depth, stroke, height], material=material),
+            _stroke_box("e", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.15, stroke], material=material),
+            _stroke_box("e", "middle_bar", "horizontal middle stroke", [0.0, -0.02, mid], [depth, 1.0, stroke], material=material),
+            _stroke_box("e", "bottom_bar", "horizontal bottom stroke", [0.0, 0.0, bottom], [depth, 1.15, stroke], material=material),
+        ],
+        "f": [
+            _stroke_box("f", "vertical", "left vertical stroke", [0.0, -0.5, 0.96], [depth, stroke, height], material=material),
+            _stroke_box("f", "top_bar", "horizontal top stroke", [0.0, 0.0, top], [depth, 1.15, stroke], material=material),
+            _stroke_box("f", "middle_bar", "horizontal middle stroke", [0.0, -0.08, mid], [depth, 0.95, stroke], material=material),
+        ],
+        "a": [
+            _stroke_box("a", "left_diagonal", "left diagonal stroke", [0.0, -0.28, 0.9], [depth, stroke, height], [-0.34, 0.0, 0.0], material),
+            _stroke_box("a", "right_diagonal", "right diagonal stroke", [0.0, 0.28, 0.9], [depth, stroke, height], [0.34, 0.0, 0.0], material),
+            _stroke_box("a", "crossbar", "middle cross stroke", [0.0, 0.0, 0.92], [depth, 0.72, stroke], material=material),
+        ],
+    }
+    return json.loads(json.dumps(primitives_by_letter.get(letter, [])))
+
+
+def _compile_semantic_geometry_primitives(request: str, spec: dict) -> list[dict[str, Any]]:
+    if isinstance(spec.get("primitives"), list) and spec["primitives"]:
+        return []
+    letter = _letter_from_semantic_geometry(request, spec)
+    if not letter:
+        return []
+    material = _normalize_material(spec.get("material") or spec.get("color") or "neutral")
+    return _letter_stroke_primitives(letter, material)
+
+
 def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
     existing = spec.get("scene_plan") or spec.get("repaired_scene_plan")
     if isinstance(existing, dict):
@@ -1778,6 +1864,11 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
     spec["asset_intent"] = source_intent
 
+    compiled_primitives = _compile_semantic_geometry_primitives(request, spec)
+    if compiled_primitives:
+        spec["primitives"] = compiled_primitives
+        spec["deliverables"] = ["glb", "preview_render", "asset_review_renders", "review_page"]
+
     scene_plan = _scene_plan_from_asset_intent(request, spec)
     if scene_plan:
         spec["scene_plan"] = scene_plan
@@ -1785,7 +1876,9 @@ def normalize_spec(request: str, spec: dict) -> dict:
 
     components = spec.get("components")
     if not isinstance(components, list) or not components:
-        if scene_plan and isinstance(scene_plan.get("objects"), list):
+        if compiled_primitives:
+            spec["components"] = [primitive["id"] for primitive in compiled_primitives]
+        elif scene_plan and isinstance(scene_plan.get("objects"), list):
             scene_components = [
                 scene_object_component(obj)
                 for obj in scene_plan["objects"]

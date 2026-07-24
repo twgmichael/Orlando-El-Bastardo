@@ -266,6 +266,66 @@ def test_broad_asset_intent_skips_geometry_resolver_and_preserves_letter_a_verti
     assert any("letter_a" in component for component in spec.components)
 
 
+def test_semantic_letter_t_geometry_compiles_to_stroke_primitives():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build the letter T.",
+        """```json
+{
+  "action": "build",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "build_job": {
+    "type": "primitive",
+    "geometry": "T",
+    "scale": [0.5, 2, 0.5],
+    "position": [-0.75, 1, -0.25]
+  }
+}
+```""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert spec.asset_intent["geometry"] == "T"
+    assert [primitive.id for primitive in spec.primitives] == ["letter_t_vertical", "letter_t_top_bar"]
+    assert [primitive.type for primitive in spec.primitives] == ["box", "box"]
+    assert spec.primitives[0].label == "vertical center stroke"
+    assert spec.primitives[1].label == "horizontal top stroke"
+    assert "letter_t_top_bar" in spec.components
+    assert "asset_review_renders" in spec.deliverables
+
+
+def test_semantic_letter_v_geometry_compiles_to_diagonal_strokes():
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build a capital letter V.",
+        """```json
+{
+  "action": "build",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "build_job": {
+    "type": "primitive",
+    "geometry": "V"
+  }
+}
+```""",
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+    )
+
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "asset_intent_normalizer"
+    assert [primitive.id for primitive in spec.primitives] == ["letter_v_left_diagonal", "letter_v_right_diagonal"]
+    assert spec.primitives[0].transform.rotation[0] > 0
+    assert spec.primitives[1].transform.rotation[0] < 0
+    assert spec.scene_plan is not None
+    assert spec.scene_plan.objects[0].shape["silhouette"] == "capital_letter_v"
+
+
 def test_asset_intent_without_style_gets_defensive_defaults_and_preserves_fields():
     spec, parsed = build_spec_from_assistant_response(
         "Build a strange green usable item with asymmetric greebles.",
