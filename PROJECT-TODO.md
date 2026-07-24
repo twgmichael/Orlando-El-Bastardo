@@ -182,6 +182,10 @@ GPU-accelerated review-render jobs completed end-to-end.
   add the shared Blender device helper, worker `OEB_FORCE_CYCLES_GPU` contract,
   pre-render GPU probes, render-device metadata, and fail-fast CPU fallback
   checks. See `docs/planning/GPU-FORCED-BLENDER-RENDER-PLAN.md`.
+  - Current gap: the scene-render `require_gpu_cycles` flag only forces routing
+    to a GPU-capable worker; it does not yet prove Blender selected CUDA/OptiX
+    at runtime. Add runtime verification and fail the job loudly when GPU
+    device selection is unavailable.
 - [x] Add per-job Blender timeout for scene renders — support
   `blender_timeout_seconds`, set quality-aware defaults, and have the worker
   use the payload timeout over the adapter default so final animation renders
@@ -199,6 +203,11 @@ GPU-accelerated review-render jobs completed end-to-end.
 - [ ] Show worker IP address on Studio Harness index — display workers as
   `worker-id (ip-address)` so operators can quickly identify and troubleshoot
   render machines from the dashboard.
+- [ ] Make render worker capability advertising truthful — workers must
+  advertise GPU/Cycles capabilities from current runtime probes, not stale
+  config alone. If `nvidia-smi`, Blender CUDA/OptiX discovery, or required
+  render devices fail, remove or mark degraded capabilities before the worker
+  can claim GPU-required jobs.
 - [ ] Add `pyproject.toml` to worker for clean `pip install -e .` installs
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth

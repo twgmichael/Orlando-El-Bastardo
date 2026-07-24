@@ -58,11 +58,13 @@ Be precise about likely failure boundaries. Do not imply that you can run shell
 commands or mutate the harness from this chat. When more evidence is needed,
 name the exact endpoint, log, setting, or job identifier to check next."""
 
-PRIMITIVE_SHAPE_RESOLVER_PROMPT = """You are the OEB primitive shape resolver.
-Convert the user's creative request and assistant draft JSON into a strict
-PrimitiveRegistry v0.1 build spec. Use only registry primitive types, material
-names, transforms, and numeric params. Cone tips point +Z by default; "pointing
-down" is rotation [3.141592654, 0, 0]. Do not write Blender code or invent APIs.
+PRIMITIVE_SHAPE_RESOLVER_PROMPT = """You are the OEB asset intent resolver.
+Normalize the user's creative request and assistant draft JSON into a strict
+small build spec for deterministic workers. Preserve asset intent, named parts,
+features, materials, quantities, and orientation. Use primitive geometry only as
+internal build ops when the request is explicitly simple enough to execute that
+way. Cone tips point +Z by default; "pointing down" is rotation
+[3.141592654, 0, 0]. Do not write Blender code or invent APIs.
 When a request is vague, set needs_clarification true with one short question.
 When art direction is ambiguous, set escalation_reason. Return only JSON with:
 version, needs_clarification, clarification_question, escalation_reason,
@@ -330,6 +332,7 @@ PRIMITIVE_ALIASES = {
 }
 PRIMITIVE_TYPES = set(PRIMITIVE_ALIASES)
 CANONICAL_PRIMITIVE_TYPES = set(PRIMITIVE_REGISTRY_V01["primitive_types"])
+ALLOWED_ASSET_KINDS = {"asset", "prop", "vehicle", "location", "set", "character"}
 DIRECTIONAL_PRIMITIVE_TYPES = {"cone"}
 PRIMITIVE_DIRECTION_ROTATIONS = {
     "up": [0.0, 0.0, 0.0],
@@ -609,6 +612,16 @@ def _apply_explicit_orientation_hints(primitives: list[dict[str, Any]], creative
     return primitives
 
 
+def _coerce_asset_kind(value: Any, creative_request: str, payload: dict[str, Any] | None = None) -> str:
+    raw_kind = normalize_id(value, "")
+    if raw_kind in ALLOWED_ASSET_KINDS:
+        return raw_kind
+    if raw_kind in {"primitive", "geometry", "shape", "part", "component", "object"}:
+        return infer_kind(creative_request, payload)
+    inferred = infer_kind(creative_request, payload)
+    return inferred if inferred in ALLOWED_ASSET_KINDS else "asset"
+
+
 def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("primitive resolver output must be an object")
@@ -627,9 +640,12 @@ def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> d
         transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
         quantity = _quantity_from_value(primitive.get("quantity")) or _quantity_from_value(primitive.get("count")) or 1
         base_id = _safe_id(primitive.get("id"), f"{primitive_type}_{idx + 1}")
-        base_location = _coerce_vec3(transform.get("location"), "transform.location", [0.0, 0.0, 0.5], -50.0, 50.0)
-        rotation = _coerce_vec3(transform.get("rotation"), "transform.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307)
-        scale = _coerce_vec3(transform.get("scale"), "transform.scale", [1.0, 1.0, 1.0], 0.01, 20.0)
+        location_value = transform.get("location", primitive.get("location", primitive.get("position")))
+        rotation_value = transform.get("rotation", primitive.get("rotation"))
+        scale_value = transform.get("scale", primitive.get("scale", primitive.get("size")))
+        base_location = _coerce_vec3(location_value, "transform.location", [0.0, 0.0, 0.5], -50.0, 50.0)
+        rotation = _coerce_vec3(rotation_value, "transform.rotation", [0.0, 0.0, 0.0], -6.283185307, 6.283185307)
+        scale = _coerce_vec3(scale_value, "transform.scale", [1.0, 1.0, 1.0], 0.01, 20.0)
         material = _normalize_material(primitive.get("material") or "neutral")
         params = _normalize_primitive_params(primitive_type, primitive.get("params"))
         for copy_idx in range(quantity):
@@ -665,9 +681,11 @@ def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> d
         payload.get("name"),
         fallback=f"{primary_material.title()} {primary_type.title()}" if material_slug else f"{primary_type.title()} Primitive",
     )
-    asset_kind = _first_text_value(payload.get("asset_kind"), payload.get("kind"), fallback="prop")
-    if asset_kind not in {"asset", "prop", "vehicle", "location", "set", "character"}:
-        raise ValueError("asset_kind must be asset, prop, vehicle, location, set, or character")
+    asset_kind = _coerce_asset_kind(
+        _first_text_value(payload.get("asset_kind"), payload.get("kind"), fallback="prop"),
+        creative_request,
+        payload,
+    )
 
     return {
         "version": "0.1",
@@ -678,6 +696,7 @@ def validate_primitive_spec(payload: dict[str, Any], creative_request: str) -> d
         "canonical_id": canonical_id,
         "name": name,
         "style": _first_text_value(payload.get("style"), fallback=creative_request),
+        "asset_intent": json.loads(json.dumps(payload)),
         "primitives": normalized_primitives,
     }
 
@@ -739,6 +758,17 @@ def _primitive_type_from_payload(payload: dict[str, Any]) -> str | None:
         if value:
             return value
     return None
+
+
+def _payload_is_broad_asset_intent(parsed: dict[str, Any], creative_request: str) -> bool:
+    build_job = parsed.get("build_job") if isinstance(parsed.get("build_job"), dict) else {}
+    spec = build_job.get("spec") if isinstance(build_job.get("spec"), dict) else build_job
+    raw_type = normalize_id(spec.get("type") if isinstance(spec, dict) else parsed.get("type"), "")
+    if raw_type not in {"primitive", "asset", "object", "component", "part"}:
+        return False
+    if infer_kind(creative_request, spec if isinstance(spec, dict) else parsed) in {"vehicle", "character", "location", "set"}:
+        return True
+    return bool(preserved_shape_phrase(creative_request))
 
 
 def _material_color_from_payload(payload: dict[str, Any]) -> str | None:
@@ -1113,7 +1143,7 @@ def _spec_from_resolved_primitive(
 ) -> PrimitiveBuildSpec:
     primitive_types = [primitive["type"] for primitive in resolved["primitives"]]
     scene_plan = {
-        "scene_type": "primitive_asset",
+        "scene_type": resolved.get("asset_kind") or "asset",
         "style": resolved.get("style") or creative_request,
         "objects": [
             {
@@ -1138,6 +1168,7 @@ def _spec_from_resolved_primitive(
         "style": resolved.get("style") or creative_request,
         "creative_request": creative_request,
         "build_method": "blender_primitives",
+        "asset_intent": resolved.get("asset_intent") if isinstance(resolved.get("asset_intent"), dict) else {},
         "primitives": resolved["primitives"],
         "components": primitive_types,
         "scene_plan": scene_plan,
@@ -1163,7 +1194,8 @@ def build_spec_with_primitive_resolver(
             reason="assistant_json_invalid",
         )
 
-    direct_payload = _primitive_payload_from_parsed(parsed, creative_request)
+    broad_asset_intent = _payload_is_broad_asset_intent(parsed, creative_request)
+    direct_payload = None if broad_asset_intent else _primitive_payload_from_parsed(parsed, creative_request)
     if direct_payload:
         try:
             resolved = validate_primitive_spec(direct_payload, creative_request)
@@ -1177,7 +1209,7 @@ def build_spec_with_primitive_resolver(
             pass
 
     resolver_output: dict[str, Any] | None = None
-    if ollama_url and model:
+    if ollama_url and model and not broad_asset_intent:
         resolver_output = resolve_primitive_spec(
             ollama_url,
             model,
@@ -1196,8 +1228,8 @@ def build_spec_with_primitive_resolver(
     if resolver_output is None:
         resolver_output = {
             "ok": False,
-            "source": "legacy_fallback",
-            "error": "resolver not configured",
+            "source": "asset_intent_normalizer" if broad_asset_intent else "legacy_fallback",
+            "error": "broad asset intent normalized without geometry resolver" if broad_asset_intent else "resolver not configured",
             "registry_version": PRIMITIVE_REGISTRY_V01["version"],
         }
     return spec, legacy_parsed, resolver_output
@@ -1578,7 +1610,153 @@ def scene_object_component(obj: dict) -> str:
     return normalize_id("_".join(parts), "component")
 
 
+def _list_from_value(value: Any) -> list:
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    return [value]
+
+
+def _object_from_asset_part(part: Any, idx: int, request: str, inherited_materials: dict[str, Any]) -> dict:
+    if isinstance(part, dict):
+        raw_id = part.get("id") or part.get("name") or part.get("label") or f"part_{idx + 1}"
+        label = str(part.get("label") or part.get("name") or raw_id)
+        category = str(part.get("category") or part.get("type") or part.get("shape") or "part")
+        shape = part.get("shape") if isinstance(part.get("shape"), dict) else {}
+        if not shape and part.get("type"):
+            shape = {"primary_form": str(part["type"])}
+        materials = part.get("materials") if isinstance(part.get("materials"), dict) else inherited_materials.copy()
+        if not materials and part.get("material"):
+            materials = {"primary": part["material"]}
+        required_features = _list_from_value(part.get("required_features") or part.get("features"))
+        style_details = _list_from_value(part.get("style_details") or part.get("details"))
+        return {
+            "id": normalize_id(raw_id, f"part_{idx + 1}"),
+            "label": label,
+            "category": normalize_id(category, "part"),
+            "count": _quantity_from_value(part.get("count") or part.get("quantity")) or 1,
+            "placement": part.get("placement"),
+            "mounting": part.get("mounting"),
+            "shape": shape,
+            "required_features": [str(feature) for feature in required_features if feature],
+            "source_phrases": [request],
+            "materials": materials,
+            "style_details": [str(detail) for detail in style_details if detail],
+            "parts": [item for item in _list_from_value(part.get("parts")) if isinstance(item, dict)],
+            "orientation": part.get("orientation") if isinstance(part.get("orientation"), dict) else {},
+        }
+    label = str(part)
+    return {
+        "id": normalize_id(label, f"part_{idx + 1}"),
+        "label": label,
+        "category": normalize_id(label, "part"),
+        "count": 1,
+        "placement": None,
+        "shape": {},
+        "required_features": [],
+        "source_phrases": [request],
+        "materials": inherited_materials.copy(),
+        "style_details": [],
+        "parts": [],
+        "orientation": {},
+    }
+
+
+def _asset_intent_hints_from_request(request: str) -> dict[str, Any]:
+    lowered = request.lower()
+    shape_hint = preserved_shape_phrase(request)
+    required_features: list[str] = []
+    style_details: list[str] = []
+    shape: dict[str, Any] = {}
+    orientation: dict[str, Any] = {}
+
+    if shape_hint:
+        shape["silhouette"] = shape_hint
+        required_features.append(shape_hint)
+        if shape_hint.startswith("letter_") or shape_hint.startswith("capital_letter_"):
+            required_features.append(f"{shape_hint}_silhouette")
+            style_details.append(shape_hint.replace("_", " "))
+    if re.search(r"\bvertical(?:ly)?\b|\bon\s+the\s+vertical\b", lowered):
+        orientation["axis"] = "vertical"
+        orientation["direction"] = "+Z"
+        required_features.append("vertical_orientation")
+        style_details.append("vertical")
+    if re.search(r"\bstart\s+with\b", lowered):
+        required_features.append("starter_form")
+
+    return {
+        "shape": shape,
+        "required_features": required_features,
+        "style_details": style_details,
+        "orientation": orientation,
+    }
+
+
+def _scene_plan_from_asset_intent(request: str, spec: dict) -> dict | None:
+    existing = spec.get("scene_plan") or spec.get("repaired_scene_plan")
+    if isinstance(existing, dict):
+        existing.setdefault("style", spec.get("style") or request)
+        return existing
+
+    inherited_materials = spec.get("materials") if isinstance(spec.get("materials"), dict) else {}
+    source_objects = spec.get("objects") if isinstance(spec.get("objects"), list) else []
+    source_parts = spec.get("parts") if isinstance(spec.get("parts"), list) else []
+    objects = []
+    for idx, item in enumerate([*source_objects, *source_parts]):
+        objects.append(_object_from_asset_part(item, idx, request, inherited_materials))
+
+    request_hints = _asset_intent_hints_from_request(request)
+    features = _list_from_value(spec.get("features") or spec.get("required_features"))
+    features.extend(request_hints["required_features"])
+    style_details = _list_from_value(spec.get("style_details") or spec.get("details"))
+    style_details.extend(request_hints["style_details"])
+    greebles = spec.get("greebles") or spec.get("asymmetric_greebles")
+    if greebles:
+        features.append("asymmetric_greebles")
+        style_details.append(str(greebles))
+
+    if not objects and (features or style_details or inherited_materials or spec.get("shape") or spec.get("type")):
+        label = str(spec.get("name") or spec.get("label") or "asset")
+        raw_category = normalize_id(spec.get("category") or spec.get("type") or "", "")
+        category = infer_kind(request, spec) if raw_category in {"", "primitive", "asset", "object"} else raw_category
+        shape = spec.get("shape") if isinstance(spec.get("shape"), dict) else {}
+        shape = {**request_hints["shape"], **shape}
+        if not shape and spec.get("type"):
+            shape = {"primary_form": str(spec["type"])}
+        elif spec.get("type") and "primary_form" not in shape and normalize_id(spec.get("type"), "") not in {"primitive", "asset", "object"}:
+            shape["primary_form"] = str(spec["type"])
+        orientation = spec.get("orientation") if isinstance(spec.get("orientation"), dict) else {}
+        orientation = {**request_hints["orientation"], **orientation}
+        objects.append({
+            "id": normalize_id(label, "asset"),
+            "label": label,
+            "category": normalize_id(category, "asset"),
+            "count": _quantity_from_value(spec.get("count") or spec.get("quantity")) or 1,
+            "placement": spec.get("placement"),
+            "mounting": spec.get("mounting"),
+            "shape": shape,
+            "required_features": [str(feature) for feature in features if feature],
+            "source_phrases": [request],
+            "materials": inherited_materials.copy(),
+            "style_details": [str(detail) for detail in style_details if detail],
+            "parts": [item for item in source_parts if isinstance(item, dict)],
+            "orientation": orientation,
+        })
+
+    if not objects:
+        return None
+
+    return {
+        "scene_type": str(spec.get("scene_type") or spec.get("type") or infer_kind(request, spec)),
+        "style": spec.get("style") or request,
+        "objects": objects,
+        "relationships": spec.get("relationships") if isinstance(spec.get("relationships"), list) else [],
+    }
+
+
 def normalize_spec(request: str, spec: dict) -> dict:
+    source_intent = json.loads(json.dumps(spec))
     canonical_id = str(spec.get("canonical_id", "")).strip()
     inferred_kind = infer_kind(request, spec)
     shape = preserved_shape_phrase(request)
@@ -1592,15 +1770,30 @@ def normalize_spec(request: str, spec: dict) -> dict:
     ):
         spec["canonical_id"] = slugify_asset_id(request)
 
-    spec.setdefault("name", "Primitive Asset Concept")
+    spec.setdefault("name", "Asset Concept")
+    spec["style"] = _first_text_value(spec.get("style"), spec.get("description"), fallback=request)
     spec["kind"] = inferred_kind
     spec["creative_request"] = request
     spec["build_method"] = "blender_primitives"
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
+    spec["asset_intent"] = source_intent
+
+    scene_plan = _scene_plan_from_asset_intent(request, spec)
+    if scene_plan:
+        spec["scene_plan"] = scene_plan
+        spec["repaired_scene_plan"] = spec.get("repaired_scene_plan") if isinstance(spec.get("repaired_scene_plan"), dict) else scene_plan
 
     components = spec.get("components")
     if not isinstance(components, list) or not components:
-        spec["components"] = default_components_for(request, spec)
+        if scene_plan and isinstance(scene_plan.get("objects"), list):
+            scene_components = [
+                scene_object_component(obj)
+                for obj in scene_plan["objects"]
+                if isinstance(obj, dict)
+            ]
+            spec["components"] = scene_components or default_components_for(request, spec)
+        else:
+            spec["components"] = default_components_for(request, spec)
     else:
         generic = {"cube", "sphere", "cylinder", "cone", "primitive"}
         component_words = {str(c).lower().strip() for c in components}
