@@ -30,6 +30,8 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "Do not collapse objects into generic boxes unless the user explicitly asks for a box" in asset_builder.system_prompt
     assert "Use objects[] for object lists" in asset_builder.system_prompt
     assert "Do not output the literal placeholder" in asset_builder.system_prompt
+    assert "Treat the newest user prompt as controlling" in asset_builder.system_prompt
+    assert "For semantic forms such as letters" in asset_builder.system_prompt
     assert '"relationships"' in asset_builder.system_prompt
     assert "small buildable primitive jobs" not in asset_builder.system_prompt
     assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt
@@ -461,6 +463,132 @@ def test_asset_intent_feedback_loop_repairs_directional_intent_to_construction_g
     assert spec.asset_intent["compiler_parts"][0]["id"] == "top_stroke"
     assert [primitive.id for primitive in spec.primitives] == ["top_stroke", "diagonal_stroke", "bottom_stroke"]
     assert "asset_review_renders" in spec.deliverables
+
+
+LETTER_COPIED_OBJECTS_RESPONSE = """{
+  "action": "translate",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "asset_intent": {
+    "name": "letter_A",
+    "kind": "set",
+    "description": "A letter A composed of a blue tube and a red cube.",
+    "objects": [
+      {
+        "id": "blue_tube",
+        "type": "custom semantic type",
+        "material": "blue",
+        "count": 1,
+        "placement": "center",
+        "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+        "description": "blue tube"
+      },
+      {
+        "id": "red_cube",
+        "type": "custom semantic type",
+        "material": "red",
+        "count": 1,
+        "placement": "right_of_group",
+        "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+        "description": "red cube"
+      }
+    ],
+    "relationships": [
+      {"subject": "blue_tube", "relation": "left_of", "target": null, "targets": ["red_cube"]},
+      {"subject": "red_cube", "relation": "right_of_group", "target": null, "targets": ["blue_tube"]}
+    ],
+    "construction_notes": "Ensure the blue tube is centered and the red cube is to its right.",
+    "construction_graph": null
+  }
+}"""
+
+
+def test_letter_request_does_not_compile_copied_typed_object_arrangement():
+    spec, parsed = build_spec_from_assistant_response(
+        "Build the letter A.",
+        LETTER_COPIED_OBJECTS_RESPONSE,
+    )
+
+    assert parsed["asset_intent"]["name"] == "letter_A"
+    assert spec.primitives == []
+    assert "asset_review_renders" not in spec.deliverables
+
+
+def test_letter_request_forces_normalizer_feedback_loop_over_copied_objects(monkeypatch):
+    requests = []
+
+    def fake_post_json(url, payload, token=None, timeout=60):
+        requests.append(payload)
+        return {
+            "message": {
+                "content": """{
+                  "construction_graph": {
+                    "units": "relative",
+                    "elements": [
+                      {"id": "left_stroke", "kind": "stroke", "from": [0, -0.45, 0.2], "to": [0, 0, 1.4], "thickness": 0.14, "material": "neutral"},
+                      {"id": "right_stroke", "kind": "stroke", "from": [0, 0.45, 0.2], "to": [0, 0, 1.4], "thickness": 0.14, "material": "neutral"},
+                      {"id": "crossbar", "kind": "stroke", "from": [0, -0.25, 0.75], "to": [0, 0.25, 0.75], "thickness": 0.12, "material": "neutral"}
+                    ],
+                    "construction_notes": "A generic construction graph for a block letter A."
+                  },
+                  "parts": [
+                    {"id": "left_stroke", "role": "left diagonal stroke"},
+                    {"id": "right_stroke", "role": "right diagonal stroke"},
+                    {"id": "crossbar", "role": "middle crossbar"}
+                  ]
+                }"""
+            },
+            "done": True,
+        }
+
+    monkeypatch.setattr(studio_chat, "post_json", fake_post_json)
+
+    spec, parsed, resolver = build_spec_with_primitive_resolver(
+        "Build the letter A.",
+        LETTER_COPIED_OBJECTS_RESPONSE,
+        ollama_url="http://ollama.test",
+        model="oeb-qwen2.5-3b",
+        resolver_retries=1,
+    )
+
+    assert parsed["asset_intent"]["name"] == "letter_A"
+    assert resolver["ok"] is True
+    assert resolver["source"] == "asset_intent_feedback_loop"
+    assert "current_asset_intent" in requests[0]["messages"][1]["content"]
+    assert [primitive.id for primitive in spec.primitives] == ["left_stroke", "right_stroke", "crossbar"]
+    assert [primitive.material for primitive in spec.primitives] == ["neutral", "neutral", "neutral"]
+    assert "asset_review_renders" in spec.deliverables
+
+
+def test_letter_request_blocks_render_when_normalizer_does_not_return_graph(monkeypatch):
+    def fake_post_json(url, payload, token=None, timeout=60):
+        return {
+            "message": {
+                "content": """{
+                  "parts": [
+                    {"id": "blue_tube", "role": "copied blue tube"},
+                    {"id": "red_cube", "role": "copied red cube"}
+                  ]
+                }"""
+            },
+            "done": True,
+        }
+
+    monkeypatch.setattr(studio_chat, "post_json", fake_post_json)
+
+    try:
+        build_spec_with_primitive_resolver(
+            "Build the letter A.",
+            LETTER_COPIED_OBJECTS_RESPONSE,
+            ollama_url="http://ollama.test",
+            model="oeb-qwen2.5-3b",
+            resolver_retries=0,
+        )
+    except ValueError as exc:
+        assert "construction_graph" in str(exc)
+    else:
+        raise AssertionError("letter request should not render copied object arrangement")
 
 
 def test_multi_asset_intent_assets_array_normalizes_to_typed_objects():

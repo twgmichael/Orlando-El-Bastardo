@@ -25,6 +25,9 @@ rear/back, -Y left, +Y right, +Z up, -Z down. Describe the intended asset,
 parts, materials, orientation, relationships, construction notes, and semantic
 geometry.
 Do not collapse objects into generic boxes unless the user explicitly asks for a box.
+Treat the newest user prompt as controlling. Do not reuse objects, colors, or
+relationships from earlier thread messages unless the user explicitly refers to
+them.
 For arrangements or multi-object requests, prefer this asset_intent shape:
 {
   "name": "short human-readable asset name",
@@ -52,6 +55,12 @@ for multiple separate library assets. Default unspecified materials to neutral.
 When the user names a concrete simple object, use that concrete type value
 directly, e.g. tube, sphere, cube. Do not output the literal placeholder
 "custom semantic type".
+For semantic forms such as letters, symbols, silhouettes, logos, arrows, or
+glyph-like structures, do not describe them as unrelated object arrangements.
+Use asset_intent.semantic_geometry and/or asset_intent.construction_graph.
+When using construction_graph, return generic stroke elements with from/to
+coordinates, thickness, material, and role. The harness compiles those strokes;
+you are not writing Blender code.
 Ask a clarifying question when the request is vague. Escalate
 ambiguous art direction, reference interpretation, or visual judgment.
 Do not write Blender code.
@@ -1562,6 +1571,7 @@ def build_spec_with_primitive_resolver(
             )
 
     spec, legacy_parsed = build_spec_from_assistant_response(creative_request, assistant_response, messages)
+    requires_construction_graph = _request_requires_construction_graph(creative_request)
     if resolver_output is None:
         resolver_output = {
             "ok": False,
@@ -1570,12 +1580,22 @@ def build_spec_with_primitive_resolver(
             "registry_version": PRIMITIVE_REGISTRY_V01["version"],
         }
 
-    if broad_asset_intent and ollama_url and model and not spec.primitives:
-        asset_intent = spec.asset_intent or _asset_intent_from_parsed(parsed) or {}
-        if asset_intent and (
-            isinstance(asset_intent.get("semantic_geometry"), dict)
-            or isinstance(asset_intent.get("construction_graph"), dict)
-        ):
+    asset_intent_for_normalizer = spec.asset_intent or _asset_intent_from_parsed(parsed) or {}
+    should_normalize_asset_intent = bool(
+        broad_asset_intent
+        and ollama_url
+        and model
+        and not spec.primitives
+        and asset_intent_for_normalizer
+        and (
+            requires_construction_graph
+            or isinstance(asset_intent_for_normalizer.get("semantic_geometry"), dict)
+            or isinstance(asset_intent_for_normalizer.get("construction_graph"), dict)
+        )
+    )
+    if should_normalize_asset_intent:
+        asset_intent = asset_intent_for_normalizer
+        if asset_intent:
             intent_normalizer_output = resolve_asset_intent_normalization(
                 ollama_url,
                 model,
@@ -1606,6 +1626,11 @@ def build_spec_with_primitive_resolver(
                         "ok": False,
                         "error": "asset intent normalized but did not compile into executable build ops",
                     }
+        if requires_construction_graph and not resolver_output.get("ok"):
+            raise ValueError(
+                resolver_output.get("error")
+                or "semantic construction request did not normalize into compiler-friendly construction_graph"
+            )
     return spec, legacy_parsed, resolver_output
 
 
@@ -2095,6 +2120,16 @@ def _construction_graph_from_spec(spec: dict) -> dict[str, Any] | None:
     return graph if isinstance(graph, dict) else None
 
 
+def _request_requires_construction_graph(request: str) -> bool:
+    if re.search(
+        r"\b(?:build|make|create|render)\s+(?:a\s+|an\s+|the\s+)?(?:capital\s+)?letter\s+[a-z0-9]\b",
+        request,
+        re.IGNORECASE,
+    ):
+        return True
+    return bool(re.search(r"\b(symbol|glyph|logo|silhouette)\b", request, re.IGNORECASE))
+
+
 def _construction_graph_vec3(value: Any, field_name: str) -> list[float]:
     return _coerce_vec3(value, field_name, [0.0, 0.0, 0.0], -20.0, 20.0)
 
@@ -2436,8 +2471,9 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
     spec["asset_intent"] = source_intent
 
+    requires_construction_graph = _request_requires_construction_graph(request)
     compiled_primitives = _compile_construction_graph_primitives(request, spec)
-    if not compiled_primitives:
+    if not compiled_primitives and not requires_construction_graph:
         compiled_primitives = _compile_typed_object_primitives(request, spec)
     if compiled_primitives:
         spec["primitives"] = compiled_primitives
