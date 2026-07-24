@@ -7,6 +7,7 @@ from agent.config import WorkerConfig
 
 
 GPU_CAPABILITY = "gpu.cycles_render"
+GPU_CAPABILITY_PREFIX = "gpu."
 BLENDER_CAPABILITY_PREFIX = "blender."
 GPU_PROBE_MARKER = "OEB_GPU_PROBE "
 
@@ -26,22 +27,26 @@ def discover_worker_capabilities(cfg: WorkerConfig) -> tuple[list[str], dict]:
                 degraded[cap] = str(blender_probe.get("error") or "Blender executable probe failed")
             verified = [cap for cap in verified if not cap.startswith(BLENDER_CAPABILITY_PREFIX)]
 
-    if GPU_CAPABILITY in desired:
+    gpu_caps = [cap for cap in desired if cap.startswith(GPU_CAPABILITY_PREFIX)]
+    if gpu_caps:
         nvidia_probe = probe_nvidia_smi()
+        probes["nvidia_smi"] = nvidia_probe
+        if not nvidia_probe.get("ok"):
+            reason = str(nvidia_probe.get("error") or "nvidia-smi probe failed")
+            for cap in gpu_caps:
+                degraded[cap] = reason
+
+    if GPU_CAPABILITY in desired and GPU_CAPABILITY not in degraded:
         blender_gpu_probe = (
             probe_blender_gpu_devices(cfg.adapters.blender.executable)
             if probes.get("blender", {}).get("ok", True)
             else {"ok": False, "error": "Blender executable probe failed"}
         )
-        probes["nvidia_smi"] = nvidia_probe
         probes["blender_gpu"] = blender_gpu_probe
-        if not nvidia_probe.get("ok"):
-            degraded[GPU_CAPABILITY] = str(nvidia_probe.get("error") or "nvidia-smi probe failed")
-        elif not blender_gpu_probe.get("ok"):
+        if not blender_gpu_probe.get("ok"):
             degraded[GPU_CAPABILITY] = str(blender_gpu_probe.get("error") or "Blender GPU discovery failed")
 
-    if GPU_CAPABILITY in degraded:
-        verified = [cap for cap in verified if cap != GPU_CAPABILITY]
+    verified = [cap for cap in verified if cap not in degraded]
 
     resources = {
         **(cfg.resources or {}),
