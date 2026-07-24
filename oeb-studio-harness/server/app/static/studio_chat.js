@@ -172,6 +172,16 @@
     return "Build job pending";
   }
 
+  function buildIsActive(build) {
+    if (!build || build.error) return false;
+    const status = build.status || null;
+    if (!status) return true;
+    if (status.gallery_ready) return false;
+    if (status.build_job && status.build_job.status === "failed") return false;
+    if (status.review_job && status.review_job.status === "failed") return false;
+    return true;
+  }
+
   function lightboxArtifactLabel(artifact, index, total) {
     const view = artifact && artifact.view ? artifact.view.toUpperCase() : "RENDER";
     return `${view} ${index + 1}/${total}`;
@@ -305,6 +315,18 @@
     return card;
   }
 
+  function renderAssistantActivityContent(content, labelText, indicatorClass, indicatorLabel) {
+    content.classList.add("assistant-waiting-content");
+    const label = document.createElement("span");
+    label.className = "assistant-waiting-label";
+    label.textContent = labelText;
+    const indicator = document.createElement("div");
+    indicator.className = indicatorClass;
+    indicator.setAttribute("aria-label", indicatorLabel);
+    indicator.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+    content.append(label, indicator);
+  }
+
   function renderAssistantWaitingRow() {
     const row = document.createElement("article");
     row.className = "chat-message chat-message-assistant chat-message-waiting";
@@ -312,15 +334,8 @@
     role.className = "chat-message-role";
     role.textContent = "assistant";
     const content = document.createElement("div");
-    content.className = "chat-message-content assistant-waiting-content";
-    const label = document.createElement("span");
-    label.className = "assistant-waiting-label";
-    label.textContent = "Waiting for local model";
-    const bubbles = document.createElement("div");
-    bubbles.className = "assistant-thinking-bubbles";
-    bubbles.setAttribute("aria-label", "Thinking");
-    bubbles.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
-    content.append(label, bubbles);
+    content.className = "chat-message-content";
+    renderAssistantActivityContent(content, "Waiting for local model", "assistant-thinking-bubbles", "Thinking");
     row.append(role, content);
     return row;
   }
@@ -345,21 +360,18 @@
       content.className = "chat-message-content";
       if (message.role === "assistant") {
         const control = assistantControl(message);
+        const buildActive = message.build && buildIsActive(message.build);
         if (control.clarification || control.escalation) {
           const visible = document.createElement("p");
           visible.textContent = control.clarification || control.escalation;
           content.appendChild(visible);
+        } else if (buildActive) {
+          renderAssistantActivityContent(content, "Rendering pipeline", "build-stacked-blocks", "Building");
+        } else if (control.parsed) {
+          content.textContent = "";
+        } else {
+          content.textContent = message.content;
         }
-        const details = document.createElement("details");
-        details.className = "assistant-json-details";
-        const summary = document.createElement("summary");
-        summary.textContent = "Assistant JSON";
-        const pre = document.createElement("pre");
-        pre.textContent = message.raw && message.raw.original_content
-          ? message.raw.original_content
-          : message.content;
-        details.append(summary, pre);
-        content.appendChild(details);
       } else {
         content.textContent = message.content;
       }
