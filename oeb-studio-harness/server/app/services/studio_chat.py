@@ -2130,6 +2130,15 @@ def _request_requires_construction_graph(request: str) -> bool:
     return bool(re.search(r"\b(symbol|glyph|logo|silhouette)\b", request, re.IGNORECASE))
 
 
+def _request_explicitly_wants_scene_shell(request: str) -> bool:
+    return bool(re.search(
+        r"\b(location|set|scene|room|office|street|park|garage|hangar|lab|clinic|bay|"
+        r"interior|exterior|environment|terrain|ground|floor|wall|ceiling)\b",
+        request,
+        re.IGNORECASE,
+    ))
+
+
 def _construction_graph_vec3(value: Any, field_name: str) -> list[float]:
     return _coerce_vec3(value, field_name, [0.0, 0.0, 0.0], -20.0, 20.0)
 
@@ -2470,6 +2479,10 @@ def normalize_spec(request: str, spec: dict) -> dict:
     spec["build_method"] = "blender_primitives"
     spec["deliverables"] = ["glb", "preview_render", "review_page"]
     spec["asset_intent"] = source_intent
+    if "scene_shell" not in spec:
+        spec["scene_shell"] = inferred_kind == "location" or (
+            inferred_kind == "set" and _request_explicitly_wants_scene_shell(request)
+        )
 
     requires_construction_graph = _request_requires_construction_graph(request)
     compiled_primitives = _compile_construction_graph_primitives(request, spec)

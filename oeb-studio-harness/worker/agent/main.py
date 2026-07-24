@@ -16,6 +16,7 @@ from agent.registry import AdapterRegistry
 from agent.adapters.ollama import OllamaAdapter
 from agent.adapters.blender import BlenderCLIAdapter
 from agent.updater import WorkerUpdateExecutor
+from agent.capabilities import discover_worker_capabilities
 
 logging.basicConfig(
     level=logging.INFO,
@@ -104,7 +105,9 @@ async def run(config_path: str) -> None:
         log.error("harness_url not set (config or OEB_HARNESS_URL env var)")
         sys.exit(1)
 
-    registration_resources = _registration_resources(cfg.resources, cfg.harness_url)
+    verified_capabilities, capability_resources = discover_worker_capabilities(cfg)
+    cfg.capabilities = verified_capabilities
+    registration_resources = _registration_resources(capability_resources, cfg.harness_url)
     worker_token = _load_token(cfg)
     git_sha = _git_sha()
     client = HarnessClient(

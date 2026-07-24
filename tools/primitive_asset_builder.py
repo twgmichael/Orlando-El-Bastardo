@@ -904,7 +904,11 @@ def primitive_for_scene_object(obj, idx, mat):
 
 
 def uses_location_shell(spec):
-    return spec.get("kind") in {"location", "set"}
+    if spec.get("scene_shell") is False:
+        return False
+    if spec.get("scene_shell") is True:
+        return True
+    return spec.get("kind") == "location"
 
 
 def layout_shell_descriptors(spec):

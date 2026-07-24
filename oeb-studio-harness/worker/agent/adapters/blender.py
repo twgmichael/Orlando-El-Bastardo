@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 import re
 import shlex
 import subprocess
@@ -20,6 +22,7 @@ ASSET_REVIEW_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action
 LOG_TAIL_LINES = 80
 
 _PATH_TRAVERSAL = re.compile(r"\.\.")
+_RENDER_DEVICE_MARKER = "OEB_RENDER_DEVICE "
 
 
 def _safe_path(raw: str, label: str) -> Path:
@@ -68,7 +71,8 @@ class BlenderCLIAdapter(Adapter):
         return resolved
 
     def execute(self, job: dict) -> AdapterResult:
-        payload = job.get("payload", {})
+        payload = dict(job.get("payload", {}))
+        payload["_required_capabilities"] = list(job.get("required_capabilities") or [])
         if payload.get("job_type") == ASSET_REVIEW_JOB_TYPE:
             return self._execute_asset_review(payload, job.get("id", ""))
 
@@ -191,6 +195,15 @@ class BlenderCLIAdapter(Adapter):
         if overrides:
             cmd += ["--python-expr", "; ".join(["import bpy"] + overrides)]
 
+        if self._requires_gpu_cycles(payload):
+            helper_expr = (
+                "import sys; "
+                f"sys.path[:0] = {[self._workspace_root, str(Path(self._workspace_root) / 'tools')]!r}; "
+                "from oeb_blender.render_device import configure_render_device; "
+                "configure_render_device(require_gpu=True)"
+            )
+            cmd += ["--python-expr", helper_expr]
+
         cmd += ["--render-output", str(out), "--render-format", render_format]
 
         if single_frame is not None:
@@ -201,18 +214,46 @@ class BlenderCLIAdapter(Adapter):
             cmd += ["--render-frame", "1"]
 
         timeout_seconds = self._payload_timeout_seconds(payload)
-        log_output, returncode = self._run(cmd, timeout_seconds=timeout_seconds)
+        log_output, returncode = self._call_run(
+            cmd,
+            timeout_seconds=timeout_seconds,
+            env=self._render_env(payload),
+        )
         if returncode != 0:
-            return AdapterResult(success=False, error=f"Blender exited {returncode}", log_output=log_output)
+            return AdapterResult(
+                success=False,
+                error=f"Blender exited {returncode}",
+                log_output=log_output,
+                output_summary={"render_device": self._render_device_summary(log_output)},
+            )
 
         rendered = sorted(out.parent.glob(f"{out.stem}*")) or ([out] if out.exists() else [])
         is_preview = payload.get("_preview", False)
+        render_device_summary = self._render_device_summary(log_output)
+        if gpu_error := self._gpu_contract_error(payload, render_device_summary):
+            return AdapterResult(
+                success=False,
+                error=gpu_error,
+                log_output=log_output,
+                output_summary={
+                    "blend_file": str(blend),
+                    "engine": engine,
+                    "frames_rendered": len(rendered),
+                    "render_device": render_device_summary,
+                    "reason": gpu_error,
+                },
+            )
         return AdapterResult(
             success=True,
             log_output=log_output,
             artifacts=rendered,
             artifact_type="preview_render" if is_preview else "final_render",
-            output_summary={"blend_file": str(blend), "engine": engine, "frames_rendered": len(rendered)},
+            output_summary={
+                "blend_file": str(blend),
+                "engine": engine,
+                "frames_rendered": len(rendered),
+                "render_device": self._render_device_summary(log_output),
+            },
         )
 
     def _execute_script(self, payload: dict, job_id: str = "") -> AdapterResult:
@@ -243,7 +284,12 @@ class BlenderCLIAdapter(Adapter):
 
         started = time.monotonic()
         timeout_seconds = self._payload_timeout_seconds(payload)
-        log_output, returncode = self._run(cmd, cwd=cwd, timeout_seconds=timeout_seconds)
+        log_output, returncode = self._call_run(
+            cmd,
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            env=self._render_env(payload),
+        )
         elapsed_seconds = time.monotonic() - started
         if returncode != 0:
             return AdapterResult(
@@ -294,7 +340,25 @@ class BlenderCLIAdapter(Adapter):
             rendered = sorted(out.parent.glob(f"{out.stem}*")) or ([out] if out.exists() else [])
 
         is_preview = payload.get("_preview", False)
-        output_summary = {"script_file": str(script), "frames_rendered": len(rendered)}
+        render_device_summary = self._render_device_summary(log_output)
+        output_summary = {
+            "script_file": str(script),
+            "frames_rendered": len(rendered),
+            "render_device": render_device_summary,
+        }
+        if gpu_error := self._gpu_contract_error(payload, render_device_summary):
+            output_summary.update({
+                "reason": gpu_error,
+                "command": shlex.join(cmd),
+                "cwd": cwd,
+                "log_tail": self._log_tail(log_output),
+            })
+            return AdapterResult(
+                success=False,
+                error=gpu_error,
+                log_output=log_output,
+                output_summary=output_summary,
+            )
         if payload.get("job_type") == "scene.render":
             frame_count = 0
             if out:
@@ -368,6 +432,7 @@ class BlenderCLIAdapter(Adapter):
             "command": shlex.join(cmd),
             "cwd": cwd,
             "log_tail": self._log_tail(log_output),
+            "render_device": self._render_device_summary(log_output),
         }
         if payload.get("job_type") == "scene.render":
             frames_dir = None
@@ -422,11 +487,80 @@ class BlenderCLIAdapter(Adapter):
             return self._cfg.timeout_seconds
         return timeout_seconds if timeout_seconds > 0 else self._cfg.timeout_seconds
 
-    def _run(self, cmd: list[str], cwd: str | None = None, timeout_seconds: int | None = None) -> tuple[str, int]:
+    def _requires_gpu_cycles(self, payload: dict) -> bool:
+        return bool(payload.get("require_gpu_cycles")) or "gpu.cycles_render" in set(
+            payload.get("_required_capabilities") or []
+        )
+
+    def _render_env(self, payload: dict) -> dict | None:
+        env = os.environ.copy()
+        python_paths = [
+            self._workspace_root,
+            str(Path(self._workspace_root) / "tools"),
+        ]
+        if env.get("PYTHONPATH"):
+            python_paths.append(env["PYTHONPATH"])
+        env["PYTHONPATH"] = os.pathsep.join(python_paths)
+        if self._requires_gpu_cycles(payload):
+            env["OEB_FORCE_CYCLES_GPU"] = "1"
+            env.setdefault("OEB_CYCLES_BACKENDS", "OPTIX,CUDA")
+        return env
+
+    def _render_device_summary(self, log_output: str) -> dict | None:
+        for line in reversed((log_output or "").splitlines()):
+            if not line.startswith(_RENDER_DEVICE_MARKER):
+                continue
+            try:
+                return json.loads(line[len(_RENDER_DEVICE_MARKER):])
+            except json.JSONDecodeError:
+                return {"parse_error": line}
+        return None
+
+    def _gpu_contract_error(self, payload: dict, render_device_summary: dict | None) -> str | None:
+        if not self._requires_gpu_cycles(payload):
+            return None
+        if not render_device_summary:
+            return "GPU render required but Blender did not report render-device metadata"
+        if render_device_summary.get("engine") != "CYCLES":
+            return f"GPU render required but Blender used {render_device_summary.get('engine') or 'unknown'}"
+        if render_device_summary.get("cycles_device") != "GPU":
+            return "GPU render required but Blender did not select Cycles GPU device"
+        if not render_device_summary.get("gpu_enabled"):
+            return "GPU render required but no CUDA/OptiX device was enabled"
+        return None
+
+    def _call_run(
+        self,
+        cmd: list[str],
+        cwd: str | None = None,
+        timeout_seconds: int | None = None,
+        env: dict | None = None,
+    ) -> tuple[str, int]:
+        try:
+            return self._run(cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env)
+        except TypeError as exc:
+            if "unexpected keyword argument 'env'" not in str(exc):
+                raise
+            return self._run(cmd, cwd=cwd, timeout_seconds=timeout_seconds)
+
+    def _run(
+        self,
+        cmd: list[str],
+        cwd: str | None = None,
+        timeout_seconds: int | None = None,
+        env: dict | None = None,
+    ) -> tuple[str, int]:
         effective_timeout = timeout_seconds or self._cfg.timeout_seconds
         log.info("Running Blender with timeout %ss: %s", effective_timeout, shlex.join(cmd))
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout, cwd=cwd)
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=effective_timeout,
+                cwd=cwd,
+                env=env,
+            )
             return proc.stdout + proc.stderr, proc.returncode
         except subprocess.TimeoutExpired as exc:
             stdout = exc.stdout or ""

@@ -59,6 +59,7 @@ class PrimitiveBuildSpec(BaseModel):
     style: str
     creative_request: Optional[str] = None
     build_method: str = "blender_primitives"
+    scene_shell: bool = False
     asset_intent: dict[str, Any] = Field(default_factory=dict)
     primitives: list[PrimitiveInstance] = Field(default_factory=list)
     components: list[str] = Field(default_factory=list)

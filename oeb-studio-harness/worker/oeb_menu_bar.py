@@ -108,6 +108,7 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
     from agent.adapters.blender import BlenderCLIAdapter
     from agent.main import _git_sha, _load_token, _registration_resources, _save_token
     from agent.updater import WorkerUpdateExecutor
+    from agent.capabilities import discover_worker_capabilities
 
     async def run():
         cfg = load_config(config_path)
@@ -117,7 +118,9 @@ def _run_worker(config_path: str, app: OEBWorkerApp) -> None:
         if token := os.environ.get("OEB_ENROLLMENT_TOKEN"):
             cfg.enrollment_token = token
 
-        registration_resources = _registration_resources(cfg.resources, cfg.harness_url)
+        verified_capabilities, capability_resources = discover_worker_capabilities(cfg)
+        cfg.capabilities = verified_capabilities
+        registration_resources = _registration_resources(capability_resources, cfg.harness_url)
         worker_token = _load_token(cfg)
         git_sha = _git_sha()
         client = HarnessClient(

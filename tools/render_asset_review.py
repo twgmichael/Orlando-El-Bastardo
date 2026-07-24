@@ -19,6 +19,7 @@ from pathlib import Path
 
 import bpy
 from mathutils import Vector
+from oeb_blender.render_device import configure_render_device_from_env
 
 
 VALID_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action")
@@ -243,6 +244,7 @@ def main() -> None:
     radius = max(dims.length * 0.5, 1.0)
 
     configure_render(args)
+    render_device = configure_render_device_from_env(bpy.context.scene)
     add_lighting(radius, center)
 
     written = []
@@ -255,6 +257,7 @@ def main() -> None:
         "asset_id": args.asset_id,
         "asset_path": str(asset_path),
         "quality": args.quality,
+        "render_device": render_device,
         "views": written,
         "bounds": {
             "min": list(mins),
