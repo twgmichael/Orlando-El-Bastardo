@@ -7,6 +7,7 @@
     threads: [],
     activeThreadId: null,
     messages: [],
+    awaitingAssistant: false,
     pollTimers: {},
     lightbox: {
       artifacts: [],
@@ -105,6 +106,44 @@
     state.raw.error = null;
     els.error.hidden = true;
     els.error.textContent = "";
+  }
+
+  function parseAssistantJson(text) {
+    if (!text || typeof text !== "string") return null;
+    let source = text.trim();
+    if (source.startsWith("```")) {
+      source = source.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    }
+    try {
+      return JSON.parse(source);
+    } catch (_err) {
+      const start = source.indexOf("{");
+      const end = source.lastIndexOf("}");
+      if (start < 0 || end <= start) return null;
+      try {
+        return JSON.parse(source.slice(start, end + 1));
+      } catch (_innerErr) {
+        return null;
+      }
+    }
+  }
+
+  function assistantControl(message) {
+    const raw = message && message.raw ? message.raw : {};
+    const parsed = raw.assistant_json || parseAssistantJson(message && message.content);
+    if (!parsed || typeof parsed !== "object") return { parsed: null };
+    const clarification = typeof parsed.clarification_question === "string"
+      ? parsed.clarification_question.trim()
+      : "";
+    const escalation = typeof parsed.escalation_reason === "string"
+      ? parsed.escalation_reason.trim()
+      : "";
+    return {
+      parsed,
+      clarification,
+      escalation,
+      blocksBuild: Boolean(clarification || escalation),
+    };
   }
 
   function stopPolling(jobId) {
@@ -266,9 +305,29 @@
     return card;
   }
 
+  function renderAssistantWaitingRow() {
+    const row = document.createElement("article");
+    row.className = "chat-message chat-message-assistant chat-message-waiting";
+    const role = document.createElement("div");
+    role.className = "chat-message-role";
+    role.textContent = "assistant";
+    const content = document.createElement("div");
+    content.className = "chat-message-content assistant-waiting-content";
+    const label = document.createElement("span");
+    label.className = "assistant-waiting-label";
+    label.textContent = "Waiting for local model";
+    const bubbles = document.createElement("div");
+    bubbles.className = "assistant-thinking-bubbles";
+    bubbles.setAttribute("aria-label", "Thinking");
+    bubbles.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+    content.append(label, bubbles);
+    row.append(role, content);
+    return row;
+  }
+
   function renderTranscript() {
     els.transcript.innerHTML = "";
-    if (!state.messages.length) {
+    if (!state.messages.length && !state.awaitingAssistant) {
       const empty = document.createElement("p");
       empty.className = "empty";
       empty.textContent = "No messages yet.";
@@ -285,27 +344,38 @@
       const content = document.createElement("div");
       content.className = "chat-message-content";
       if (message.role === "assistant") {
+        const control = assistantControl(message);
+        if (control.clarification || control.escalation) {
+          const visible = document.createElement("p");
+          visible.textContent = control.clarification || control.escalation;
+          content.appendChild(visible);
+        }
         const details = document.createElement("details");
         details.className = "assistant-json-details";
         const summary = document.createElement("summary");
         summary.textContent = "Assistant JSON";
         const pre = document.createElement("pre");
-        pre.textContent = message.content;
+        pre.textContent = message.raw && message.raw.original_content
+          ? message.raw.original_content
+          : message.content;
         details.append(summary, pre);
         content.appendChild(details);
       } else {
         content.textContent = message.content;
       }
       row.append(role, content);
-      if (message.build) {
+      if (message.build && (message.build.result || message.build.status || message.build.error)) {
         const spacer = document.createElement("div");
         spacer.className = "chat-message-build-spacer";
         row.append(spacer, renderBuildCard(message.build));
       }
       els.transcript.appendChild(row);
     }
+    if (state.awaitingAssistant) {
+      els.transcript.appendChild(renderAssistantWaitingRow());
+    }
     els.transcript.scrollTop = els.transcript.scrollHeight;
-    els.createBuildJob.disabled = !latestAssistantMessage();
+    els.createBuildJob.disabled = !latestBuildableAssistantMessage();
   }
 
   function latestAssistantMessage() {
@@ -315,6 +385,12 @@
     return null;
   }
 
+  function latestBuildableAssistantMessage() {
+    const assistant = latestAssistantMessage();
+    if (!assistant) return null;
+    return assistantControl(assistant).blocksBuild ? null : assistant;
+  }
+
   function latestUserBefore(message) {
     const messageIndex = state.messages.indexOf(message);
     const startIndex = messageIndex >= 0 ? messageIndex - 1 : state.messages.length - 1;
@@ -322,6 +398,41 @@
       if (state.messages[idx].role === "user") return state.messages[idx];
     }
     return null;
+  }
+
+  function previousAssistantBefore(message) {
+    const messageIndex = state.messages.indexOf(message);
+    const startIndex = messageIndex >= 0 ? messageIndex - 1 : state.messages.length - 1;
+    for (let idx = startIndex; idx >= 0; idx -= 1) {
+      if (state.messages[idx].role === "assistant") return state.messages[idx];
+    }
+    return null;
+  }
+
+  function clarificationContextForUserAnswer(userMessage) {
+    const priorAssistant = previousAssistantBefore(userMessage);
+    if (!priorAssistant || !assistantControl(priorAssistant).blocksBuild) return null;
+    const originalUser = latestUserBefore(priorAssistant);
+    if (!originalUser) return null;
+    return {
+      assistant: priorAssistant,
+      originalUser,
+      effectiveCreativeRequest: [
+        originalUser.content,
+        `Clarification answer: ${userMessage.content}`,
+      ].join("\n"),
+    };
+  }
+
+  function creativeRequestForBuild(assistant, user) {
+    if (user && user.raw && user.raw.effective_creative_request) {
+      return user.raw.effective_creative_request;
+    }
+    const clarification = user ? clarificationContextForUserAnswer(user) : null;
+    if (clarification) {
+      return clarification.effectiveCreativeRequest;
+    }
+    return user ? user.content : "";
   }
 
   function currentSettings() {
@@ -599,8 +710,21 @@
     state.raw.build_job = null;
     state.raw.build_status = null;
     let userMessage = { role: "user", content };
+    const pendingClarification = latestAssistantMessage();
+    const pendingControl = assistantControl(pendingClarification);
+    const originalRequest = pendingControl.blocksBuild ? latestUserBefore(pendingClarification) : null;
+    const effectiveCreativeRequest = originalRequest
+      ? [originalRequest.content, `Clarification answer: ${content}`].join("\n")
+      : null;
     try {
-      const savedUser = await saveThreadMessage("user", content, { settings: currentSettings() });
+      const savedUser = await saveThreadMessage("user", content, {
+        settings: currentSettings(),
+        clarification_response_to_message_id: pendingControl.blocksBuild && pendingClarification
+          ? pendingClarification.id || null
+          : null,
+        original_request_message_id: originalRequest ? originalRequest.id || null : null,
+        effective_creative_request: effectiveCreativeRequest,
+      });
       userMessage = {
         id: savedUser.id,
         role: savedUser.role,
@@ -638,7 +762,9 @@
     renderDebug();
 
     els.send.disabled = true;
+    state.awaitingAssistant = true;
     setStatus("Waiting for local model...");
+    renderTranscript();
     try {
       const response = await fetchJson("/api/v1/studio-chat/chat", {
         method: "POST",
@@ -646,24 +772,39 @@
         body: JSON.stringify(payload),
       });
       state.raw.response = response.raw;
+      state.awaitingAssistant = false;
+      const assistantJson = parseAssistantJson(response.message.content);
+      const control = assistantControl({
+        role: "assistant",
+        content: response.message.content,
+        raw: { assistant_json: assistantJson },
+      });
       const savedAssistant = await saveThreadMessage(
         "assistant",
-        response.message.content,
-        { ollama: response.raw },
+        control.clarification || control.escalation || response.message.content,
+        {
+          ollama: response.raw,
+          original_content: response.message.content,
+          assistant_json: assistantJson,
+        },
       );
-      state.messages.push({
+      const assistantMessage = {
         id: savedAssistant.id,
         role: savedAssistant.role,
         content: savedAssistant.content,
         raw: savedAssistant.raw || {},
-      });
+      };
+      state.messages.push(assistantMessage);
       setStatus(`Done: ${response.model}`);
       renderTranscript();
       renderDebug();
-      if (els.autoBuild.checked) {
+      if (control.blocksBuild) {
+        setStatus(control.clarification ? "Clarification needed" : "Escalation needed");
+      } else if (els.autoBuild.checked) {
         await createBuildJob({ auto: true });
       }
     } catch (err) {
+      state.awaitingAssistant = false;
       showError("Local chat failed", err.message);
       setStatus("Error");
     } finally {
@@ -715,22 +856,16 @@
 
   async function createBuildJob(options) {
     const auto = options && options.auto;
-    const assistant = latestAssistantMessage();
+    const assistant = latestBuildableAssistantMessage();
     const user = assistant ? latestUserBefore(assistant) : null;
     if (!assistant || !user) {
-      showError("Build job needs a user request and assistant JSON");
+      showError("Build job needs a user request and buildable assistant JSON");
       return;
     }
     clearError();
     els.createBuildJob.disabled = true;
     setStatus(auto ? "Auto-creating deterministic build job..." : "Creating deterministic build job...");
     try {
-      assistant.build = {
-        result: null,
-        status: null,
-        error: null,
-      };
-      renderTranscript();
       const threadId = await ensureThread();
       const result = await fetchJson(`/api/v1/studio-chat/threads/${threadId}/build-jobs`, {
         method: "POST",
@@ -739,8 +874,10 @@
           model: els.model.value,
           thread_id: threadId,
           message_id: assistant.id || null,
-          creative_request: user.content,
-          assistant_response: assistant.content,
+          creative_request: creativeRequestForBuild(assistant, user),
+          assistant_response: assistant.raw && assistant.raw.original_content
+            ? assistant.raw.original_content
+            : assistant.content,
           messages: ollamaMessages().slice(-12),
           review_views: selectedReviewViews(),
           priority: 0,
@@ -748,7 +885,9 @@
         }),
       });
       state.raw.build_job = result;
+      assistant.build = assistant.build || {};
       assistant.build.result = result;
+      assistant.build.status = null;
       assistant.build.error = null;
       renderTranscript();
       setStatus(`Build job queued: ${result.job.id}`);
@@ -764,7 +903,7 @@
       setStatus("Build job failed");
     } finally {
       renderDebug();
-      els.createBuildJob.disabled = !latestAssistantMessage();
+      els.createBuildJob.disabled = !latestBuildableAssistantMessage();
     }
   }
 
@@ -807,6 +946,11 @@
   }
 
   els.composer.addEventListener("submit", sendMessage);
+  els.input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    els.composer.requestSubmit();
+  });
   els.newThread.addEventListener("click", async () => {
     try {
       clearError();
