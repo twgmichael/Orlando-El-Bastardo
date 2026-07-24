@@ -712,6 +712,7 @@ def test_multi_object_intent_repairs_placeholder_types_and_null_relationship_tar
     assert parsed["action"] == "translate"
     assert resolver["source"] == "asset_intent_normalizer"
     assert spec.kind == "set"
+    assert spec.scene_shell is False
     assert [primitive.type for primitive in spec.primitives] == ["cylinder", "cylinder", "sphere", "box"]
     assert [primitive.material for primitive in spec.primitives] == ["blue", "blue", "yellow", "red"]
     assert spec.primitives[0].transform.location == [0.0, -1.5, 0.5]
@@ -724,6 +725,32 @@ def test_multi_object_intent_repairs_placeholder_types_and_null_relationship_tar
         ("red_cube", "right_of_group", "tube1"),
         ("red_cube", "right_of_group", "tube2"),
     ]
+
+
+def test_explicit_set_request_enables_scene_shell():
+    spec, parsed = build_spec_from_assistant_response(
+        "Build a small office set.",
+        """{
+          "action": "translate",
+          "confidence": 1,
+          "clarification_question": null,
+          "escalation_reason": null,
+          "asset_intent": {
+            "name": "small_office_set",
+            "kind": "set",
+            "description": "A small office set.",
+            "objects": [
+              {"id": "desk", "type": "box", "material": "wood", "placement": "center", "description": "desk"}
+            ],
+            "relationships": [],
+            "construction_notes": "Include an office set context."
+          }
+        }""",
+    )
+
+    assert parsed["asset_intent"]["kind"] == "set"
+    assert spec.kind == "set"
+    assert spec.scene_shell is True
 
 
 def test_asset_intent_without_style_gets_defensive_defaults_and_preserves_fields():

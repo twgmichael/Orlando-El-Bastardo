@@ -459,8 +459,10 @@ def test_location_shell_uses_kind_not_fuzzy_text():
     builder = load_builder_module()
 
     assert builder.uses_location_shell({"kind": "location"})
-    assert builder.uses_location_shell({"kind": "set"})
+    assert builder.uses_location_shell({"kind": "set", "scene_shell": True})
     assert not builder.uses_location_shell({"kind": "vehicle", "name": "office rover"})
+    assert not builder.uses_location_shell({"kind": "set"})
+    assert not builder.uses_location_shell({"kind": "set", "scene_shell": False})
 
 
 def test_assets_do_not_get_environment_shells():
@@ -475,6 +477,10 @@ def test_locations_keep_environment_shells():
     builder = load_builder_module()
 
     assert builder.layout_shell_descriptors({"kind": "location"}) == [
+        ("layout_floor", (0, 0, -0.08), (6.2, 3.8, 0.1), "neutral"),
+        ("layout_back_wall", (-3.1, 0, 1.0), (0.08, 3.8, 2.05), "light"),
+    ]
+    assert builder.layout_shell_descriptors({"kind": "set", "scene_shell": True}) == [
         ("layout_floor", (0, 0, -0.08), (6.2, 3.8, 0.1), "neutral"),
         ("layout_back_wall", (-3.1, 0, 1.0), (0.08, 3.8, 2.05), "light"),
     ]

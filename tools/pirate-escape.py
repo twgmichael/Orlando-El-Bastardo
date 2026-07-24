@@ -27,6 +27,7 @@ import subprocess
 
 import bpy
 from mathutils import Vector
+from oeb_blender.render_device import configure_render_device_from_env
 
 
 FPS = 24
@@ -51,6 +52,29 @@ def parse_args():
     parser.add_argument("--width", type=int, default=None)
     parser.add_argument("--height", type=int, default=None)
     return parser.parse_args(argv)
+
+
+def find_ffmpeg():
+    candidates = []
+    system_ffmpeg = shutil.which("ffmpeg")
+    if system_ffmpeg:
+        candidates.append(system_ffmpeg)
+    candidates.extend(globmod.glob(os.path.join(
+        CWD, ".venv/lib/python*/site-packages/imageio_ffmpeg/binaries/ffmpeg-*")))
+
+    for candidate in candidates:
+        try:
+            result = subprocess.run(
+                [candidate, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode == 0:
+            return candidate
+    raise RuntimeError("No compatible ffmpeg binary found on PATH or in .venv")
 
 
 def clear_scene():
@@ -368,15 +392,14 @@ def main():
 
     assign_linear_interpolation()
 
+    configure_render_device_from_env(scene)
     os.makedirs(frames_dir, exist_ok=True)
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = os.path.join(frames_dir, "frame_")
     print(f"[chase] rendering {N_FRAMES} {args.mode} frames to {frames_dir}")
     bpy.ops.render.render(animation=True)
 
-    hits = globmod.glob(os.path.join(
-        CWD, ".venv/lib/python*/site-packages/imageio_ffmpeg/binaries/ffmpeg-*"))
-    ffmpeg = hits[0] if hits else shutil.which("ffmpeg") or "ffmpeg"
+    ffmpeg = find_ffmpeg()
     os.makedirs(os.path.dirname(out_mp4), exist_ok=True)
     print(f"[chase] encoding with {ffmpeg}")
     subprocess.run([

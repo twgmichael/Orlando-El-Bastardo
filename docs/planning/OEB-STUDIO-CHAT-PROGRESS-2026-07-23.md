@@ -269,6 +269,23 @@ Fixes landed:
 - Blender smoke verification produced two blue spheres, and a review render
   from the exported GLB preserved the blue material.
 
+## Asset-Only Review Shell Fix
+
+Chat-originated standalone assets should not receive default render-scene
+geometry. The floor and wall shell that appeared in grouped asset and letter
+reviews came from treating every `kind: set` spec as a location shell.
+
+Fixes landed:
+
+- `PrimitiveBuildSpec` now carries an explicit `scene_shell` boolean.
+- Studio chat normalization sets `scene_shell: false` for standalone assets,
+  semantic forms, and grouped object arrangements.
+- Explicit location/set/environment prompts can still set `scene_shell: true`.
+- `primitive_asset_builder.py` now adds `layout_floor` and `layout_back_wall`
+  only for `kind: location` or explicit `scene_shell: true`.
+- Focused studio chat and primitive builder routing tests verify grouped
+  assets remain shell-free while explicit sets can still opt into shells.
+
 ## Next Chat Interface TODO
 
 Update `oeb-studio-chat` layout and worker gating:
