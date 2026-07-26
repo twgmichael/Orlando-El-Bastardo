@@ -703,6 +703,21 @@
         required: ["operation", "base_revision"],
         optional: ["target", "view", "semantic_direction", "amount", "preserve", "edit_delta"],
         note: "For follow-up edits to the active asset, return asset_edit_request instead of a fresh build.",
+        examples: {
+          center_objects: {
+            operation: "align_centers",
+            target: "whole_asset",
+            preserve: ["vertical_heights", "materials", "relationships"],
+          },
+          cut_half_sphere: {
+            operation: "set_geometry_modifier",
+            target: "<sphere_id>",
+            edit_delta: {
+              shape_modifiers: ["half", "flat"],
+              hemisphere_direction: "up",
+            },
+          },
+        },
       },
     };
     return [
@@ -1190,7 +1205,11 @@
       } else if (els.autoBuild.checked) {
         const edited = await createAssetEdit(assistantMessage, assistantJson);
         if (!edited) {
-          await createBuildJob({ auto: true });
+          if (activeAsset()) {
+            await repairActiveAssetEdit(assistantMessage, assistantJson);
+          } else {
+            await createBuildJob({ auto: true });
+          }
         }
       }
     } catch (err) {
@@ -1333,6 +1352,68 @@
     } finally {
       renderTranscript();
       renderDebug();
+    }
+  }
+
+  async function repairActiveAssetEdit(assistant, assistantJson) {
+    const asset = activeAsset();
+    if (!asset) return false;
+    setStatus("Repairing active asset edit...");
+    const repairPayload = {
+      model: els.model.value,
+      thread_id: state.activeThreadId,
+      message_id: assistant.id || null,
+      preset_id: "asset_edit_translator",
+      system_prompt: [
+        systemPromptWithActiveAsset(),
+        "EDIT REPAIR OVERRIDE:",
+        "The active asset already exists. Do not return build_asset or asset_intent.",
+        "Return asset_edit_request only. For 'center/middle the objects', use",
+        "operation align_centers, target whole_asset, preserving each object's Z height.",
+        "This is one repair attempt; do not explain or write Blender code.",
+      ].join("\n"),
+      messages: [
+        { role: "user", content: latestUserBefore(assistant)?.content || "" },
+        {
+          role: "assistant",
+          content: JSON.stringify(assistantJson || {}),
+        },
+        {
+          role: "user",
+          content: "Repair the previous response as an edit to the active asset. Return asset_edit_request only.",
+        },
+      ],
+      temperature: Math.min(Number(els.temperature.value), 0.1),
+      max_tokens: Number(els.maxTokens.value),
+      review_views: selectedReviewViews(),
+      stream: false,
+    };
+    state.raw.repair_request = repairPayload;
+    try {
+      const response = await fetchJson("/api/v1/studio-chat/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(repairPayload),
+      });
+      const repairedJson = parseAssistantJson(response.message.content);
+      state.raw.repair_response = response.raw;
+      assistant.raw = assistant.raw || {};
+      assistant.raw.edit_repair = {
+        response: response.raw,
+        original_json: assistantJson,
+        repaired_json: repairedJson,
+      };
+      renderDebug();
+      const edited = await createAssetEdit(assistant, repairedJson);
+      if (!edited) {
+        showError("Active asset edit was not compiler-ready; no new build was submitted.");
+        setStatus("Edit needs clarification");
+      }
+      return true;
+    } catch (err) {
+      showError("Active asset edit could not be repaired; no new build was submitted.", err.message);
+      setStatus("Edit repair failed");
+      return true;
     }
   }
 
