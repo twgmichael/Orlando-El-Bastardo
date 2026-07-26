@@ -533,6 +533,9 @@ async def _record_asset_revision(
         status=status_value,
     )
     db.add(revision)
+    # Revision responses and trace events need database-generated fields now,
+    # before this request serializes the revision into its build response.
+    await db.flush()
     return revision
 
 

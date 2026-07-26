@@ -1,3 +1,9 @@
+import uuid
+from datetime import datetime, timezone
+
+import pytest
+
+from app.models.studio_chat import StudioChatAsset
 from app.schemas.studio_chat import (
     STANDARD_REVIEW_VIEWS,
     StudioChatAssetEditRequest,
@@ -7,6 +13,8 @@ from app.schemas.studio_chat import (
 )
 from app.routers.studio_chat import (
     _compile_asset_edit_state,
+    _record_asset_revision,
+    _revision_response,
     _state_paths_from_payload,
     _thread_title_from_prompt,
 )
@@ -141,6 +149,55 @@ def test_state_paths_from_payload_prefers_explicit_source_blend_path():
 
     assert source_blend_path == "{output_root}/working/current.blend"
     assert glb_path == "{output_root}/jobs/job-1/assets/props/chair.glb"
+
+
+@pytest.mark.anyio
+async def test_asset_revision_is_flushed_before_build_response_serialization():
+    class FlushAssigningSession:
+        def __init__(self):
+            self.revision = None
+            self.flushes = 0
+
+        def add(self, revision):
+            self.revision = revision
+
+        async def flush(self):
+            self.flushes += 1
+            self.revision.id = uuid.uuid4()
+            self.revision.created_at = datetime.now(timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    asset = StudioChatAsset(
+        id=uuid.uuid4(),
+        thread_id=uuid.uuid4(),
+        asset_id="vehicle_flying_saucer_A",
+        current_revision=1,
+        state_json={},
+        created_at=now,
+        updated_at=now,
+    )
+    db = FlushAssigningSession()
+
+    revision = await _record_asset_revision(
+        db,
+        asset=asset,
+        revision_number=1,
+        parent_revision=None,
+        message_id=None,
+        job_id=uuid.uuid4(),
+        state_before={},
+        edit_delta={"operation": "initial_build"},
+        state_after={"canonical_id": asset.asset_id},
+        source_blend_path=None,
+        glb_path=None,
+        status_value="build_created",
+    )
+
+    response = _revision_response(revision)
+
+    assert db.flushes == 1
+    assert response.id == revision.id
+    assert response.created_at == revision.created_at
 
 
 def test_asset_edit_request_preserves_reversible_delta_fields():

@@ -32,12 +32,14 @@ sitting on top of a squished sphere on the right view.`
   squished/flattened sphere intent, as scale and params metadata.
 - Improved Studio Chat browser error handling so non-JSON server failures show
   the HTTP failure instead of the misleading `Invalid JSON` message.
+- Fixed build-response serialization after the deployed API traceback showed a
+  newly created asset revision being returned before its database-generated UUID
+  and timestamp existed. Revision creation now flushes before trace and response
+  serialization, so a successfully assembled build job is not turned into a 500.
 
 Validation:
-- Studio Chat targeted Docker tests passed: 44 tests.
-- Full local Docker harness suite passed: 154 tests.
-- Python compile checks passed for touched server modules.
-- `node --check` passed for `studio_chat.js`.
+- Studio Chat targeted Docker tests passed: 45 tests.
+- Full local Docker harness suite passed: 155 tests.
 
 ---
 
