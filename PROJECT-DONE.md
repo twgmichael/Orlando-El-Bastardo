@@ -19,6 +19,28 @@ Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date
 
 ---
 
+## 2026-07-26 — Studio Chat saucer prompt hardening
+
+Fixed a deployed Studio Chat failure found with the prompt:
+`Let's build a simple flying saucer. Start with half sphere with flat bottom,
+sitting on top of a squished sphere on the right view.`
+
+- Added a regression test for the exact local LLM response shape.
+- Hardened kind normalization so standalone saucer/UFO requests are treated as
+  vehicle assets even if the local LLM labels them as `set`.
+- Preserved generic shape modifiers for typed objects, including half/flat and
+  squished/flattened sphere intent, as scale and params metadata.
+- Improved Studio Chat browser error handling so non-JSON server failures show
+  the HTTP failure instead of the misleading `Invalid JSON` message.
+
+Validation:
+- Studio Chat targeted Docker tests passed: 44 tests.
+- Full local Docker harness suite passed: 154 tests.
+- Python compile checks passed for touched server modules.
+- `node --check` passed for `studio_chat.js`.
+
+---
+
 ## 2026-07-26 — Studio Chat revision browser
 
 Studio Chat now exposes active asset revision history directly in the browser.

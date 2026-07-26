@@ -836,6 +836,9 @@
       try {
         payload = JSON.parse(text);
       } catch (err) {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} ${response.statusText}: ${text.slice(0, 240)}`);
+        }
         throw new Error(`Invalid JSON from ${url}: ${text.slice(0, 240)}`);
       }
     }

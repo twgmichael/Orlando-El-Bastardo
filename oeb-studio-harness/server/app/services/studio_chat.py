@@ -1789,6 +1789,8 @@ def request_text(request: str, spec: dict | None = None) -> str:
 
 def infer_kind(request: str, spec: dict | None = None) -> str:
     text = request_text(request, spec)
+    if text_has_any(text, ("saucer", "ufo", "spaceship", "starship")):
+        return "vehicle"
     if (
         text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf", "stool", "bed"))
         and not text_has_any(text, ("office", "location", "scene", "set"))
@@ -2325,6 +2327,23 @@ def _scale_from_object(obj: dict[str, Any], primitive_type: str) -> list[float]:
     default = [1.0, 1.0, 1.0]
     if primitive_type == "cylinder":
         default = [0.4, 0.4, 1.4]
+    text = " ".join(
+        str(value)
+        for value in (
+            obj.get("id"),
+            obj.get("label"),
+            obj.get("name"),
+            obj.get("type"),
+            obj.get("description"),
+            obj.get("role"),
+        )
+        if value is not None
+    ).lower()
+    if primitive_type == "sphere":
+        if text_has_any(text, ("squished", "flattened", "flat", "squash", "squashed", "disk", "disc")):
+            default = [1.45, 1.45, 0.28]
+        if "half" in text or "hemisphere" in text:
+            default = [1.0, 1.0, 0.5]
     return _coerce_vec3(value, "object.scale", default, 0.01, 20.0)
 
 
@@ -2353,7 +2372,13 @@ def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str,
                 "rotation": _rotation_from_object(obj),
                 "scale": _scale_from_object(obj, primitive_type),
             },
-            "params": {},
+            "params": {
+                "shape_description": str(obj.get("description") or ""),
+                "shape_modifiers": [
+                    modifier for modifier in ("half", "flat", "squished", "flattened", "hemisphere")
+                    if modifier in str(obj.get("description") or object_id).lower()
+                ],
+            },
         })
     return primitives
 
@@ -2495,7 +2520,11 @@ def normalize_spec(request: str, spec: dict) -> dict:
     source_intent = json.loads(json.dumps(source_intent_value))
     canonical_id = str(spec.get("canonical_id", "")).strip()
     requested_kind = normalize_id(spec.get("asset_kind") or spec.get("kind"), "")
-    inferred_kind = requested_kind if requested_kind in ALLOWED_ASSET_KINDS else infer_kind(request, spec)
+    request_inferred_kind = infer_kind(request, spec)
+    if requested_kind == "set" and request_inferred_kind in {"prop", "vehicle", "character"}:
+        inferred_kind = request_inferred_kind
+    else:
+        inferred_kind = requested_kind if requested_kind in ALLOWED_ASSET_KINDS else request_inferred_kind
     shape = preserved_shape_phrase(request)
     if (
         not re.fullmatch(r"[a-z]+_[a-z0-9_]+_A", canonical_id)

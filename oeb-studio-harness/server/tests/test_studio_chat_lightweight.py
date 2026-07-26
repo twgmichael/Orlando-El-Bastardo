@@ -370,6 +370,63 @@ def test_build_spec_from_assistant_response_preserves_sphere_scene_object():
     assert "asset_review_renders" in spec.deliverables
 
 
+def test_flying_saucer_asset_intent_with_shape_modifiers_normalizes_without_500_regression():
+    spec, parsed = build_spec_from_assistant_response(
+        "Let's build a simple flying saucer. Start with half sphere with flat bottom, sitting on top of a squished sphere on the right view.",
+        """{
+          "action": "build_asset",
+          "confidence": 1,
+          "clarification_question": null,
+          "escalation_reason": null,
+          "asset_intent": {
+            "name": "Flying Saucer",
+            "kind": "set",
+            "description": "A simple flying saucer composed of a half sphere and a squished sphere.",
+            "objects": [
+              {
+                "id": "half_sphere_bottom",
+                "type": "sphere",
+                "material": "neutral",
+                "count": 1,
+                "placement": "center",
+                "orientation": {"position": [0, 0, -0.5], "rotation": [0, 0, 0]},
+                "description": "Bottom half of the flying saucer with flat bottom"
+              },
+              {
+                "id": "squished_sphere_right",
+                "type": "sphere",
+                "material": "neutral",
+                "count": 1,
+                "placement": "right_of_group",
+                "orientation": {"position": [0.5, -0.25, 0], "rotation": [0, 0, 0]},
+                "description": "Squished sphere on the right side"
+              }
+            ],
+            "relationships": [
+              {
+                "subject": "half_sphere_bottom",
+                "relation": "attached_to",
+                "target": "squished_sphere_right",
+                "targets": ["squished_sphere_right"]
+              }
+            ],
+            "construction_notes": "Attach half sphere bottom to squished sphere on the right.",
+            "construction_graph": null
+          }
+        }""",
+    )
+
+    assert parsed["action"] == "build_asset"
+    assert spec.kind == "vehicle"
+    assert spec.scene_shell is False
+    assert [primitive.id for primitive in spec.primitives] == ["half_sphere_bottom", "squished_sphere_right"]
+    assert spec.primitives[0].transform.scale == [1.0, 1.0, 0.5]
+    assert spec.primitives[1].transform.scale == [1.45, 1.45, 0.28]
+    assert "flat" in spec.primitives[0].params["shape_modifiers"]
+    assert "squished" in spec.primitives[1].params["shape_modifiers"]
+    assert "asset_review_renders" in spec.deliverables
+
+
 def test_validate_primitive_spec_normalizes_cube_alias_to_box():
     resolved = validate_primitive_spec(
         {

@@ -143,6 +143,36 @@ visible shot.
      construction-graph/state level with clear compile diagnostics.
    - [x] Studio Chat Milestone 15 — validate browser syntax and Docker-backed
      server tests.
+   - [ ] Studio Chat Milestone 17 — define a broad asset-intent envelope and
+     preserve complete raw local LLM requests/responses plus unknown fields
+     before parsing or normalization.
+   - [ ] Studio Chat Milestone 17 — add tolerant JSON ingestion with narrowly
+     scoped repairs, recoverable structural defaults, and an auditable change
+     log.
+   - [ ] Studio Chat Milestone 17 — add idempotent, semantic-preserving
+     normalization for aliases, kinds, identifiers, materials, transforms,
+     directions, review views, modifiers, and recoverable omissions.
+   - [ ] Studio Chat Milestone 17 — define explicit compiler outcomes:
+     `compiled`, `needs_repair`, `needs_clarification`, `unsupported`, and
+     `invalid`.
+   - [ ] Studio Chat Milestone 17 — enforce the deterministic submission gate
+     so only `compiled` results can create build or render jobs.
+   - [ ] Studio Chat Milestone 17 — add one focused local LLM repair pass by
+     default, permit a second only for explicitly recoverable validation
+     classes, and stop safely after exhaustion.
+   - [ ] Studio Chat Milestone 17 — return structured stage/code/reason/trace
+     diagnostics and useful inline clarification instead of generic HTTP 500
+     errors.
+   - [ ] Studio Chat Milestone 17 — add contract, invariant, property, and
+     representative failure-class tests for malformed JSON, missing and extra
+     fields, unexpected kinds, rich semantic intent, modifiers,
+     clarification, normalization, unsupported intent, and graceful failure.
+   - [ ] Studio Chat Milestone 17 — establish a curated real-response fixture
+     corpus and add fixtures only when a response exposes a new behavior class
+     or semantic-preservation regression.
+   - [ ] Studio Chat Milestone 17 — verify compiler-gate, repair-exhaustion,
+     structured-diagnostic, and no-submission behavior through Docker-backed
+     integration tests.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.
