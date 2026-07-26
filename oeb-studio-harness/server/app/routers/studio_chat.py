@@ -1955,6 +1955,15 @@ async def studio_chat_ollama(
             )
             await db.commit()
         return response
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8")
+        except Exception:
+            detail = str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ollama rejected the chat request ({exc.code}): {detail}",
+        ) from exc
     except urllib.error.URLError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

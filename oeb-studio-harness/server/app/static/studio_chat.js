@@ -91,9 +91,16 @@
   }
 
   function ollamaMessages() {
-    return state.messages
+    const messages = state.messages
       .filter((message) => ["user", "assistant", "system"].includes(message.role))
       .map(messagePayload);
+    const deduped = [];
+    for (const message of messages) {
+      const previous = deduped[deduped.length - 1];
+      if (previous && previous.role === message.role && previous.content === message.content) continue;
+      deduped.push(message);
+    }
+    return deduped.slice(-12);
   }
 
   function threadSettingsPayload(title) {
@@ -691,12 +698,43 @@
   function systemPromptWithActiveAsset() {
     const asset = activeAsset();
     if (!asset) return els.systemPrompt.value;
+    const stateJson = asset.state_json && typeof asset.state_json === "object"
+      ? asset.state_json
+      : {};
+    const intent = stateJson.asset_intent && typeof stateJson.asset_intent === "object"
+      ? stateJson.asset_intent
+      : {};
+    const compactState = {
+      canonical_id: stateJson.canonical_id || asset.asset_id,
+      name: stateJson.name || intent.name || asset.asset_id,
+      kind: stateJson.kind || intent.kind || null,
+      description: stateJson.description || intent.description || null,
+      parts: Array.isArray(intent.objects)
+        ? intent.objects.map((part) => ({
+          id: part.id || part.label || null,
+          type: part.type || null,
+          material: part.material || null,
+          placement: part.placement || null,
+          description: part.description || null,
+        }))
+        : [],
+      relationships: Array.isArray(intent.relationships) ? intent.relationships : [],
+      primitives: Array.isArray(stateJson.primitives)
+        ? stateJson.primitives.map((primitive) => ({
+          id: primitive.id || primitive.label || null,
+          type: primitive.type || null,
+          material: primitive.material || null,
+          transform: primitive.transform || {},
+          params: primitive.params || {},
+        }))
+        : [],
+    };
     const context = {
       active_asset: {
         asset_id: asset.asset_id,
         current_revision: asset.current_revision,
         base_builder: asset.base_builder,
-        state_json: asset.state_json,
+        state_json: compactState,
       },
       edit_contract: {
         return_field: "asset_edit_request",
