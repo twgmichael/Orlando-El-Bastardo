@@ -1,4 +1,5 @@
 import uuid
+import math
 from datetime import datetime, timezone
 
 import pytest
@@ -482,6 +483,83 @@ def test_flying_saucer_asset_intent_with_shape_modifiers_normalizes_without_500_
     assert "flat" in spec.primitives[0].params["shape_modifiers"]
     assert "squished" in spec.primitives[1].params["shape_modifiers"]
     assert "asset_review_renders" in spec.deliverables
+
+
+def test_asset_edit_centers_group_without_changing_relative_offsets():
+    state = {
+        "primitives": [
+            {
+                "id": "dome",
+                "type": "sphere",
+                "transform": {"location": [0.0, 0.0, -0.5], "rotation": [0, 0, 0], "scale": [1, 1, 0.5]},
+                "params": {"shape_modifiers": ["half", "flat"]},
+            },
+            {
+                "id": "lower_body",
+                "type": "sphere",
+                "transform": {"location": [0.5, -0.25, 0.0], "rotation": [0, 0, 0], "scale": [1.45, 1.45, 0.28]},
+                "params": {"shape_modifiers": ["squished"]},
+            },
+        ]
+    }
+
+    result, diagnostics, compiled = _compile_asset_edit_state(
+        state,
+        {"operation": "center_group", "target": "whole_asset"},
+    )
+
+    assert compiled is True
+    assert result["primitives"][0]["transform"]["location"] == [-0.25, 0.125, -0.25]
+    assert result["primitives"][1]["transform"]["location"] == [0.25, -0.125, 0.25]
+    assert any(item["type"] == "centered_group" for item in diagnostics)
+
+
+def test_asset_edit_aligns_object_centers_while_preserving_height():
+    state = {
+        "primitives": [
+            {"id": "dome", "type": "sphere", "transform": {"location": [0.0, 0.0, -0.5]}},
+            {"id": "body", "type": "sphere", "transform": {"location": [0.5, -0.25, 0.0]}},
+        ]
+    }
+
+    result, diagnostics, compiled = _compile_asset_edit_state(
+        state,
+        {"operation": "align_centers", "target": "whole_asset"},
+    )
+
+    assert compiled is True
+    assert result["primitives"][0]["transform"]["location"] == [0.25, -0.125, -0.5]
+    assert result["primitives"][1]["transform"]["location"] == [0.25, -0.125, 0.0]
+    assert any(item["type"] == "aligned_centers" for item in diagnostics)
+
+
+def test_asset_edit_compiles_half_sphere_direction_generically():
+    state = {
+        "primitives": [
+            {
+                "id": "dome",
+                "type": "sphere",
+                "transform": {"location": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                "params": {},
+            }
+        ]
+    }
+
+    result, diagnostics, compiled = _compile_asset_edit_state(
+        state,
+        {
+            "operation": "set_geometry_modifier",
+            "target": "dome",
+            "edit_delta": {},
+            "shape_modifiers": ["half", "flat"],
+            "hemisphere_direction": "down",
+        },
+    )
+
+    assert compiled is True
+    assert result["primitives"][0]["params"]["shape_modifiers"] == ["half", "flat"]
+    assert result["primitives"][0]["transform"]["rotation"] == [math.pi, 0.0, 0.0]
+    assert any(item["type"] == "compiled" for item in diagnostics)
 
 
 def test_validate_primitive_spec_normalizes_cube_alias_to_box():

@@ -62,23 +62,36 @@ When using construction_graph, return generic stroke elements with from/to
 coordinates, thickness, material, and role. The harness compiles those strokes;
 you are not writing Blender code.
 When an active_asset context is supplied and the user asks for a follow-up edit
-to that existing asset, return asset_edit_request instead of a fresh asset
-build. Preserve the active asset_id and use base_revision from the active asset.
+to that existing asset, ALWAYS return asset_edit_request instead of a fresh asset
+build. This includes short follow-ups such as "center the two objects",
+"cut the sphere in half", "move it right", and "make the dome face down".
+Preserve the active asset_id and use base_revision from the active asset. Do
+not reinterpret an edit as a new asset merely because the prompt omits the
+asset name.
 Example:
 {
   "action": "edit_asset",
   "confidence": 1,
   "clarification_question": null,
   "escalation_reason": null,
-  "asset_edit_request": {
-    "base_revision": 3,
-    "target": "left_wing",
-    "operation": "move",
+    "asset_edit_request": {
+      "base_revision": 3,
+      "target": "left_wing",
+      "operation": "move",
     "semantic_direction": "down",
     "amount": 0.25,
-    "preserve": ["material", "attachments"]
-  }
+      "preserve": ["material", "attachments"]
+    }
 }
+For generic arrangement and shape edits, use these operations when applicable:
+"align_centers" aligns selected objects on the horizontal X/Y plane while
+preserving their relative Z heights; "center_group" preserves relative offsets
+while moving the selected asset group centroid to [0, 0, 0]; "set_geometry_modifier" changes a named object's
+generic geometry modifiers. For a sphere cut in half with a flat bottom, use
+target equal to the sphere id and edit_delta containing
+{"shape_modifiers": ["half", "flat"], "hemisphere_direction": "up"}.
+Use hemisphere_direction "down" when the flat face should point up. Do not
+invent a new primitive helper or a new asset type.
 Ask a clarifying question when the request is vague. Escalate
 ambiguous art direction, reference interpretation, or visual judgment.
 Do not write Blender code.
@@ -96,9 +109,9 @@ container level; asset_intent may be rich and descriptive."""
 ASSET_EDIT_TRANSLATOR_PROMPT = """You are the OEB local asset-edit translator.
 Translate conversational edits into strict JSON deltas against named assets and
 parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down.
-When active_asset context is supplied, return asset_edit_request with:
+When active_asset context is supplied, ALWAYS return asset_edit_request with:
 base_revision, target, operation, view, semantic_direction, amount, preserve,
-and edit_delta. Supported generic operations include recolor, move,
+and edit_delta. Never return build_asset for a follow-up edit. Supported generic operations include recolor, move, align_centers, center_group, set_geometry_modifier,
 set_location, rotate, set_scale, proportional_scale, scale_axis, set_thickness,
 and adjust_thickness. Do not invent Blender APIs.
 Example:
@@ -115,6 +128,13 @@ Example:
     "preserve": ["relationships", "materials"]
   }
 }
+For "center/middle the objects", use operation "align_centers", target
+"whole_asset", and preserve each object's vertical height. Use "center_group"
+only when the user explicitly asks to center the entire group in world space.
+For "cut the sphere in half",
+use operation "set_geometry_modifier", target the sphere object id, and put
+{"shape_modifiers": ["half", "flat"], "hemisphere_direction": "up"} in
+edit_delta. Use direction "down" only when the flat face should point up.
 Ask one clarifying question if the target part, direction, or amount is unclear.
 Do not mutate files or submit worker jobs. For standard review renders, use
 requested_review_views: ["top", "bottom", "left", "right", "front", "rear",

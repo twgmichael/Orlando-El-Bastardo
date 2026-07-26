@@ -165,6 +165,30 @@ def test_registry_primitive_dispatch_expands_quantity(monkeypatch):
     assert captured[1] == ("sphere_2", (0.0, 0.625, 0.5), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0), {}, "blue-mat")
 
 
+def test_registry_sphere_compiles_half_modifier_as_hemisphere(monkeypatch):
+    builder = load_builder_module()
+    captured = []
+
+    def fake_hemisphere(name, location, radius, mat):
+        captured.append((name, location, radius, mat))
+        return types.SimpleNamespace(rotation_euler=None, scale=None)
+
+    monkeypatch.setattr(builder, "hemisphere", fake_hemisphere)
+
+    objects = builder._registry_sphere(
+        "half_sphere_bottom",
+        (0.0, 0.0, 0.5),
+        (0.0, 0.0, 0.0),
+        (1.0, 1.0, 0.5),
+        {"radius": 0.5, "shape_modifiers": ["half", "flat"]},
+        "neutral-mat",
+    )
+
+    assert len(objects) == 1
+    assert captured == [("half_sphere_bottom", (0.0, 0.0, 0.5), 0.5, "neutral-mat")]
+    assert objects[0].scale == (1.0, 1.0, 0.5)
+
+
 def test_material_sets_principled_base_color_for_render_and_export():
     builder = load_builder_module()
 

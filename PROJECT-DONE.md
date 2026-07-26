@@ -40,6 +40,9 @@ sitting on top of a squished sphere on the right view.`
   its embedded Python could not import `oeb_blender`. The review script now
   bootstraps its own repository `tools/` directory before importing the shared
   render configuration package.
+- Fixed generic sphere execution so `shape_modifiers: ["half", "flat"]` creates
+  a capped hemisphere with a flat base instead of merely scaling a complete
+  sphere into a flattened ellipsoid.
 
 Validation:
 - Studio Chat targeted Docker tests passed: 45 tests.

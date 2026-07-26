@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import re
 import shutil
 import urllib.error
@@ -377,6 +378,16 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
     amount = edit_delta.get("amount")
     semantic_direction = str(edit_delta.get("semantic_direction") or "").strip().lower()
     axis = str(edit_delta.get("axis") or "").strip().lower()
+    geometry_modifiers = edit_delta.get("shape_modifiers")
+    if not isinstance(geometry_modifiers, list):
+        geometry_modifiers = edit_delta.get("modifiers")
+    if not isinstance(geometry_modifiers, list):
+        geometry_modifiers = []
+    hemisphere_direction = str(
+        edit_delta.get("hemisphere_direction")
+        or edit_delta.get("direction")
+        or semantic_direction
+    ).strip().lower()
     graph_elements = [
         element
         for element in _construction_graph_elements(state_after)
@@ -384,10 +395,88 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
     ]
 
     changed = False
+    if operation in {"align_centers", "align_objects", "center_objects_on_axis"}:
+        locations = [
+            _as_number_list(primitive.setdefault("transform", {}).get("location"))
+            or [0.0, 0.0, 0.0]
+            for primitive in matched
+        ]
+        horizontal_center = [
+            sum(location[index] for location in locations) / len(locations)
+            for index in (0, 1)
+        ]
+        for primitive in matched:
+            transform = primitive.setdefault("transform", {})
+            location_value = _as_number_list(transform.get("location")) or [0.0, 0.0, 0.0]
+            transform["location"] = [horizontal_center[0], horizontal_center[1], location_value[2]]
+        diagnostics.append({
+            "type": "aligned_centers",
+            "message": f"Aligned {len(matched)} object center(s) while preserving vertical heights.",
+            "horizontal_center": horizontal_center,
+            "target": target or "whole_asset",
+        })
+        changed = True
+
+    if operation in {"center_group", "center_objects", "center", "align_center"}:
+        locations = [
+            _as_number_list(primitive.setdefault("transform", {}).get("location"))
+            or [0.0, 0.0, 0.0]
+            for primitive in matched
+        ]
+        centroid = [
+            sum(location[index] for location in locations) / len(locations)
+            for index in range(3)
+        ]
+        for primitive in matched:
+            transform = primitive.setdefault("transform", {})
+            location_value = _as_number_list(transform.get("location")) or [0.0, 0.0, 0.0]
+            transform["location"] = [
+                location_value[index] - centroid[index]
+                for index in range(3)
+            ]
+        diagnostics.append({
+            "type": "centered_group",
+            "message": f"Centered {len(matched)} object(s) on the asset origin while preserving relative offsets.",
+            "previous_centroid": centroid,
+            "target": target or "whole_asset",
+        })
+        changed = True
+
     for primitive in matched:
         transform = primitive.setdefault("transform", {})
         current_scale = _as_number_list(transform.get("scale")) or [1.0, 1.0, 1.0]
-        if material and operation in {"set_material", "material", "recolor", "change_color", "color"}:
+        if operation in {"align_centers", "align_objects", "center_objects_on_axis", "center_group", "center_objects", "center", "align_center"}:
+            continue
+        if operation in {"set_geometry_modifier", "geometry_modifier", "set_shape_modifier", "shape_modifier", "cut", "hemisphere", "half"}:
+            primitive_type = str(primitive.get("type") or "").lower()
+            if primitive_type not in {"sphere", "uv_sphere"}:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": f"Geometry modifier edit requires a sphere target, got {primitive_type or '<missing>'}.",
+                })
+                continue
+            params = primitive.setdefault("params", {})
+            existing = params.get("shape_modifiers")
+            modifiers = [str(item).strip().lower() for item in existing] if isinstance(existing, list) else []
+            requested = [str(item).strip().lower() for item in geometry_modifiers]
+            if operation in {"cut", "hemisphere", "half"} and "half" not in requested:
+                requested.append("half")
+            if "half" in requested and "flat" not in requested:
+                requested.append("flat")
+            params["shape_modifiers"] = list(dict.fromkeys(modifiers + [item for item in requested if item]))
+            if "half" in params["shape_modifiers"] or "hemisphere" in params["shape_modifiers"]:
+                if hemisphere_direction in {"down", "-z", "bottom", "flat_up", "flat-top"}:
+                    transform["rotation"] = [math.pi, 0.0, 0.0]
+                elif hemisphere_direction in {"up", "+z", "top", "flat_down", "flat-bottom", ""}:
+                    transform["rotation"] = [0.0, 0.0, 0.0]
+                else:
+                    diagnostics.append({
+                        "type": "compile_blocked",
+                        "message": "Hemisphere direction must be up or down.",
+                    })
+                    continue
+            changed = True
+        elif material and operation in {"set_material", "material", "recolor", "change_color", "color"}:
             primitive["material"] = str(material)
             changed = True
         elif location and operation in {"set_location", "position", "move_to"}:

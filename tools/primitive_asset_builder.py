@@ -12,6 +12,7 @@ Run by the harness worker through Blender:
 
 import argparse
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -79,6 +80,50 @@ def sphere(name, location, scale, mat):
     obj = bpy.context.object
     obj.name = name
     obj.scale = scale
+    obj.data.materials.append(mat)
+    return obj
+
+
+def hemisphere(name, location, radius, mat, segments=32, rings=8):
+    """Create a capped +Z hemisphere for generic half/hemisphere intent."""
+    vertices = [(0.0, 0.0, radius)]
+    for ring_index in range(1, rings + 1):
+        angle = (math.pi / 2.0) * (ring_index / rings)
+        ring_radius = radius * math.sin(angle)
+        z = radius * math.cos(angle)
+        for segment_index in range(segments):
+            segment_angle = (2.0 * math.pi) * (segment_index / segments)
+            vertices.append((
+                ring_radius * math.cos(segment_angle),
+                ring_radius * math.sin(segment_angle),
+                z,
+            ))
+
+    faces = []
+    first_ring = 1
+    for segment_index in range(segments):
+        next_segment = (segment_index + 1) % segments
+        faces.append((0, first_ring + segment_index, first_ring + next_segment))
+    for ring_index in range(rings - 1):
+        current_ring = 1 + (ring_index * segments)
+        next_ring = current_ring + segments
+        for segment_index in range(segments):
+            next_segment = (segment_index + 1) % segments
+            faces.append((
+                current_ring + segment_index,
+                next_ring + segment_index,
+                next_ring + next_segment,
+                current_ring + next_segment,
+            ))
+    bottom_ring = 1 + ((rings - 1) * segments)
+    faces.append(tuple(bottom_ring + segment_index for segment_index in reversed(range(segments))))
+
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.location = location
     obj.data.materials.append(mat)
     return obj
 
@@ -766,7 +811,16 @@ def _registry_box(name, location, rotation, scale, params, mat):
 
 def _registry_sphere(name, location, rotation, scale, params, mat):
     radius = float(params.get("radius", 0.5))
-    obj = sphere(name, location, (scale[0] * radius, scale[1] * radius, scale[2] * radius), mat)
+    modifiers = {
+        str(modifier).strip().lower()
+        for modifier in params.get("shape_modifiers", [])
+        if str(modifier).strip()
+    }
+    if "half" in modifiers or "hemisphere" in modifiers:
+        obj = hemisphere(name, location, radius, mat)
+        obj.scale = scale
+    else:
+        obj = sphere(name, location, (scale[0] * radius, scale[1] * radius, scale[2] * radius), mat)
     obj.rotation_euler = rotation
     return [obj]
 
