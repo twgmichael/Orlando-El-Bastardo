@@ -17,6 +17,13 @@ import math
 import sys
 from pathlib import Path
 
+# Blender's embedded Python does not consistently add the --python script's
+# directory to sys.path. Bootstrap the repository tools package explicitly so
+# review renders work from the worker and from direct command-line runs.
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+
 import bpy
 from mathutils import Vector
 from oeb_blender.render_device import configure_render_device_from_env

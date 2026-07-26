@@ -36,6 +36,10 @@ sitting on top of a squished sphere on the right view.`
   newly created asset revision being returned before its database-generated UUID
   and timestamp existed. Revision creation now flushes before trace and response
   serialization, so a successfully assembled build job is not turned into a 500.
+- Fixed the follow-up review failure where Blender produced zero views because
+  its embedded Python could not import `oeb_blender`. The review script now
+  bootstraps its own repository `tools/` directory before importing the shared
+  render configuration package.
 
 Validation:
 - Studio Chat targeted Docker tests passed: 45 tests.
