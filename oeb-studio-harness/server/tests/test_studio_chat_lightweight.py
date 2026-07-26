@@ -1,10 +1,15 @@
 from app.schemas.studio_chat import (
     STANDARD_REVIEW_VIEWS,
+    StudioChatAssetEditRequest,
     StudioChatMessage,
     StudioChatOllamaRequest,
     StudioChatThreadCreateRequest,
 )
-from app.routers.studio_chat import _thread_title_from_prompt
+from app.routers.studio_chat import (
+    _compile_asset_edit_state,
+    _state_paths_from_payload,
+    _thread_title_from_prompt,
+)
 from app.services import studio_chat
 from app.services.studio_chat import (
     build_spec_from_assistant_response,
@@ -32,6 +37,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "Do not output the literal placeholder" in asset_builder.system_prompt
     assert "Treat the newest user prompt as controlling" in asset_builder.system_prompt
     assert "For semantic forms such as letters" in asset_builder.system_prompt
+    assert "asset_edit_request instead of a fresh asset" in asset_builder.system_prompt
     assert '"relationships"' in asset_builder.system_prompt
     assert "small buildable primitive jobs" not in asset_builder.system_prompt
     assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt
@@ -39,6 +45,9 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "Do not write Blender code" in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
+    asset_edit = presets["asset_edit_translator"]
+    assert "Supported generic operations include recolor, move" in asset_edit.system_prompt
+    assert '"operation": "proportional_scale"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
 
@@ -102,6 +111,228 @@ def test_thread_title_from_prompt_is_short_and_readable():
     assert _thread_title_from_prompt("Build a yellow cone with a white sphere on top.") == (
         "Build a yellow cone with a white sphere"
     )
+
+
+def test_state_paths_from_payload_preserves_blend_and_glb_artifacts():
+    source_blend_path, glb_path = _state_paths_from_payload(
+        {
+            "artifact_paths": [
+                "{output_root}/jobs/job-1/out/asset_builds/ship.json",
+                "{output_root}/jobs/job-1/assets/vehicles/ship.glb",
+                "{output_root}/jobs/job-1/blend/ship.blend",
+            ]
+        }
+    )
+
+    assert source_blend_path == "{output_root}/jobs/job-1/blend/ship.blend"
+    assert glb_path == "{output_root}/jobs/job-1/assets/vehicles/ship.glb"
+
+
+def test_state_paths_from_payload_prefers_explicit_source_blend_path():
+    source_blend_path, glb_path = _state_paths_from_payload(
+        {
+            "source_blend_path": "{output_root}/working/current.blend",
+            "artifact_paths": [
+                "{output_root}/jobs/job-1/blend/archived.blend",
+                "{output_root}/jobs/job-1/assets/props/chair.glb",
+            ],
+        }
+    )
+
+    assert source_blend_path == "{output_root}/working/current.blend"
+    assert glb_path == "{output_root}/jobs/job-1/assets/props/chair.glb"
+
+
+def test_asset_edit_request_preserves_reversible_delta_fields():
+    body = StudioChatAssetEditRequest(
+        base_revision=3,
+        target="spine",
+        operation="adjust_profile",
+        view="right",
+        semantic_direction="down",
+        amount=0.3,
+        preserve=["cockpit_connection", "material"],
+        edit_delta={"note": "lower right-view spine endpoint"},
+    )
+
+    assert body.base_revision == 3
+    assert body.target == "spine"
+    assert body.operation == "adjust_profile"
+    assert body.semantic_direction == "down"
+    assert body.preserve == ["cockpit_connection", "material"]
+    assert body.edit_delta["note"] == "lower right-view spine endpoint"
+
+
+def test_compile_asset_edit_state_recolors_target_primitive():
+    state_before = {
+        "canonical_id": "asset_test_A",
+        "name": "Test Asset",
+        "kind": "asset",
+        "style": "test",
+        "primitives": [
+            {
+                "id": "left_tube",
+                "type": "cylinder",
+                "material": "blue",
+                "transform": {"location": [0, -1, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            },
+            {
+                "id": "right_cube",
+                "type": "box",
+                "material": "red",
+                "transform": {"location": [0, 1, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            },
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "recolor", "target": "right_cube", "material": "yellow"},
+    )
+
+    assert compiled is True
+    assert state_after["primitives"][0]["material"] == "blue"
+    assert state_after["primitives"][1]["material"] == "yellow"
+    assert state_after["pending_edit"] is False
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_moves_target_by_oeb_direction():
+    state_before = {
+        "canonical_id": "asset_test_A",
+        "name": "Test Asset",
+        "kind": "asset",
+        "style": "test",
+        "primitives": [
+            {
+                "id": "spine",
+                "type": "box",
+                "material": "neutral",
+                "transform": {"location": [1, 2, 3], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            }
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "move", "target": "spine", "semantic_direction": "down", "amount": 0.25},
+    )
+
+    assert compiled is True
+    assert state_after["primitives"][0]["transform"]["location"] == [1, 2, 2.75]
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_blocks_unsupported_delta_without_mutating():
+    state_before = {
+        "canonical_id": "asset_test_A",
+        "name": "Test Asset",
+        "kind": "asset",
+        "style": "test",
+        "primitives": [
+            {
+                "id": "spine",
+                "type": "box",
+                "material": "neutral",
+                "transform": {"location": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            }
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "make_more_mysterious", "target": "spine"},
+    )
+
+    assert compiled is False
+    assert state_after["primitives"][0]["material"] == "neutral"
+    assert diagnostics[0]["type"] == "compile_blocked"
+
+
+def test_compile_asset_edit_state_applies_proportional_scale_to_asset_relationships():
+    state_before = {
+        "canonical_id": "asset_test_A",
+        "name": "Test Asset",
+        "kind": "asset",
+        "style": "test",
+        "asset_intent": {
+            "construction_graph": {
+                "elements": [
+                    {
+                        "id": "stroke",
+                        "kind": "stroke",
+                        "from": [0, 0, 0],
+                        "to": [0, 0, 1],
+                        "thickness": 0.1,
+                    }
+                ]
+            }
+        },
+        "primitives": [
+            {
+                "id": "stroke",
+                "type": "box",
+                "material": "neutral",
+                "transform": {"location": [0, 1, 1], "rotation": [0, 0, 0], "scale": [0.1, 0.1, 1]},
+            }
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "proportional_scale", "target": "whole_asset", "amount": 2},
+    )
+
+    assert compiled is True
+    assert state_after["primitives"][0]["transform"]["location"] == [0, 2, 2]
+    assert state_after["primitives"][0]["transform"]["scale"] == [0.2, 0.2, 2]
+    graph = state_after["asset_intent"]["construction_graph"]["elements"][0]
+    assert graph["to"] == [0, 0, 2]
+    assert graph["thickness"] == 0.2
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_adjusts_stroke_thickness_generically():
+    state_before = {
+        "canonical_id": "asset_test_A",
+        "name": "Test Asset",
+        "kind": "asset",
+        "style": "test",
+        "asset_intent": {
+            "construction_graph": {
+                "elements": [
+                    {
+                        "id": "stroke",
+                        "kind": "stroke",
+                        "from": [0, 0, 0],
+                        "to": [0, 0, 1],
+                        "thickness": 0.1,
+                    }
+                ]
+            }
+        },
+        "primitives": [
+            {
+                "id": "stroke",
+                "type": "box",
+                "material": "neutral",
+                "construction_element": {"kind": "stroke", "from": [0, 0, 0], "to": [0, 0, 1], "thickness": 0.1},
+                "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [0.1, 0.1, 1]},
+            }
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "set_thickness", "target": "stroke", "amount": 0.25},
+    )
+
+    assert compiled is True
+    primitive = state_after["primitives"][0]
+    assert primitive["transform"]["scale"] == [0.25, 0.25, 1]
+    assert primitive["construction_element"]["thickness"] == 0.25
+    assert state_after["asset_intent"]["construction_graph"]["elements"][0]["thickness"] == 0.25
+    assert diagnostics[-1]["type"] == "compiled"
 
 
 def test_parse_assistant_json_accepts_fenced_json():

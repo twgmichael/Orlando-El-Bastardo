@@ -7,6 +7,19 @@
   <aside class="chat-controls">
     <button type="button" id="new-thread" class="new-thread-button">New Thread</button>
     <nav id="thread-list" class="thread-list" aria-label="Chat threads"></nav>
+    <section class="active-asset-panel" aria-label="Active asset">
+      <div class="active-asset-label">Active Asset</div>
+      <select id="active-asset-select">
+        <option value="">No asset selected</option>
+      </select>
+      <div id="active-asset-meta" class="active-asset-meta">No asset state yet.</div>
+      <div class="active-asset-label active-revision-label">Revision</div>
+      <select id="active-revision-select" disabled>
+        <option value="">No revisions</option>
+      </select>
+      <button type="button" id="revert-revision" class="revert-revision-button" disabled>Revert To Revision</button>
+      <div id="active-revision-meta" class="active-asset-meta">No revision selected.</div>
+    </section>
     <details class="settings-panel">
       <summary>Settings</summary>
       <div class="control-row">

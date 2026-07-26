@@ -6,6 +6,10 @@
     presets: [],
     threads: [],
     activeThreadId: null,
+    assets: [],
+    activeAssetId: null,
+    assetRevisions: [],
+    activeRevisionNumber: null,
     messages: [],
     awaitingAssistant: false,
     pollTimers: {},
@@ -19,6 +23,9 @@
       response: null,
       build_job: null,
       build_status: null,
+      asset_edit: null,
+      asset_revert: null,
+      milestone: null,
       error: null,
       settings: {},
     },
@@ -27,6 +34,11 @@
   const els = {
     threadList: document.getElementById("thread-list"),
     newThread: document.getElementById("new-thread"),
+    activeAsset: document.getElementById("active-asset-select"),
+    activeAssetMeta: document.getElementById("active-asset-meta"),
+    activeRevision: document.getElementById("active-revision-select"),
+    activeRevisionMeta: document.getElementById("active-revision-meta"),
+    revertRevision: document.getElementById("revert-revision"),
     model: document.getElementById("model-select"),
     preset: document.getElementById("preset-select"),
     temperature: document.getElementById("temperature-input"),
@@ -179,7 +191,16 @@
     if (status.gallery_ready) return false;
     if (status.build_job && status.build_job.status === "failed") return false;
     if (status.review_job && status.review_job.status === "failed") return false;
+    if (status.review_job && status.review_job.status === "completed") return false;
     return true;
+  }
+
+  function milestoneCommand(content) {
+    const text = (content || "").trim();
+    const match = text.match(/^(?:save(?:\s+this)?\s+milestone|snapshot\s+progress)(?:\s+as\s+(.+))?\.?$/i);
+    if (!match) return null;
+    const label = match[1] ? match[1].trim().replace(/\.$/, "") : "";
+    return { label: label || null };
   }
 
   function lightboxArtifactLabel(artifact, index, total) {
@@ -276,8 +297,26 @@
     if (status && status.missing_views && status.missing_views.length) {
       const missing = document.createElement("div");
       missing.className = "build-job-meta";
-      missing.textContent = `Waiting for ${status.missing_views.join(", ")}`;
+      missing.textContent = `Missing registered views: ${status.missing_views.join(", ")}`;
       card.appendChild(missing);
+    }
+
+    if (status && status.missing_uploaded_views && status.missing_uploaded_views.length) {
+      const uploaded = document.createElement("div");
+      uploaded.className = "build-job-meta";
+      uploaded.textContent = `Missing uploaded views: ${status.missing_uploaded_views.join(", ")}`;
+      card.appendChild(uploaded);
+    }
+
+    if (status && status.diagnostics && status.diagnostics.length) {
+      const details = document.createElement("details");
+      details.className = "assistant-json-details build-resolver-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Review diagnostics";
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(status.diagnostics, null, 2);
+      details.append(summary, pre);
+      card.appendChild(details);
     }
 
     if (status && status.artifacts && status.artifacts.length) {
@@ -312,6 +351,184 @@
       card.appendChild(details);
     }
 
+    return card;
+  }
+
+  function renderMilestoneCard(milestone) {
+    const card = document.createElement("div");
+    card.className = "chat-build-card chat-milestone-card";
+
+    const eyebrow = document.createElement("div");
+    eyebrow.className = "chat-build-eyebrow";
+    eyebrow.textContent = "Milestone saved";
+    card.appendChild(eyebrow);
+
+    const title = document.createElement("strong");
+    const label = milestone.label || milestone.asset_id || "Studio Chat milestone";
+    title.textContent = label;
+    card.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "build-job-meta";
+    const savedViews = (milestone.renders || []).map((render) => render.view);
+    const missingViews = milestone.missing_views || [];
+    meta.textContent = [
+      milestone.asset_id ? `Asset ${milestone.asset_id}` : "Thread snapshot",
+      savedViews.length ? `saved ${savedViews.join(", ")}` : "no renders copied",
+      missingViews.length ? `missing ${missingViews.join(", ")}` : "",
+    ].filter(Boolean).join("; ");
+    card.appendChild(meta);
+
+    const links = document.createElement("div");
+    links.className = "build-job-links";
+    const manifest = (milestone.files || []).find((file) => file.filename === "milestone.json");
+    const readme = (milestone.files || []).find((file) => file.filename === "README.md");
+    const detailLink = document.createElement("a");
+    detailLink.href = `/api/v1/studio-chat/milestones/${milestone.id}`;
+    detailLink.textContent = "Milestone JSON";
+    links.appendChild(detailLink);
+    if (manifest && manifest.url) {
+      const manifestLink = document.createElement("a");
+      manifestLink.href = manifest.url;
+      manifestLink.textContent = "Manifest file";
+      links.appendChild(manifestLink);
+    }
+    if (readme && readme.url) {
+      const readmeLink = document.createElement("a");
+      readmeLink.href = readme.url;
+      readmeLink.textContent = "README";
+      links.appendChild(readmeLink);
+    }
+    card.appendChild(links);
+
+    if (milestone.renders && milestone.renders.length) {
+      const grid = document.createElement("div");
+      grid.className = "chat-render-grid";
+      for (const [index, render] of milestone.renders.entries()) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-render-thumb";
+        button.setAttribute("aria-label", `Open saved ${render.view} render`);
+        button.addEventListener("click", () => openLightbox(milestone.renders, index, button));
+        const image = document.createElement("img");
+        image.src = render.url;
+        image.alt = `${render.view} milestone render`;
+        const span = document.createElement("span");
+        span.textContent = render.view;
+        button.append(image, span);
+        grid.appendChild(button);
+      }
+      card.appendChild(grid);
+    }
+
+    return card;
+  }
+
+  function artifactsForRevision(assetId, revisionNumber) {
+    for (const message of state.messages) {
+      const events = message.revisionEvents || [];
+      const hasRevision = events.some((event) => {
+        const payload = event.payload || {};
+        const eventAsset = payload.asset || {};
+        const revision = payload.revision || {};
+        return eventAsset.asset_id === assetId && revision.revision === revisionNumber;
+      });
+      const artifacts = message.build && message.build.status && message.build.status.artifacts;
+      if (hasRevision && artifacts && artifacts.length) return artifacts;
+    }
+    return [];
+  }
+
+  function renderRevisionArtifactStrip(label, artifacts) {
+    const section = document.createElement("div");
+    section.className = "revision-artifact-strip";
+    const heading = document.createElement("div");
+    heading.className = "build-job-meta";
+    heading.textContent = label;
+    section.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.className = "revision-artifact-grid";
+    for (const [index, artifact] of artifacts.slice(0, 4).entries()) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chat-render-thumb revision-render-thumb";
+      button.setAttribute("aria-label", `Open ${label} ${artifact.view} render`);
+      button.addEventListener("click", () => openLightbox(artifacts, index, button));
+      const image = document.createElement("img");
+      image.src = artifact.url;
+      image.alt = `${label} ${artifact.view} render`;
+      const span = document.createElement("span");
+      span.textContent = artifact.view;
+      button.append(image, span);
+      grid.appendChild(button);
+    }
+    section.appendChild(grid);
+    return section;
+  }
+
+  function renderRevisionCard(event) {
+    const card = document.createElement("div");
+    card.className = "chat-build-card chat-revision-card";
+    const payload = event.payload || {};
+    const asset = payload.asset || null;
+    const revision = payload.revision || null;
+    const eyebrow = document.createElement("div");
+    eyebrow.className = "chat-build-eyebrow";
+    eyebrow.textContent = event.event_type === "asset_reverted" ? "Revision reverted" : "Asset edit";
+    card.appendChild(eyebrow);
+    const title = document.createElement("strong");
+    title.textContent = asset
+      ? `${asset.asset_id} revision ${asset.current_revision}`
+      : "Asset revision";
+    card.appendChild(title);
+    const meta = document.createElement("div");
+    meta.className = "build-job-meta";
+    meta.textContent = revision
+      ? `Before r${revision.parent_revision || "none"}; after r${revision.revision}; status ${revision.status}`
+      : "Revision state recorded";
+    card.appendChild(meta);
+    if (payload.job && payload.review_url) {
+      const links = document.createElement("div");
+      links.className = "build-job-links";
+      const jobLink = document.createElement("a");
+      jobLink.href = payload.review_url;
+      jobLink.textContent = "Edit job";
+      links.appendChild(jobLink);
+      if (payload.asset_review_url) {
+        const assetLink = document.createElement("a");
+        assetLink.href = payload.asset_review_url;
+        assetLink.textContent = "Asset review gallery";
+        links.appendChild(assetLink);
+      }
+      card.appendChild(links);
+    }
+    if (payload.diagnostics && payload.diagnostics.length) {
+      const details = document.createElement("details");
+      details.className = "assistant-json-details build-resolver-details";
+      const summary = document.createElement("summary");
+      summary.textContent = "Edit diagnostics";
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(payload.diagnostics, null, 2);
+      details.append(summary, pre);
+      card.appendChild(details);
+    }
+    if (asset && revision) {
+      const beforeArtifacts = revision.parent_revision
+        ? artifactsForRevision(asset.asset_id, revision.parent_revision)
+        : [];
+      const afterArtifacts = artifactsForRevision(asset.asset_id, revision.revision);
+      if (beforeArtifacts.length || afterArtifacts.length) {
+        const pair = document.createElement("div");
+        pair.className = "revision-render-pair";
+        if (beforeArtifacts.length) {
+          pair.appendChild(renderRevisionArtifactStrip(`Before r${revision.parent_revision}`, beforeArtifacts));
+        }
+        if (afterArtifacts.length) {
+          pair.appendChild(renderRevisionArtifactStrip(`After r${revision.revision}`, afterArtifacts));
+        }
+        card.appendChild(pair);
+      }
+    }
     return card;
   }
 
@@ -380,6 +597,16 @@
         const spacer = document.createElement("div");
         spacer.className = "chat-message-build-spacer";
         row.append(spacer, renderBuildCard(message.build));
+      }
+      if (message.milestone) {
+        const spacer = document.createElement("div");
+        spacer.className = "chat-message-build-spacer";
+        row.append(spacer, renderMilestoneCard(message.milestone));
+      }
+      for (const event of message.revisionEvents || []) {
+        const spacer = document.createElement("div");
+        spacer.className = "chat-message-build-spacer";
+        row.append(spacer, renderRevisionCard(event));
       }
       els.transcript.appendChild(row);
     }
@@ -461,13 +688,102 @@
     };
   }
 
+  function systemPromptWithActiveAsset() {
+    const asset = activeAsset();
+    if (!asset) return els.systemPrompt.value;
+    const context = {
+      active_asset: {
+        asset_id: asset.asset_id,
+        current_revision: asset.current_revision,
+        base_builder: asset.base_builder,
+        state_json: asset.state_json,
+      },
+      edit_contract: {
+        return_field: "asset_edit_request",
+        required: ["operation", "base_revision"],
+        optional: ["target", "view", "semantic_direction", "amount", "preserve", "edit_delta"],
+        note: "For follow-up edits to the active asset, return asset_edit_request instead of a fresh build.",
+      },
+    };
+    return [
+      els.systemPrompt.value,
+      "",
+      "Active OEB asset context:",
+      JSON.stringify(context, null, 2),
+    ].join("\n");
+  }
+
   function selectedReviewViews() {
     return els.reviewViews.value === "standard" ? STANDARD_REVIEW_VIEWS : [];
   }
 
+  function activeAsset() {
+    return state.assets.find((asset) => asset.asset_id === state.activeAssetId) || null;
+  }
+
+  function renderActiveAsset() {
+    if (!els.activeAsset) return;
+    els.activeAsset.innerHTML = "";
+    els.activeAsset.appendChild(option("", "No asset selected"));
+    for (const asset of state.assets) {
+      const label = `${asset.asset_id} r${asset.current_revision}`;
+      els.activeAsset.appendChild(option(asset.asset_id, label));
+    }
+    if (state.activeAssetId && state.assets.some((asset) => asset.asset_id === state.activeAssetId)) {
+      els.activeAsset.value = state.activeAssetId;
+    } else if (state.assets.length) {
+      state.activeAssetId = state.assets[0].asset_id;
+      els.activeAsset.value = state.activeAssetId;
+    } else {
+      state.activeAssetId = null;
+      els.activeAsset.value = "";
+    }
+    const asset = activeAsset();
+    els.activeAssetMeta.textContent = asset
+      ? `Revision ${asset.current_revision}; builder ${asset.base_builder || "unknown"}`
+      : "No asset state yet.";
+  }
+
+  function activeRevision() {
+    return state.assetRevisions.find((revision) => revision.revision === state.activeRevisionNumber) || null;
+  }
+
+  function renderActiveRevision() {
+    if (!els.activeRevision) return;
+    const asset = activeAsset();
+    els.activeRevision.innerHTML = "";
+    if (!asset || !state.assetRevisions.length) {
+      els.activeRevision.appendChild(option("", "No revisions"));
+      els.activeRevision.disabled = true;
+      els.revertRevision.disabled = true;
+      els.activeRevisionMeta.textContent = "No revision selected.";
+      return;
+    }
+    const revisions = [...state.assetRevisions].sort((a, b) => b.revision - a.revision);
+    for (const revision of revisions) {
+      const label = `r${revision.revision} ${revision.status}`;
+      els.activeRevision.appendChild(option(String(revision.revision), label));
+    }
+    if (!state.activeRevisionNumber || !state.assetRevisions.some((item) => item.revision === state.activeRevisionNumber)) {
+      state.activeRevisionNumber = asset.current_revision;
+    }
+    els.activeRevision.value = String(state.activeRevisionNumber);
+    els.activeRevision.disabled = false;
+    const revision = activeRevision();
+    const canRevert = Boolean(revision && revision.revision !== asset.current_revision);
+    els.revertRevision.disabled = !canRevert;
+    els.activeRevisionMeta.textContent = revision
+      ? `r${revision.revision}; parent ${revision.parent_revision || "none"}; ${revision.status}`
+      : "No revision selected.";
+  }
+
   function renderDebug() {
     els.debugPanel.hidden = !els.debugToggle.checked;
-    state.raw.settings = currentSettings();
+    state.raw.settings = {
+      ...currentSettings(),
+      active_asset: activeAsset(),
+      active_revision: activeRevision(),
+    };
     els.debugOutput.textContent = JSON.stringify(state.raw, null, 2);
   }
 
@@ -588,12 +904,19 @@
         message.build.resolver = event.payload && event.payload.resolver_output;
         message.build.error = null;
       }
-      if (event.event_type === "review_ready" || event.event_type === "failure") {
+      if (event.event_type === "review_ready" || event.event_type === "failure" || event.event_type === "review_attention") {
         message.build = message.build || {};
         message.build.status = event.payload && event.payload.build_status;
         if (event.event_type === "failure") {
           message.build.error = "Render pipeline needs attention";
         }
+      }
+      if (event.event_type === "milestone_created") {
+        message.milestone = event.payload && event.payload.milestone;
+      }
+      if (["asset_revision_created", "asset_edit_recorded", "asset_edit_compiled", "asset_reverted"].includes(event.event_type)) {
+        message.revisionEvents = message.revisionEvents || [];
+        message.revisionEvents.push(event);
       }
     }
   }
@@ -604,7 +927,11 @@
       const jobId = message.build && message.build.result && message.build.result.job && message.build.result.job.id;
       const status = message.build && message.build.status;
       if (!jobId) continue;
-      if (status && (status.gallery_ready || status.build_job.status === "failed" || (status.review_job && status.review_job.status === "failed"))) {
+      if (status && (
+        status.gallery_ready
+        || status.build_job.status === "failed"
+        || (status.review_job && ["completed", "failed"].includes(status.review_job.status))
+      )) {
         continue;
       }
       startBuildPolling(jobId, message);
@@ -619,6 +946,12 @@
     });
     state.threads.unshift(thread);
     state.activeThreadId = thread.id;
+    state.assets = [];
+    state.activeAssetId = null;
+    state.assetRevisions = [];
+    state.activeRevisionNumber = null;
+    renderActiveAsset();
+    renderActiveRevision();
     renderThreadOptions();
     return thread;
   }
@@ -632,12 +965,42 @@
       role: message.role,
       content: message.content,
       raw: message.raw || {},
+      milestone: message.raw && message.raw.milestone ? message.raw.milestone : null,
     }));
     attachThreadEvents(detail.events || []);
+    await loadThreadAssets(detail.thread.id);
     renderThreadOptions();
     renderTranscript();
     renderDebug();
     resumeThreadPolling();
+  }
+
+  async function loadThreadAssets(threadId) {
+    const payload = await fetchJson(`/api/v1/studio-chat/threads/${threadId}/assets`);
+    state.assets = payload.assets || [];
+    if (!state.assets.some((asset) => asset.asset_id === state.activeAssetId)) {
+      state.activeAssetId = state.assets.length ? state.assets[0].asset_id : null;
+    }
+    renderActiveAsset();
+    await loadActiveAssetRevisions();
+  }
+
+  async function loadActiveAssetRevisions() {
+    const asset = activeAsset();
+    if (!asset) {
+      state.assetRevisions = [];
+      state.activeRevisionNumber = null;
+      renderActiveRevision();
+      return;
+    }
+    const payload = await fetchJson(
+      `/api/v1/studio-chat/assets/${asset.asset_id}/revisions?thread_id=${state.activeThreadId}`,
+    );
+    state.assetRevisions = payload.revisions || [];
+    if (!state.assetRevisions.some((revision) => revision.revision === state.activeRevisionNumber)) {
+      state.activeRevisionNumber = asset.current_revision;
+    }
+    renderActiveRevision();
   }
 
   async function loadThreads() {
@@ -721,6 +1084,9 @@
     els.input.value = "";
     state.raw.build_job = null;
     state.raw.build_status = null;
+    state.raw.asset_edit = null;
+    state.raw.asset_revert = null;
+    state.raw.milestone = null;
     let userMessage = { role: "user", content };
     const pendingClarification = latestAssistantMessage();
     const pendingControl = assistantControl(pendingClarification);
@@ -757,12 +1123,18 @@
     state.messages.push(userMessage);
     renderTranscript();
 
+    const milestoneIntent = milestoneCommand(content);
+    if (milestoneIntent) {
+      await createMilestone(userMessage, milestoneIntent.label);
+      return;
+    }
+
     const payload = {
       model: els.model.value,
       thread_id: state.activeThreadId,
       message_id: userMessage.id || null,
       preset_id: els.preset.value,
-      system_prompt: els.systemPrompt.value,
+      system_prompt: systemPromptWithActiveAsset(),
       messages: ollamaMessages(),
       temperature: Number(els.temperature.value),
       max_tokens: Number(els.maxTokens.value),
@@ -813,7 +1185,10 @@
       if (control.blocksBuild) {
         setStatus(control.clarification ? "Clarification needed" : "Escalation needed");
       } else if (els.autoBuild.checked) {
-        await createBuildJob({ auto: true });
+        const edited = await createAssetEdit(assistantMessage, assistantJson);
+        if (!edited) {
+          await createBuildJob({ auto: true });
+        }
       }
     } catch (err) {
       state.awaitingAssistant = false;
@@ -848,6 +1223,11 @@
       if (status.gallery_ready) {
         stopPolling(jobId);
         setStatus("Review renders ready");
+      } else if (status.review_job && status.review_job.status === "completed") {
+        stopPolling(jobId);
+        setStatus(status.missing_views && status.missing_views.length
+          ? "Review renders need attention"
+          : "Review renders available");
       } else if (status.build_job.status === "failed" || (status.review_job && status.review_job.status === "failed")) {
         stopPolling(jobId);
         setStatus("Render pipeline needs attention");
@@ -864,6 +1244,186 @@
     stopPolling(jobId);
     pollBuildJobStatus(jobId, message);
     state.pollTimers[jobId] = setInterval(() => pollBuildJobStatus(jobId, message), 3000);
+  }
+
+  function latestBuildJobId() {
+    for (let idx = state.messages.length - 1; idx >= 0; idx -= 1) {
+      const build = state.messages[idx].build;
+      const jobId = build && build.result && build.result.job && build.result.job.id;
+      if (jobId) return jobId;
+    }
+    return null;
+  }
+
+  function editRequestFromAssistant(assistantJson) {
+    if (!assistantJson || typeof assistantJson !== "object") return null;
+    const source = assistantJson.asset_edit_request || assistantJson.edit_delta || null;
+    if (!source || typeof source !== "object") return null;
+    const asset = activeAsset();
+    if (!asset) return null;
+    return {
+      thread_id: state.activeThreadId,
+      message_id: null,
+      base_revision: Number(source.base_revision || asset.current_revision),
+      target: source.target || null,
+      operation: source.operation || "record_intent",
+      view: source.view || null,
+      semantic_direction: source.semantic_direction || source.direction || null,
+      amount: typeof source.amount === "number" ? source.amount : null,
+      preserve: Array.isArray(source.preserve) ? source.preserve : [],
+      edit_delta: source.edit_delta && typeof source.edit_delta === "object" ? source.edit_delta : source,
+    };
+  }
+
+  async function createAssetEdit(assistant, assistantJson) {
+    const asset = activeAsset();
+    const request = editRequestFromAssistant(assistantJson);
+    if (!asset || !request) return false;
+    request.message_id = assistant.id || null;
+    setStatus("Compiling asset edit...");
+    try {
+      const result = await fetchJson(`/api/v1/studio-chat/assets/${asset.asset_id}/edits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      state.raw.asset_edit = result;
+      const idx = state.assets.findIndex((item) => item.asset_id === result.asset.asset_id);
+      if (idx >= 0) {
+        state.assets[idx] = result.asset;
+      } else {
+        state.assets.unshift(result.asset);
+      }
+      state.activeAssetId = result.asset.asset_id;
+      renderActiveAsset();
+      await loadActiveAssetRevisions();
+      assistant.revisionEvents = assistant.revisionEvents || [];
+      assistant.revisionEvents.push({
+        event_type: result.job_created ? "asset_edit_compiled" : "asset_edit_recorded",
+        payload: {
+          asset: result.asset,
+          revision: result.revision,
+          job: result.job,
+          review_url: result.review_url,
+          asset_review_url: result.asset_review_url,
+          diagnostics: result.diagnostics,
+        },
+      });
+      if (result.job && result.job.id) {
+        assistant.build = assistant.build || {};
+        assistant.build.result = {
+          job: result.job,
+          review_url: result.review_url,
+          asset_review_url: result.asset_review_url,
+          spec: result.asset.state_json,
+        };
+        assistant.build.status = null;
+        assistant.build.error = null;
+        startBuildPolling(result.job.id, assistant);
+      }
+      setStatus(result.job_created ? `Edit job queued: ${result.job.id}` : "Edit recorded");
+      return true;
+    } catch (err) {
+      showError("Could not create asset edit", err.message);
+      setStatus("Asset edit failed");
+      return true;
+    } finally {
+      renderTranscript();
+      renderDebug();
+    }
+  }
+
+  async function revertActiveAssetToRevision() {
+    const asset = activeAsset();
+    const revision = activeRevision();
+    if (!asset || !revision || revision.revision === asset.current_revision) return;
+    clearError();
+    const content = `Revert ${asset.asset_id} to revision ${revision.revision}.`;
+    let userMessage = { role: "user", content };
+    try {
+      const savedUser = await saveThreadMessage("user", content, {
+        settings: currentSettings(),
+        active_asset: asset,
+        target_revision: revision.revision,
+      });
+      userMessage = {
+        id: savedUser.id,
+        role: savedUser.role,
+        content: savedUser.content,
+        raw: savedUser.raw || {},
+      };
+      state.messages.push(userMessage);
+      renderTranscript();
+      setStatus("Reverting asset revision...");
+      const result = await fetchJson(`/api/v1/studio-chat/assets/${asset.asset_id}/revert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: state.activeThreadId,
+          message_id: userMessage.id || null,
+          target_revision: revision.revision,
+          base_revision: asset.current_revision,
+        }),
+      });
+      state.raw.asset_revert = result;
+      const idx = state.assets.findIndex((item) => item.asset_id === result.asset.asset_id);
+      if (idx >= 0) {
+        state.assets[idx] = result.asset;
+      } else {
+        state.assets.unshift(result.asset);
+      }
+      state.activeAssetId = result.asset.asset_id;
+      state.activeRevisionNumber = result.asset.current_revision;
+      userMessage.revisionEvents = userMessage.revisionEvents || [];
+      userMessage.revisionEvents.push({
+        event_type: "asset_reverted",
+        payload: {
+          asset: result.asset,
+          revision: result.revision,
+          reverted_to_revision: result.reverted_to_revision,
+        },
+      });
+      renderActiveAsset();
+      await loadActiveAssetRevisions();
+      setStatus(`Reverted to revision ${result.reverted_to_revision}`);
+    } catch (err) {
+      showError("Could not revert asset revision", err.message);
+      setStatus("Revert failed");
+    } finally {
+      renderTranscript();
+      renderDebug();
+      els.input.focus();
+    }
+  }
+
+  async function createMilestone(userMessage, label) {
+    els.send.disabled = true;
+    setStatus("Saving milestone...");
+    try {
+      const threadId = await ensureThread();
+      const milestone = await fetchJson(`/api/v1/studio-chat/threads/${threadId}/milestones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          thread_id: threadId,
+          message_id: userMessage.id || null,
+          build_job_id: latestBuildJobId(),
+          label,
+        }),
+      });
+      state.raw.milestone = milestone;
+      userMessage.milestone = milestone;
+      setStatus("Milestone saved");
+    } catch (err) {
+      showError("Could not save milestone", err.message);
+      setStatus("Milestone failed");
+    } finally {
+      els.send.disabled = false;
+      state.awaitingAssistant = false;
+      renderTranscript();
+      renderDebug();
+      els.input.focus();
+    }
   }
 
   async function createBuildJob(options) {
@@ -897,6 +1457,25 @@
         }),
       });
       state.raw.build_job = result;
+      if (result.asset) {
+        const idx = state.assets.findIndex((asset) => asset.asset_id === result.asset.asset_id);
+        if (idx >= 0) {
+          state.assets[idx] = result.asset;
+        } else {
+          state.assets.unshift(result.asset);
+        }
+        state.activeAssetId = result.asset.asset_id;
+        renderActiveAsset();
+        await loadActiveAssetRevisions();
+        assistant.revisionEvents = assistant.revisionEvents || [];
+        assistant.revisionEvents.push({
+          event_type: "asset_revision_created",
+          payload: {
+            asset: result.asset,
+            revision: result.revision,
+          },
+        });
+      }
       assistant.build = assistant.build || {};
       assistant.build.result = result;
       assistant.build.status = null;
@@ -985,6 +1564,21 @@
   els.reviewViews.addEventListener("change", renderDebug);
   els.model.addEventListener("change", renderDebug);
   els.systemPrompt.addEventListener("input", renderDebug);
+  els.activeAsset.addEventListener("change", () => {
+    state.activeAssetId = els.activeAsset.value || null;
+    state.activeRevisionNumber = null;
+    renderActiveAsset();
+    renderDebug();
+    loadActiveAssetRevisions().catch((err) => {
+      showError("Could not load asset revisions", err.message);
+    });
+  });
+  els.activeRevision.addEventListener("change", () => {
+    state.activeRevisionNumber = els.activeRevision.value ? Number(els.activeRevision.value) : null;
+    renderActiveRevision();
+    renderDebug();
+  });
+  els.revertRevision.addEventListener("click", revertActiveAssetToRevision);
   els.clear.addEventListener("click", async () => {
     stopPolling();
     closeLightbox();

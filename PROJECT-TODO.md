@@ -97,6 +97,52 @@ visible shot.
      standalone asset builds. Carry `scene_shell: false` in the normalized spec
      by default; allow `scene_shell: true` only when the user explicitly asks
      for a location, set, room, ground, wall, or environment.
+   - [x] Studio Chat Milestone 12 — centralize asset review view normalization
+     so Studio Chat, review jobs, worker artifact metadata, gallery readiness,
+     and UI labels share one canonical view contract.
+   - [x] Studio Chat Milestone 12 — split review status into rendered,
+     uploaded, registered, gallery-ready, and failed diagnostics instead of
+     collapsing useful visible output into a generic failure state.
+   - [x] Studio Chat Milestone 12 — show available thumbnails in Studio Chat
+     even when gallery readiness fails, with exact missing-view or metadata
+     diagnostics.
+   - [x] Studio Chat Milestone 12 — add Docker-backed tests for the case where
+     review render files/artifacts exist but strict gallery readiness is not
+     satisfied.
+   - [x] Studio Chat Milestone 13 — add persistent `studio_chat_assets` and
+     `studio_chat_asset_revisions` state tables for chat-managed assets.
+   - [x] Studio Chat Milestone 13 — create/update active asset state and first
+     revision when Studio Chat submits a deterministic build job.
+   - [x] Studio Chat Milestone 13 — add asset state, revision list, and
+     `asset_edit_request` endpoints with optimistic revision checks.
+   - [x] Studio Chat Milestone 13 — persist edit deltas and reversible
+     before/after state without letting the local LLM mutate files directly.
+   - [x] Studio Chat Milestone 13 — verify asset-state/revision behavior in the
+     Docker-backed server test suite.
+   - [x] Studio Chat Milestone 14 — add active asset listing/selection so
+     follow-up prompts can target the correct asset revision.
+   - [x] Studio Chat Milestone 14 — add asset-edit compiler path for generic
+     deterministic deltas against compiled asset state.
+   - [x] Studio Chat Milestone 14 — submit deterministic rebuild/review jobs
+     only when the edit delta compiles.
+   - [x] Studio Chat Milestone 14 — add rollback/revert by selecting a prior
+     revision as active state.
+   - [x] Studio Chat Milestone 14 — show before/after revision cards in the
+     chat transcript.
+   - [x] Studio Chat Milestone 14 — verify edit compiler and revert behavior in
+     the Docker-backed server test suite.
+   - [x] Studio Chat Milestone 15 — add revision-history browsing controls for
+     the active Studio Chat asset.
+   - [x] Studio Chat Milestone 15 — add one-click rollback/revert controls in
+     the Studio Chat UI.
+   - [x] Studio Chat Milestone 15 — show explicit before/after revision context
+     for edit revisions and compiled review jobs.
+   - [x] Studio Chat Milestone 15 — add local LLM prompt examples/tests for
+     producing `asset_edit_request` from active asset context.
+   - [x] Studio Chat Milestone 15 — expand generic edit operations at the
+     construction-graph/state level with clear compile diagnostics.
+   - [x] Studio Chat Milestone 15 — validate browser syntax and Docker-backed
+     server tests.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.

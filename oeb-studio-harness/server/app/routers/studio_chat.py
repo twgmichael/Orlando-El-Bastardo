@@ -1,9 +1,14 @@
 import asyncio
+import json
+import re
+import shutil
 import urllib.error
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,18 +19,38 @@ from app.models.artifact import Artifact
 from app.models.audit import AuditEvent
 from app.models.job import Job
 from app.models.studio_chat import (
+    StudioChatAsset,
+    StudioChatAssetRevision,
     StudioChatBuildEvent,
+    StudioChatMilestone,
     StudioChatMessageRecord,
     StudioChatThread,
     StudioChatTraceEvent,
 )
+from app.routers.review import _artifact_file_path
 from app.routers.conversations import _build_job_payload, create_conversation_job
 from app.schemas.conversation import ConversationJobRequest, ConversationJobResponse
+from app.schemas.conversation import PrimitiveBuildSpec
 from app.schemas.studio_chat import (
+    STANDARD_REVIEW_VIEWS,
     StudioChatBuildJobRequest,
     StudioChatBuildJobResponse,
     StudioChatBuildJobStatusResponse,
+    StudioChatAssetCreateRequest,
+    StudioChatAssetEditRequest,
+    StudioChatAssetEditResponse,
+    StudioChatAssetListResponse,
+    StudioChatAssetRevertRequest,
+    StudioChatAssetRevertResponse,
+    StudioChatAssetResponse,
+    StudioChatAssetRevisionListResponse,
+    StudioChatAssetRevisionResponse,
     StudioChatModelList,
+    StudioChatMilestoneCreateRequest,
+    StudioChatMilestoneFile,
+    StudioChatMilestoneListResponse,
+    StudioChatMilestoneRender,
+    StudioChatMilestoneResponse,
     StudioChatOllamaRequest,
     StudioChatOllamaResponse,
     StudioChatPrimitiveResolveRequest,
@@ -47,7 +72,12 @@ from app.schemas.studio_chat import (
     StudioChatTraceEventResponse,
 )
 from app.schemas.job import JobSummary
-from app.services.asset_review import image_artifacts_by_view, missing_uploaded_views
+from app.services.asset_review import (
+    display_review_view,
+    image_artifacts_by_view,
+    normalize_review_views,
+    review_artifact_readiness,
+)
 from app.services.studio_chat import (
     StudioChatLLMConfig,
     build_spec_with_primitive_resolver,
@@ -64,11 +94,11 @@ router = APIRouter(prefix="/studio-chat", tags=["studio-chat"])
 
 
 def _review_render_views(review_views: list[str]) -> list[str]:
-    return ["back" if view == "rear" else view for view in review_views]
+    return normalize_review_views(review_views)
 
 
 def _chat_review_views(review_views: list[str]) -> list[str]:
-    return ["rear" if view == "back" else view for view in review_views]
+    return [display_review_view(view) or view for view in review_views]
 
 
 def _artifact_url(artifact: Artifact) -> str:
@@ -89,12 +119,546 @@ def _thread_title_from_prompt(prompt: str) -> str:
     return title[:80] or "Studio Chat Thread"
 
 
+def _safe_slug(value: str, fallback: str = "milestone") -> str:
+    slug = re.sub(r"[^a-zA-Z0-9._-]+", "_", value.strip().lower()).strip("_")
+    return slug[:80] or fallback
+
+
+def _milestone_file_url(milestone_id: uuid.UUID, relative_path: str) -> str:
+    return f"/api/v1/studio-chat/milestones/{milestone_id}/files/{relative_path}"
+
+
+def _copy_file_if_available(source: Path, dest: Path) -> int | None:
+    if not source.exists() or not source.is_file():
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, dest)
+    return dest.stat().st_size
+
+
+def _copy_tree_if_available(source: Path, dest: Path) -> int | None:
+    if not source.exists() or not source.is_dir():
+        return None
+    shutil.copytree(source, dest)
+    return sum(path.stat().st_size for path in dest.rglob("*") if path.is_file())
+
+
+def _job_output_candidates(job_id: uuid.UUID) -> list[Path]:
+    module_path = Path(__file__).resolve()
+    candidates = []
+    for parent in module_path.parents:
+        candidates.append(parent / "oeb-worker-output" / "jobs" / str(job_id))
+        candidates.append(parent.parent / "oeb-worker-output" / "jobs" / str(job_id))
+    unique: list[Path] = []
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def _find_job_output_dir(job_id: uuid.UUID) -> Path | None:
+    for candidate in _job_output_candidates(job_id):
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+    return None
+
+
+def _review_render_candidates(job_id: uuid.UUID) -> list[Path]:
+    module_path = Path(__file__).resolve()
+    candidates = []
+    for parent in module_path.parents:
+        candidates.append(parent / "oeb-worker-output" / "oeb-studio-harness" / "review-renders" / str(job_id))
+        candidates.append(parent.parent / "oeb-worker-output" / "oeb-studio-harness" / "review-renders" / str(job_id))
+    unique: list[Path] = []
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def _find_review_render_dir(job_id: uuid.UUID) -> Path | None:
+    for candidate in _review_render_candidates(job_id):
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+    return None
+
+
+def _view_from_render_filename(asset_id: str | None, filename: str) -> str | None:
+    stem = Path(filename).stem
+    view = None
+    if asset_id and stem.startswith(f"{asset_id}_"):
+        view = stem[len(asset_id) + 1:]
+    else:
+        view = stem.rsplit("_", 1)[-1]
+    view = "rear" if view == "back" else view
+    return view if view in {"top", "bottom", "left", "right", "front", "rear", "action"} else None
+
+
+def _write_json(path: Path, payload: dict | list) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return path.stat().st_size
+
+
+def _write_text(path: Path, text: str) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path.stat().st_size
+
+
+def _manifest_response(milestone: StudioChatMilestone) -> StudioChatMilestoneResponse:
+    manifest = milestone.manifest_json or {}
+    return StudioChatMilestoneResponse(
+        id=milestone.id,
+        thread_id=milestone.thread_id,
+        message_id=milestone.message_id,
+        asset_id=milestone.asset_id,
+        revision=milestone.revision,
+        label=milestone.label,
+        bundle_path=milestone.bundle_path,
+        manifest=manifest,
+        files=[
+            StudioChatMilestoneFile.model_validate(file_info)
+            for file_info in manifest.get("files", [])
+        ],
+        renders=[
+            StudioChatMilestoneRender.model_validate(render_info)
+            for render_info in manifest.get("renders", [])
+        ],
+        missing_views=manifest.get("missing_views", []),
+        created_at=milestone.created_at,
+    )
+
+
+def _asset_response(asset: StudioChatAsset) -> StudioChatAssetResponse:
+    return StudioChatAssetResponse.model_validate(asset)
+
+
+def _revision_response(revision: StudioChatAssetRevision) -> StudioChatAssetRevisionResponse:
+    return StudioChatAssetRevisionResponse.model_validate(revision)
+
+
 async def _get_thread_or_404(db: AsyncSession, thread_id: uuid.UUID) -> StudioChatThread:
     result = await db.execute(select(StudioChatThread).where(StudioChatThread.id == thread_id))
     thread = result.scalar_one_or_none()
     if not thread:
         raise HTTPException(status_code=404, detail="Studio chat thread not found")
     return thread
+
+
+async def _get_chat_asset_or_404(
+    db: AsyncSession,
+    asset_id: str,
+    thread_id: uuid.UUID | None = None,
+) -> StudioChatAsset:
+    query = select(StudioChatAsset).where(StudioChatAsset.asset_id == asset_id)
+    if thread_id:
+        query = query.where(StudioChatAsset.thread_id == thread_id)
+    result = await db.execute(query.order_by(StudioChatAsset.updated_at.desc()))
+    asset = result.scalars().first()
+    if not asset:
+        raise HTTPException(status_code=404, detail="Studio chat asset not found")
+    return asset
+
+
+def _state_paths_from_payload(payload: dict) -> tuple[str | None, str | None]:
+    artifact_paths = payload.get("artifact_paths") if isinstance(payload.get("artifact_paths"), list) else []
+    source_blend_path = str(payload.get("source_blend_path") or "") or None
+    if not source_blend_path:
+        source_blend_path = next(
+            (str(path) for path in artifact_paths if str(path).lower().endswith(".blend")),
+            None,
+        )
+    glb_path = next((str(path) for path in artifact_paths if str(path).lower().endswith(".glb")), None)
+    return source_blend_path, glb_path
+
+
+def _as_number_list(value: object, *, length: int = 3) -> list[float] | None:
+    if not isinstance(value, list) or len(value) != length:
+        return None
+    numbers = []
+    for item in value:
+        if not isinstance(item, int | float):
+            return None
+        numbers.append(float(item))
+    return numbers
+
+
+def _primitive_matches_target(primitive: dict, target: str | None) -> bool:
+    if not target or target in {"whole_asset", "asset", "*"}:
+        return True
+    lowered = target.lower()
+    for key in ("id", "label", "name", "role"):
+        value = primitive.get(key)
+        if isinstance(value, str) and value.lower() == lowered:
+            return True
+    return False
+
+
+def _construction_graph_elements(state: dict) -> list[dict]:
+    graphs = []
+    root_graph = state.get("construction_graph")
+    if isinstance(root_graph, dict):
+        graphs.append(root_graph)
+    asset_intent = state.get("asset_intent")
+    if isinstance(asset_intent, dict) and isinstance(asset_intent.get("construction_graph"), dict):
+        graphs.append(asset_intent["construction_graph"])
+    elements = []
+    for graph in graphs:
+        graph_elements = graph.get("elements")
+        if isinstance(graph_elements, list):
+            elements.extend(element for element in graph_elements if isinstance(element, dict))
+    return elements
+
+
+def _element_matches_target(element: dict, target: str | None) -> bool:
+    if not target or target in {"whole_asset", "asset", "*"}:
+        return True
+    lowered = target.lower()
+    for key in ("id", "label", "name", "role"):
+        value = element.get(key)
+        if isinstance(value, str) and value.lower() == lowered:
+            return True
+    return False
+
+
+def _numeric_factor(edit_delta: dict, default: float | None = None) -> float | None:
+    value = edit_delta.get("factor")
+    if value is None:
+        value = edit_delta.get("scale_factor")
+    if value is None:
+        value = edit_delta.get("amount")
+    if value is None:
+        return default
+    if not isinstance(value, int | float):
+        return None
+    factor = float(value)
+    return factor if 0.01 <= factor <= 20.0 else None
+
+
+def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dict, list[dict], bool]:
+    diagnostics: list[dict] = []
+    state_after = json.loads(json.dumps(state_before or {}))
+    primitives = state_after.get("primitives")
+    if not isinstance(primitives, list) or not primitives:
+        return state_after, [
+            {
+                "type": "compile_blocked",
+                "message": "Asset state has no compiled primitives to edit deterministically.",
+            }
+        ], False
+
+    operation = str(edit_delta.get("operation") or "").strip().lower()
+    target = edit_delta.get("target")
+    matched = [
+        primitive
+        for primitive in primitives
+        if isinstance(primitive, dict) and _primitive_matches_target(primitive, target)
+    ]
+    if not matched:
+        return state_after, [
+            {
+                "type": "compile_blocked",
+                "message": f"Edit target does not match a known primitive or part: {target}",
+            }
+        ], False
+
+    material = edit_delta.get("material") or edit_delta.get("color")
+    location = _as_number_list(edit_delta.get("location") or edit_delta.get("position"))
+    location_delta = _as_number_list(edit_delta.get("location_delta") or edit_delta.get("delta_location"))
+    rotation = _as_number_list(edit_delta.get("rotation"))
+    scale = _as_number_list(edit_delta.get("scale"))
+    amount = edit_delta.get("amount")
+    semantic_direction = str(edit_delta.get("semantic_direction") or "").strip().lower()
+    axis = str(edit_delta.get("axis") or "").strip().lower()
+    graph_elements = [
+        element
+        for element in _construction_graph_elements(state_after)
+        if _element_matches_target(element, target)
+    ]
+
+    changed = False
+    for primitive in matched:
+        transform = primitive.setdefault("transform", {})
+        current_scale = _as_number_list(transform.get("scale")) or [1.0, 1.0, 1.0]
+        if material and operation in {"set_material", "material", "recolor", "change_color", "color"}:
+            primitive["material"] = str(material)
+            changed = True
+        elif location and operation in {"set_location", "position", "move_to"}:
+            transform["location"] = location
+            changed = True
+        elif location_delta or operation in {"translate", "move", "adjust_position"}:
+            current = _as_number_list(transform.get("location")) or [0.0, 0.0, 0.0]
+            delta = location_delta
+            if not delta and isinstance(amount, int | float) and semantic_direction:
+                direction_vectors = {
+                    "front": [float(amount), 0.0, 0.0],
+                    "forward": [float(amount), 0.0, 0.0],
+                    "rear": [-float(amount), 0.0, 0.0],
+                    "back": [-float(amount), 0.0, 0.0],
+                    "left": [0.0, -float(amount), 0.0],
+                    "right": [0.0, float(amount), 0.0],
+                    "up": [0.0, 0.0, float(amount)],
+                    "down": [0.0, 0.0, -float(amount)],
+                }
+                delta = direction_vectors.get(semantic_direction)
+            if not delta:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Move edit requires location_delta or semantic_direction plus amount.",
+                })
+                continue
+            transform["location"] = [current[idx] + delta[idx] for idx in range(3)]
+            changed = True
+        elif rotation and operation in {"set_rotation", "rotate"}:
+            transform["rotation"] = rotation
+            changed = True
+        elif scale and operation in {"set_scale", "scale", "resize"}:
+            transform["scale"] = scale
+            changed = True
+        elif operation in {"proportional_scale", "scale_relative", "scale_uniform"}:
+            factor = _numeric_factor(edit_delta)
+            if factor is None:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Proportional scale edit requires numeric factor between 0.01 and 20.0.",
+                })
+                continue
+            transform["scale"] = [component * factor for component in current_scale]
+            if not target or target in {"whole_asset", "asset", "*"}:
+                current_location = _as_number_list(transform.get("location")) or [0.0, 0.0, 0.0]
+                transform["location"] = [component * factor for component in current_location]
+            changed = True
+        elif operation in {"scale_axis", "resize_axis"}:
+            factor = _numeric_factor(edit_delta)
+            axis_map = {"x": 0, "+x": 0, "-x": 0, "y": 1, "+y": 1, "-y": 1, "z": 2, "+z": 2, "-z": 2}
+            axis_index = axis_map.get(axis)
+            if factor is None or axis_index is None:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Axis scale edit requires axis x/y/z and numeric factor between 0.01 and 20.0.",
+                })
+                continue
+            next_scale = current_scale.copy()
+            next_scale[axis_index] *= factor
+            transform["scale"] = next_scale
+            changed = True
+        elif operation in {"set_thickness", "adjust_thickness"}:
+            current_thickness = float(current_scale[0])
+            if operation == "adjust_thickness" and isinstance(amount, int | float):
+                thickness = current_thickness + float(amount)
+            else:
+                thickness = float(amount) if isinstance(amount, int | float) else None
+            if thickness is None or not 0.01 <= thickness <= 20.0:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Thickness edit requires numeric amount that resolves between 0.01 and 20.0.",
+                })
+                continue
+            next_scale = current_scale.copy()
+            next_scale[0] = thickness
+            next_scale[1] = thickness
+            transform["scale"] = next_scale
+            construction_element = primitive.get("construction_element")
+            if isinstance(construction_element, dict):
+                construction_element["thickness"] = thickness
+            changed = True
+        else:
+            diagnostics.append({
+                "type": "compile_blocked",
+                "message": f"Unsupported deterministic edit operation: {operation}",
+            })
+
+    if changed and operation in {"proportional_scale", "scale_relative", "scale_uniform"}:
+        factor = _numeric_factor(edit_delta)
+        if factor is not None:
+            for element in graph_elements:
+                for key in ("from", "to"):
+                    vector = _as_number_list(element.get(key))
+                    if vector:
+                        element[key] = [component * factor for component in vector]
+                if isinstance(element.get("thickness"), int | float):
+                    element["thickness"] = float(element["thickness"]) * factor
+    if changed and operation in {"set_thickness", "adjust_thickness"}:
+        for element in graph_elements:
+            if isinstance(amount, int | float):
+                element["thickness"] = float(amount) if operation == "set_thickness" else float(element.get("thickness") or 0) + float(amount)
+
+    if not changed:
+        return state_after, diagnostics, False
+    state_after["last_edit_delta"] = edit_delta
+    state_after["pending_edit"] = False
+    state_after["source"] = "studio_chat_asset_edit"
+    diagnostics.append({
+        "type": "compiled",
+        "message": f"Compiled {operation} edit for {len(matched)} target primitive(s).",
+    })
+    return state_after, diagnostics, True
+
+
+async def _record_asset_revision(
+    db: AsyncSession,
+    *,
+    asset: StudioChatAsset,
+    revision_number: int,
+    parent_revision: int | None,
+    message_id: uuid.UUID | None,
+    job_id: uuid.UUID | None,
+    state_before: dict,
+    edit_delta: dict,
+    state_after: dict,
+    source_blend_path: str | None,
+    glb_path: str | None,
+    review_artifacts: list | None = None,
+    status_value: str = "created",
+) -> StudioChatAssetRevision:
+    revision = StudioChatAssetRevision(
+        chat_asset_id=asset.id,
+        revision=revision_number,
+        parent_revision=parent_revision,
+        message_id=message_id,
+        job_id=job_id,
+        state_before=state_before,
+        edit_delta=edit_delta,
+        state_after=state_after,
+        source_blend_path=source_blend_path,
+        glb_path=glb_path,
+        review_artifacts=review_artifacts or [],
+        status=status_value,
+    )
+    db.add(revision)
+    return revision
+
+
+async def _upsert_asset_state_from_build(
+    db: AsyncSession,
+    *,
+    thread_id: uuid.UUID,
+    message_id: uuid.UUID | None,
+    job: Job,
+    spec: dict,
+    build_payload: dict,
+) -> tuple[StudioChatAsset, StudioChatAssetRevision]:
+    asset_id = str(spec.get("canonical_id") or "")
+    if not asset_id:
+        raise ValueError("spec canonical_id is required for asset state")
+    result = await db.execute(
+        select(StudioChatAsset).where(
+            StudioChatAsset.thread_id == thread_id,
+            StudioChatAsset.asset_id == asset_id,
+        )
+    )
+    asset = result.scalar_one_or_none()
+    now = _now()
+    state_before = dict(asset.state_json) if asset and isinstance(asset.state_json, dict) else {}
+    source_blend_path, glb_path = _state_paths_from_payload(build_payload)
+    state_after = {
+        **spec,
+        "asset_id": asset_id,
+        "source_job_id": str(job.id),
+        "source": "studio_chat_build",
+    }
+    if asset:
+        parent_revision = asset.current_revision
+        revision_number = asset.current_revision + 1
+        asset.current_revision = revision_number
+        asset.state_json = state_after
+        asset.source_blend_path = source_blend_path or asset.source_blend_path
+        asset.glb_path = glb_path or asset.glb_path
+        asset.updated_at = now
+    else:
+        parent_revision = None
+        revision_number = 1
+        asset = StudioChatAsset(
+            thread_id=thread_id,
+            asset_id=asset_id,
+            base_builder=str(build_payload.get("tool") or "primitive_asset_builder"),
+            current_revision=revision_number,
+            state_json=state_after,
+            source_blend_path=source_blend_path,
+            glb_path=glb_path,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(asset)
+        await db.flush()
+    revision = await _record_asset_revision(
+        db,
+        asset=asset,
+        revision_number=revision_number,
+        parent_revision=parent_revision,
+        message_id=message_id,
+        job_id=job.id,
+        state_before=state_before,
+        edit_delta={"operation": "initial_build"},
+        state_after=state_after,
+        source_blend_path=source_blend_path,
+        glb_path=glb_path,
+        status_value="build_created",
+    )
+    return asset, revision
+
+
+def _edit_build_job_from_state(
+    *,
+    asset: StudioChatAsset,
+    revision_number: int,
+    state_after: dict,
+    edit_delta: dict,
+    priority: int = 0,
+) -> tuple[Job, str, str]:
+    spec = PrimitiveBuildSpec.model_validate(state_after)
+    creative_request = str(
+        edit_delta.get("creative_request")
+        or edit_delta.get("description")
+        or state_after.get("creative_request")
+        or f"Edit {asset.asset_id} revision {revision_number}"
+    )
+    payload = _build_job_payload(creative_request, spec)
+    review_url = ""
+    asset_review_url = f"/review/assets/{spec.canonical_id}"
+    asset_path_template = payload["payload"]["artifact_paths"][0]
+    payload["payload"] = {
+        **payload["payload"],
+        "post_build_review": {
+            "enabled": True,
+            "asset_id": spec.canonical_id,
+            "asset_name": spec.name,
+            "asset_kind": spec.kind,
+            "asset_path": asset_path_template,
+            "views": _review_render_views(STANDARD_REVIEW_VIEWS),
+            "quality": "preview",
+            "priority": priority + 10,
+            "gallery_url": asset_review_url,
+        },
+        "studio_chat": {
+            "source": "oeb-studio-chat",
+            "thread_id": str(asset.thread_id),
+            "asset_id": asset.asset_id,
+            "base_revision": asset.current_revision,
+            "target_revision": revision_number,
+            "edit_delta": edit_delta,
+            "review_views": STANDARD_REVIEW_VIEWS,
+        },
+    }
+    job = Job(
+        title=f"Edit {asset.asset_id} revision {revision_number}",
+        description=creative_request,
+        llm_response=json.dumps(edit_delta, indent=2, sort_keys=True),
+        required_capabilities=payload["required_capabilities"],
+        policy=payload["policy"],
+        priority=priority,
+        payload=payload["payload"],
+        is_idempotent=True,
+    )
+    review_url = f"/review/jobs/{{job_id}}"
+    return job, review_url, asset_review_url
 
 
 async def _record_thread_event(
@@ -545,6 +1109,717 @@ async def list_studio_chat_job_trace(
     )
 
 
+async def _latest_thread_build_job(db: AsyncSession, thread_id: uuid.UUID) -> Job | None:
+    event_result = await db.execute(
+        select(StudioChatBuildEvent)
+        .where(
+            StudioChatBuildEvent.thread_id == thread_id,
+            StudioChatBuildEvent.event_type.in_(["review_ready", "build_created", "failure"]),
+            StudioChatBuildEvent.job_id.is_not(None),
+        )
+        .order_by(StudioChatBuildEvent.created_at.desc())
+    )
+    for event in event_result.scalars().all():
+        job_result = await db.execute(select(Job).where(Job.id == event.job_id))
+        job = job_result.scalar_one_or_none()
+        if job:
+            return job
+    return None
+
+
+async def _build_job_for_milestone(
+    db: AsyncSession,
+    thread_id: uuid.UUID,
+    build_job_id: uuid.UUID | None,
+) -> Job | None:
+    if build_job_id:
+        result = await db.execute(select(Job).where(Job.id == build_job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            raise HTTPException(status_code=404, detail="Build job not found")
+        return job
+    return await _latest_thread_build_job(db, thread_id)
+
+
+async def _review_job_for_build(db: AsyncSession, build_job: Job | None) -> Job | None:
+    if not build_job:
+        return None
+    result = await db.execute(
+        select(Job)
+        .where(
+            Job.payload["job_type"].as_string() == "asset.review_render",
+            Job.payload["parent_build_job_id"].as_string() == str(build_job.id),
+        )
+        .order_by(Job.created_at.desc())
+    )
+    return result.scalars().first()
+
+
+async def _job_artifacts(db: AsyncSession, job: Job | None) -> list[Artifact]:
+    if not job:
+        return []
+    result = await db.execute(
+        select(Artifact).where(Artifact.job_id == job.id).order_by(Artifact.created_at)
+    )
+    return list(result.scalars().all())
+
+
+@router.post(
+    "/threads/{thread_id}/milestones",
+    response_model=StudioChatMilestoneResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_studio_chat_thread_milestone(
+    thread_id: uuid.UUID,
+    body: StudioChatMilestoneCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    thread = await _get_thread_or_404(db, thread_id)
+    build_job = await _build_job_for_milestone(db, thread_id, body.build_job_id)
+    review_job = await _review_job_for_build(db, build_job)
+    build_payload = build_job.payload if build_job and isinstance(build_job.payload, dict) else {}
+    review_config = (
+        build_payload.get("post_build_review")
+        if isinstance(build_payload.get("post_build_review"), dict)
+        else {}
+    )
+    asset_id = str(review_config.get("asset_id") or "") or None
+    review_views = _chat_review_views(review_config.get("views") or [])
+    label = body.label.strip() if body.label and body.label.strip() else None
+    now = _now()
+    milestone_id = uuid.uuid4()
+    timestamp = now.strftime("%Y-%m-%d_%H%M%S")
+    asset_slug = _safe_slug(asset_id or thread.title or "thread")
+    label_slug = f"_{_safe_slug(label, 'milestone')}" if label else ""
+    bundle_name = f"{timestamp}_{asset_slug}{label_slug}_{milestone_id.hex[:8]}"
+    bundle_root = Path(get_settings().studio_chat_milestones_root) / bundle_name
+    bundle_root.mkdir(parents=True, exist_ok=False)
+
+    await record_studio_chat_trace(
+        db,
+        thread_id,
+        "milestone.requested",
+        "backend",
+        "Milestone requested",
+        {
+            "milestone_id": str(milestone_id),
+            "label": label,
+            "build_job_id": str(build_job.id) if build_job else None,
+            "review_job_id": str(review_job.id) if review_job else None,
+        },
+        message_id=body.message_id,
+        job_id=build_job.id if build_job else None,
+    )
+
+    files: list[dict] = []
+    renders: list[dict] = []
+
+    def add_json_file(source: str, relative_path: str, payload: dict | list) -> None:
+        size = _write_json(bundle_root / relative_path, payload)
+        files.append({
+            "source": source,
+            "path": relative_path,
+            "filename": Path(relative_path).name,
+            "url": _milestone_file_url(milestone_id, relative_path),
+            "size_bytes": size,
+        })
+
+    def add_text_file(source: str, relative_path: str, text: str) -> None:
+        size = _write_text(bundle_root / relative_path, text)
+        files.append({
+            "source": source,
+            "path": relative_path,
+            "filename": Path(relative_path).name,
+            "url": _milestone_file_url(milestone_id, relative_path),
+            "size_bytes": size,
+        })
+
+    if build_job:
+        add_json_file("build_job", "artifacts/build_job.json", JobSummary.model_validate(build_job).model_dump(mode="json"))
+        add_json_file("build_payload", "artifacts/build_payload.json", build_payload)
+        spec_json = (
+            build_payload.get("conversation", {}).get("spec")
+            if isinstance(build_payload.get("conversation"), dict)
+            else None
+        )
+        if isinstance(spec_json, dict):
+            add_json_file("asset_state", "state/asset_state.json", spec_json)
+    if review_job:
+        add_json_file("review_job", "artifacts/review_job.json", JobSummary.model_validate(review_job).model_dump(mode="json"))
+        add_json_file("review_payload", "artifacts/review_payload.json", review_job.payload or {})
+
+    trace_result = await db.execute(
+        select(StudioChatTraceEvent)
+        .where(StudioChatTraceEvent.thread_id == thread_id)
+        .order_by(StudioChatTraceEvent.created_at)
+    )
+    trace_payload = [
+        StudioChatTraceEventResponse.model_validate(event).model_dump(mode="json")
+        for event in trace_result.scalars().all()
+    ]
+    add_json_file("studio_chat_trace", "traces/studio_chat_trace.json", trace_payload)
+
+    message_result = await db.execute(
+        select(StudioChatMessageRecord)
+        .where(StudioChatMessageRecord.thread_id == thread_id)
+        .order_by(StudioChatMessageRecord.created_at)
+    )
+    messages_payload = [
+        StudioChatThreadMessageResponse.model_validate(message).model_dump(mode="json")
+        for message in message_result.scalars().all()
+    ]
+    add_json_file("studio_chat_messages", "state/thread_messages.json", messages_payload)
+
+    build_artifacts = await _job_artifacts(db, build_job)
+    review_artifacts = await _job_artifacts(db, review_job)
+    render_by_view = image_artifacts_by_view(asset_id or "", review_artifacts) if asset_id else {}
+    expected_views = review_views or sorted(render_by_view)
+
+    for artifact in build_artifacts:
+        source = _artifact_file_path(artifact)
+        relative_path = f"artifacts/build/{Path(artifact.filename).name}"
+        size = _copy_file_if_available(source, bundle_root / relative_path)
+        if size is not None:
+            files.append({
+                "source": f"artifact:{artifact.id}",
+                "path": relative_path,
+                "filename": Path(relative_path).name,
+                "url": _milestone_file_url(milestone_id, relative_path),
+                "size_bytes": size,
+            })
+
+    if build_job:
+        job_output_dir = _find_job_output_dir(build_job.id)
+        if job_output_dir:
+            relative_path = f"working/jobs/{build_job.id}"
+            size = _copy_tree_if_available(job_output_dir, bundle_root / relative_path)
+            if size is not None:
+                files.append({
+                    "source": "job_output_directory",
+                    "path": relative_path,
+                    "filename": str(build_job.id),
+                    "url": None,
+                    "size_bytes": size,
+            })
+
+    copied_render_views = set()
+    for view, artifact in render_by_view.items():
+        display_view = _chat_review_views([view])[0]
+        suffix = Path(artifact.filename).suffix or ".png"
+        relative_path = f"renders/{display_view}{suffix}"
+        size = _copy_file_if_available(_artifact_file_path(artifact), bundle_root / relative_path)
+        if size is not None:
+            copied_render_views.add(display_view)
+            renders.append({
+                "view": display_view,
+                "path": relative_path,
+                "filename": Path(relative_path).name,
+                "url": _milestone_file_url(milestone_id, relative_path),
+                "source_artifact_id": str(artifact.id),
+                "size_bytes": size,
+            })
+
+    if review_job:
+        review_render_dir = _find_review_render_dir(review_job.id)
+        if review_render_dir:
+            for render_path in sorted(review_render_dir.iterdir()):
+                if render_path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}:
+                    continue
+                display_view = _view_from_render_filename(asset_id, render_path.name)
+                if not display_view or display_view in copied_render_views:
+                    continue
+                relative_path = f"renders/{display_view}{render_path.suffix.lower()}"
+                size = _copy_file_if_available(render_path, bundle_root / relative_path)
+                if size is not None:
+                    copied_render_views.add(display_view)
+                    renders.append({
+                        "view": display_view,
+                        "path": relative_path,
+                        "filename": Path(relative_path).name,
+                        "url": _milestone_file_url(milestone_id, relative_path),
+                        "source_artifact_id": None,
+                        "size_bytes": size,
+                    })
+
+    renders.sort(key=lambda render: render["view"])
+    missing_views = [view for view in expected_views if view not in copied_render_views]
+
+    readme_lines = [
+        "# Studio Chat Milestone",
+        "",
+        f"Created: {now.isoformat()}",
+        f"Thread: {thread_id}",
+        f"Label: {label or ''}",
+        f"Asset: {asset_id or ''}",
+        f"Build job: {build_job.id if build_job else ''}",
+        f"Review job: {review_job.id if review_job else ''}",
+        "",
+        "Saved renders:",
+        *[f"- {render['view']}: {render['path']}" for render in renders],
+        "",
+        "Missing views:",
+        *[f"- {view}" for view in missing_views],
+    ]
+    add_text_file("summary", "README.md", "\n".join(readme_lines).rstrip() + "\n")
+
+    manifest = {
+        "milestone_id": str(milestone_id),
+        "label": label,
+        "created_at": now.isoformat(),
+        "thread_id": str(thread_id),
+        "message_id": str(body.message_id) if body.message_id else None,
+        "asset_id": asset_id,
+        "revision": None,
+        "build_job_id": str(build_job.id) if build_job else None,
+        "review_job_id": str(review_job.id) if review_job else None,
+        "bundle_path": str(bundle_root),
+        "files": files,
+        "renders": renders,
+        "missing_views": missing_views,
+    }
+    _write_json(bundle_root / "milestone.json", manifest)
+    files.insert(0, {
+        "source": "milestone_manifest",
+        "path": "milestone.json",
+        "filename": "milestone.json",
+        "url": _milestone_file_url(milestone_id, "milestone.json"),
+        "size_bytes": (bundle_root / "milestone.json").stat().st_size,
+    })
+    manifest["files"] = files
+    _write_json(bundle_root / "milestone.json", manifest)
+
+    milestone = StudioChatMilestone(
+        id=milestone_id,
+        thread_id=thread_id,
+        message_id=body.message_id,
+        asset_id=asset_id,
+        revision=None,
+        label=label,
+        bundle_path=str(bundle_root),
+        manifest_json=manifest,
+        created_at=now,
+    )
+    db.add(milestone)
+    await _record_thread_event(
+        db,
+        thread_id,
+        "milestone_created",
+        {"milestone": manifest},
+        message_id=body.message_id,
+        job_id=build_job.id if build_job else None,
+        asset_id=asset_id,
+    )
+    await record_studio_chat_trace(
+        db,
+        thread_id,
+        "milestone.created",
+        "backend",
+        "Milestone created",
+        manifest,
+        message_id=body.message_id,
+        job_id=build_job.id if build_job else None,
+    )
+    thread.updated_at = now
+    await db.commit()
+    await db.refresh(milestone)
+    return _manifest_response(milestone)
+
+
+@router.get("/threads/{thread_id}/milestones", response_model=StudioChatMilestoneListResponse)
+async def list_studio_chat_thread_milestones(
+    thread_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_thread_or_404(db, thread_id)
+    result = await db.execute(
+        select(StudioChatMilestone)
+        .where(StudioChatMilestone.thread_id == thread_id)
+        .order_by(StudioChatMilestone.created_at.desc())
+    )
+    return StudioChatMilestoneListResponse(
+        milestones=[_manifest_response(milestone) for milestone in result.scalars().all()]
+    )
+
+
+@router.get("/threads/{thread_id}/assets", response_model=StudioChatAssetListResponse)
+async def list_studio_chat_thread_assets(
+    thread_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_thread_or_404(db, thread_id)
+    result = await db.execute(
+        select(StudioChatAsset)
+        .where(StudioChatAsset.thread_id == thread_id)
+        .order_by(StudioChatAsset.updated_at.desc())
+    )
+    return StudioChatAssetListResponse(assets=[_asset_response(asset) for asset in result.scalars().all()])
+
+
+@router.post(
+    "/assets/{asset_id}/milestones",
+    response_model=StudioChatMilestoneResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_studio_chat_asset_milestone(
+    asset_id: str,
+    body: StudioChatMilestoneCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    if not body.thread_id:
+        raise HTTPException(status_code=422, detail="thread_id is required to save an asset milestone")
+    await _get_thread_or_404(db, body.thread_id)
+    build_job = await _build_job_for_milestone(db, body.thread_id, body.build_job_id)
+    build_payload = build_job.payload if build_job and isinstance(build_job.payload, dict) else {}
+    review_config = (
+        build_payload.get("post_build_review")
+        if isinstance(build_payload.get("post_build_review"), dict)
+        else {}
+    )
+    effective_asset_id = str(review_config.get("asset_id") or "")
+    if effective_asset_id and effective_asset_id != asset_id:
+        raise HTTPException(status_code=422, detail="Build job asset does not match requested asset")
+    return await create_studio_chat_thread_milestone(body.thread_id, body, db)
+
+
+@router.get("/assets/{asset_id}/milestones", response_model=StudioChatMilestoneListResponse)
+async def list_studio_chat_asset_milestones(
+    asset_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(StudioChatMilestone)
+        .where(StudioChatMilestone.asset_id == asset_id)
+        .order_by(StudioChatMilestone.created_at.desc())
+    )
+    return StudioChatMilestoneListResponse(
+        milestones=[_manifest_response(milestone) for milestone in result.scalars().all()]
+    )
+
+
+@router.post(
+    "/assets",
+    response_model=StudioChatAssetResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_studio_chat_asset(
+    body: StudioChatAssetCreateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_thread_or_404(db, body.thread_id)
+    existing = await db.execute(
+        select(StudioChatAsset).where(
+            StudioChatAsset.thread_id == body.thread_id,
+            StudioChatAsset.asset_id == body.asset_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Studio chat asset already exists for this thread")
+    now = _now()
+    asset = StudioChatAsset(
+        thread_id=body.thread_id,
+        asset_id=body.asset_id,
+        base_builder=body.base_builder,
+        current_revision=1,
+        state_json=body.state_json,
+        source_blend_path=body.source_blend_path,
+        glb_path=body.glb_path,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(asset)
+    await db.flush()
+    revision = await _record_asset_revision(
+        db,
+        asset=asset,
+        revision_number=1,
+        parent_revision=None,
+        message_id=None,
+        job_id=None,
+        state_before={},
+        edit_delta={"operation": "manual_asset_state_create"},
+        state_after=body.state_json,
+        source_blend_path=body.source_blend_path,
+        glb_path=body.glb_path,
+        status_value="created",
+    )
+    await record_studio_chat_trace(
+        db,
+        body.thread_id,
+        "asset.state.created",
+        "backend",
+        "Studio Chat asset state created",
+        {
+            "asset": _asset_response(asset).model_dump(mode="json"),
+            "revision": _revision_response(revision).model_dump(mode="json"),
+        },
+    )
+    await db.commit()
+    await db.refresh(asset)
+    return _asset_response(asset)
+
+
+@router.get("/assets/{asset_id}/state", response_model=StudioChatAssetResponse)
+async def get_studio_chat_asset_state(
+    asset_id: str,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, thread_id)
+    return _asset_response(asset)
+
+
+@router.get("/assets/{asset_id}/revisions", response_model=StudioChatAssetRevisionListResponse)
+async def list_studio_chat_asset_revisions(
+    asset_id: str,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, thread_id)
+    result = await db.execute(
+        select(StudioChatAssetRevision)
+        .where(StudioChatAssetRevision.chat_asset_id == asset.id)
+        .order_by(StudioChatAssetRevision.revision)
+    )
+    return StudioChatAssetRevisionListResponse(
+        asset=_asset_response(asset),
+        revisions=[_revision_response(revision) for revision in result.scalars().all()],
+    )
+
+
+@router.post("/assets/{asset_id}/edits", response_model=StudioChatAssetEditResponse)
+async def create_studio_chat_asset_edit(
+    asset_id: str,
+    body: StudioChatAssetEditRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, body.thread_id)
+    if body.base_revision != asset.current_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Asset revision conflict",
+                "current_revision": asset.current_revision,
+                "requested_base_revision": body.base_revision,
+            },
+        )
+    now = _now()
+    state_before = dict(asset.state_json or {})
+    edit_delta = {
+        **body.edit_delta,
+        "target": body.target,
+        "operation": body.operation,
+        "view": body.view,
+        "semantic_direction": body.semantic_direction,
+        "amount": body.amount,
+        "preserve": body.preserve,
+    }
+    state_after, diagnostics, compiled = _compile_asset_edit_state(state_before, edit_delta)
+    revision_number = asset.current_revision + 1
+    asset.current_revision = revision_number
+    asset.state_json = state_after
+    asset.updated_at = now
+    job = None
+    review_url = None
+    asset_review_url = None
+    if compiled:
+        try:
+            job, _pending_review_url, asset_review_url = _edit_build_job_from_state(
+                asset=asset,
+                revision_number=revision_number,
+                state_after=state_after,
+                edit_delta=edit_delta,
+            )
+            db.add(job)
+            await db.flush()
+            review_url = f"/review/jobs/{job.id}"
+            job.payload = {
+                **(job.payload or {}),
+                "review_url": review_url,
+            }
+        except Exception as exc:
+            job = None
+            review_url = None
+            asset_review_url = None
+            diagnostics.append({
+                "type": "job_compile_failed",
+                "message": str(exc),
+            })
+    revision = await _record_asset_revision(
+        db,
+        asset=asset,
+        revision_number=revision_number,
+        parent_revision=body.base_revision,
+        message_id=body.message_id,
+        job_id=job.id if job else None,
+        state_before=state_before,
+        edit_delta=edit_delta,
+        state_after=state_after,
+        source_blend_path=asset.source_blend_path,
+        glb_path=asset.glb_path,
+        status_value="job_created" if job else "delta_recorded",
+    )
+    await _record_thread_event(
+        db,
+        asset.thread_id,
+        "asset_edit_compiled" if job else "asset_edit_recorded",
+        {
+            "asset": _asset_response(asset).model_dump(mode="json"),
+            "revision": _revision_response(revision).model_dump(mode="json"),
+            "job": JobSummary.model_validate(job).model_dump(mode="json") if job else None,
+            "review_url": review_url,
+            "asset_review_url": asset_review_url,
+            "diagnostics": diagnostics,
+        },
+        message_id=body.message_id,
+        job_id=job.id if job else None,
+        asset_id=asset.asset_id,
+    )
+    await record_studio_chat_trace(
+        db,
+        asset.thread_id,
+        "asset.edit.compiled" if job else "asset.edit.recorded",
+        "backend",
+        "Studio Chat asset edit delta compiled" if job else "Studio Chat asset edit delta recorded",
+        {
+            "asset": _asset_response(asset).model_dump(mode="json"),
+            "revision": _revision_response(revision).model_dump(mode="json"),
+            "job": JobSummary.model_validate(job).model_dump(mode="json") if job else None,
+            "review_url": review_url,
+            "asset_review_url": asset_review_url,
+            "diagnostics": diagnostics,
+        },
+        message_id=body.message_id,
+        job_id=job.id if job else None,
+    )
+    await db.commit()
+    await db.refresh(asset)
+    await db.refresh(revision)
+    if job:
+        await db.refresh(job)
+    return StudioChatAssetEditResponse(
+        asset=_asset_response(asset),
+        revision=_revision_response(revision),
+        accepted=True,
+        job_created=job is not None,
+        job=JobSummary.model_validate(job) if job else None,
+        review_url=review_url,
+        asset_review_url=asset_review_url,
+        diagnostics=diagnostics,
+    )
+
+
+@router.post("/assets/{asset_id}/revert", response_model=StudioChatAssetRevertResponse)
+async def revert_studio_chat_asset(
+    asset_id: str,
+    body: StudioChatAssetRevertRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, body.thread_id)
+    if body.base_revision != asset.current_revision:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Asset revision conflict",
+                "current_revision": asset.current_revision,
+                "requested_base_revision": body.base_revision,
+            },
+        )
+    target_result = await db.execute(
+        select(StudioChatAssetRevision).where(
+            StudioChatAssetRevision.chat_asset_id == asset.id,
+            StudioChatAssetRevision.revision == body.target_revision,
+        )
+    )
+    target_revision = target_result.scalar_one_or_none()
+    if not target_revision:
+        raise HTTPException(status_code=404, detail="Target revision not found")
+
+    state_before = dict(asset.state_json or {})
+    state_after = dict(target_revision.state_after or {})
+    revision_number = asset.current_revision + 1
+    asset.current_revision = revision_number
+    asset.state_json = state_after
+    asset.source_blend_path = target_revision.source_blend_path
+    asset.glb_path = target_revision.glb_path
+    asset.updated_at = _now()
+    revision = await _record_asset_revision(
+        db,
+        asset=asset,
+        revision_number=revision_number,
+        parent_revision=body.base_revision,
+        message_id=body.message_id,
+        job_id=None,
+        state_before=state_before,
+        edit_delta={"operation": "revert", "target_revision": body.target_revision},
+        state_after=state_after,
+        source_blend_path=asset.source_blend_path,
+        glb_path=asset.glb_path,
+        status_value="reverted",
+    )
+    await _record_thread_event(
+        db,
+        asset.thread_id,
+        "asset_reverted",
+        {
+            "asset": _asset_response(asset).model_dump(mode="json"),
+            "revision": _revision_response(revision).model_dump(mode="json"),
+            "reverted_to_revision": body.target_revision,
+        },
+        message_id=body.message_id,
+        asset_id=asset.asset_id,
+    )
+    await record_studio_chat_trace(
+        db,
+        asset.thread_id,
+        "asset.reverted",
+        "backend",
+        "Studio Chat asset reverted",
+        {
+            "asset": _asset_response(asset).model_dump(mode="json"),
+            "revision": _revision_response(revision).model_dump(mode="json"),
+            "reverted_to_revision": body.target_revision,
+        },
+        message_id=body.message_id,
+    )
+    await db.commit()
+    await db.refresh(asset)
+    await db.refresh(revision)
+    return StudioChatAssetRevertResponse(
+        asset=_asset_response(asset),
+        revision=_revision_response(revision),
+        reverted_to_revision=body.target_revision,
+    )
+
+
+@router.get("/milestones/{milestone_id}", response_model=StudioChatMilestoneResponse)
+async def get_studio_chat_milestone(
+    milestone_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(StudioChatMilestone).where(StudioChatMilestone.id == milestone_id))
+    milestone = result.scalar_one_or_none()
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    return _manifest_response(milestone)
+
+
+@router.get("/milestones/{milestone_id}/files/{relative_path:path}")
+async def get_studio_chat_milestone_file(
+    milestone_id: uuid.UUID,
+    relative_path: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(StudioChatMilestone).where(StudioChatMilestone.id == milestone_id))
+    milestone = result.scalar_one_or_none()
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    bundle_root = Path(milestone.bundle_path).resolve()
+    file_path = (bundle_root / relative_path).resolve()
+    if not file_path.is_relative_to(bundle_root) or not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Milestone file not found")
+    return FileResponse(file_path, filename=file_path.name)
+
+
 @router.post("/chat", response_model=StudioChatOllamaResponse)
 async def studio_chat_ollama(
     body: StudioChatOllamaRequest,
@@ -786,6 +2061,8 @@ async def create_studio_chat_build_job(
             "review_views": body.review_views,
         },
     ))
+    asset_state = None
+    asset_revision = None
     response_payload = StudioChatBuildJobResponse(
         job=job,
         review_url=review_url,
@@ -818,7 +2095,7 @@ async def create_studio_chat_build_job(
                 message_id=body.message_id,
                 job_id=job.id,
                 asset_id=spec.canonical_id,
-            )
+        )
         await _record_thread_event(
             db,
             effective_thread_id,
@@ -834,6 +2111,39 @@ async def create_studio_chat_build_job(
             job_id=job.id,
             asset_id=spec.canonical_id,
         )
+        asset_state, asset_revision = await _upsert_asset_state_from_build(
+            db,
+            thread_id=effective_thread_id,
+            message_id=body.message_id,
+            job=job,
+            spec=spec.model_dump(mode="json"),
+            build_payload=payload["payload"],
+        )
+        await _record_thread_event(
+            db,
+            effective_thread_id,
+            "asset_revision_created",
+            {
+                "asset": _asset_response(asset_state).model_dump(mode="json"),
+                "revision": _revision_response(asset_revision).model_dump(mode="json"),
+            },
+            message_id=body.message_id,
+            job_id=job.id,
+            asset_id=spec.canonical_id,
+        )
+        await record_studio_chat_trace(
+            db,
+            effective_thread_id,
+            "asset.revision.created",
+            "backend",
+            "Studio Chat asset revision created",
+            {
+                "asset": _asset_response(asset_state).model_dump(mode="json"),
+                "revision": _revision_response(asset_revision).model_dump(mode="json"),
+            },
+            message_id=body.message_id,
+            job_id=job.id,
+        )
         thread = await _get_thread_or_404(db, effective_thread_id)
         thread.updated_at = _now()
     await db.commit()
@@ -845,6 +2155,8 @@ async def create_studio_chat_build_job(
         spec=spec,
         review_views=body.review_views,
         resolver=resolver_output,
+        asset=_asset_response(asset_state) if asset_state else None,
+        revision=_revision_response(asset_revision) if asset_revision else None,
     )
 
 
@@ -874,7 +2186,16 @@ async def studio_chat_build_job_status(
     )
     review_job = review_result.scalars().first()
     artifacts: list[StudioChatReviewArtifact] = []
-    missing_views = _chat_review_views(review_config.get("views") or [])
+    readiness = {
+        "requested_views": normalize_review_views(review_config.get("views") or []),
+        "registered_views": [],
+        "uploaded_views": [],
+        "missing_registered_views": normalize_review_views(review_config.get("views") or []),
+        "missing_uploaded_views": normalize_review_views(review_config.get("views") or []),
+        "gallery_ready": False,
+        "diagnostics": [],
+    }
+    missing_views = _chat_review_views(readiness["missing_registered_views"])
     gallery_ready = False
     phase = build_job.status
 
@@ -885,8 +2206,11 @@ async def studio_chat_build_job_status(
         )
         review_artifacts = artifact_result.scalars().all()
         by_view = image_artifacts_by_view(asset_id, review_artifacts)
-        missing_views = _chat_review_views(missing_uploaded_views(review_job, review_artifacts))
-        gallery_ready = review_job.status == "completed" and not missing_views
+        readiness = review_artifact_readiness(review_job, review_artifacts)
+        missing_views = _chat_review_views(readiness["missing_registered_views"])
+        gallery_ready = review_job.status == "completed" and readiness["gallery_ready"]
+        if review_job.status == "completed" and not gallery_ready:
+            phase = "review_completed_attention"
         artifacts = [
             StudioChatReviewArtifact(
                 view=_chat_review_views([view])[0],
@@ -905,7 +2229,13 @@ async def studio_chat_build_job_status(
         asset_review_url=_asset_review_url(asset_id),
         review_job=JobSummary.model_validate(review_job) if review_job else None,
         gallery_ready=gallery_ready,
+        requested_views=_chat_review_views(readiness["requested_views"]),
+        registered_views=_chat_review_views(readiness["registered_views"]),
+        uploaded_views=_chat_review_views(readiness["uploaded_views"]),
         missing_views=missing_views,
+        missing_registered_views=missing_views,
+        missing_uploaded_views=_chat_review_views(readiness["missing_uploaded_views"]),
+        diagnostics=readiness["diagnostics"],
         artifacts=artifacts,
         phase=phase,
     )
@@ -938,6 +2268,8 @@ async def studio_chat_build_job_status(
         event_type = "review_ready"
     elif build_job.status == "failed" or (review_job and review_job.status == "failed"):
         event_type = "failure"
+    elif review_job and review_job.status == "completed" and not gallery_ready:
+        event_type = "review_attention"
     if event_type and effective_thread_id:
             await _record_thread_event(
                 db,
@@ -955,9 +2287,21 @@ async def studio_chat_build_job_status(
             await record_studio_chat_trace(
                 db,
                 effective_thread_id,
-                "review.ready" if event_type == "review_ready" else "review.failed",
+                (
+                    "review.ready"
+                    if event_type == "review_ready"
+                    else "review.attention"
+                    if event_type == "review_attention"
+                    else "review.failed"
+                ),
                 "harness",
-                "Review renders ready" if event_type == "review_ready" else "Review render failed",
+                (
+                    "Review renders ready"
+                    if event_type == "review_ready"
+                    else "Review render needs attention"
+                    if event_type == "review_attention"
+                    else "Review render failed"
+                ),
                 {
                     "build_status": response.model_dump(mode="json"),
                     "review_artifacts": [artifact.model_dump(mode="json") for artifact in artifacts],

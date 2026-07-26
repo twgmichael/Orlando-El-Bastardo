@@ -372,6 +372,38 @@ button:disabled {
   color: #bfdbfe;
 }
 
+.active-asset-panel {
+  border-bottom: 1px solid rgba(42, 46, 54, .8);
+  padding-bottom: .75rem;
+}
+
+.active-asset-label {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: .35rem;
+  text-transform: uppercase;
+}
+
+.active-revision-label {
+  margin-top: .65rem;
+}
+
+.active-asset-panel select {
+  width: 100%;
+}
+
+.revert-revision-button {
+  margin-top: .5rem;
+  width: 100%;
+}
+
+.active-asset-meta {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: .35rem;
+  overflow-wrap: anywhere;
+}
+
 .settings-panel {
   display: flex;
   flex-direction: column;
@@ -578,6 +610,24 @@ button:disabled {
   color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
+}
+
+.revision-render-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .75rem;
+  margin-top: .75rem;
+}
+
+.revision-artifact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem;
+  margin-top: .4rem;
+}
+
+.revision-render-thumb img {
+  aspect-ratio: 1.2;
 }
 
 .transcript {

@@ -6,7 +6,10 @@ from app.models.artifact import Artifact
 from app.models.asset import Asset
 from app.models.audit import AuditEvent
 from app.models.studio_chat import (
+    StudioChatAsset,
+    StudioChatAssetRevision,
     StudioChatBuildEvent,
+    StudioChatMilestone,
     StudioChatMessageRecord,
     StudioChatThread,
     StudioChatTraceEvent,
@@ -23,7 +26,10 @@ __all__ = [
     "Artifact",
     "Asset",
     "AuditEvent",
+    "StudioChatAsset",
+    "StudioChatAssetRevision",
     "StudioChatBuildEvent",
+    "StudioChatMilestone",
     "StudioChatMessageRecord",
     "StudioChatThread",
     "StudioChatTraceEvent",

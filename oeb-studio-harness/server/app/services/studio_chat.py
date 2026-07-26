@@ -61,6 +61,24 @@ Use asset_intent.semantic_geometry and/or asset_intent.construction_graph.
 When using construction_graph, return generic stroke elements with from/to
 coordinates, thickness, material, and role. The harness compiles those strokes;
 you are not writing Blender code.
+When an active_asset context is supplied and the user asks for a follow-up edit
+to that existing asset, return asset_edit_request instead of a fresh asset
+build. Preserve the active asset_id and use base_revision from the active asset.
+Example:
+{
+  "action": "edit_asset",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "asset_edit_request": {
+    "base_revision": 3,
+    "target": "left_wing",
+    "operation": "move",
+    "semantic_direction": "down",
+    "amount": 0.25,
+    "preserve": ["material", "attachments"]
+  }
+}
 Ask a clarifying question when the request is vague. Escalate
 ambiguous art direction, reference interpretation, or visual judgment.
 Do not write Blender code.
@@ -77,13 +95,30 @@ container level; asset_intent may be rich and descriptive."""
 
 ASSET_EDIT_TRANSLATOR_PROMPT = """You are the OEB local asset-edit translator.
 Translate conversational edits into strict JSON deltas against named assets and
-parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down. Prefer
-target_part, operation, semantic_direction, axis, amount, units, material_delta,
-requested_review_views, and escalation_reason. Ask one clarifying question if
-the target part, direction, or amount is unclear. Do not mutate files or submit
-worker jobs. For standard review renders, use requested_review_views:
-["top", "bottom", "left", "right", "front", "rear", "action"]. Use all seven
-views exactly, including "action". Return only JSON."""
+parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down.
+When active_asset context is supplied, return asset_edit_request with:
+base_revision, target, operation, view, semantic_direction, amount, preserve,
+and edit_delta. Supported generic operations include recolor, move,
+set_location, rotate, set_scale, proportional_scale, scale_axis, set_thickness,
+and adjust_thickness. Do not invent Blender APIs.
+Example:
+{
+  "action": "edit_asset",
+  "confidence": 1,
+  "clarification_question": null,
+  "escalation_reason": null,
+  "asset_edit_request": {
+    "base_revision": 4,
+    "target": "spine",
+    "operation": "proportional_scale",
+    "amount": 1.1,
+    "preserve": ["relationships", "materials"]
+  }
+}
+Ask one clarifying question if the target part, direction, or amount is unclear.
+Do not mutate files or submit worker jobs. For standard review renders, use
+requested_review_views: ["top", "bottom", "left", "right", "front", "rear",
+"action"]. Use all seven views exactly, including "action". Return only JSON."""
 
 SCENE_PLAN_EXTRACTOR_PROMPT = """You are the OEB local scene-plan extractor.
 Convert creative scene or location requests into strict JSON scene plans with

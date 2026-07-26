@@ -125,6 +125,8 @@ class StudioChatBuildJobResponse(BaseModel):
     spec: PrimitiveBuildSpec
     review_views: list[str]
     resolver: dict[str, Any] | None = None
+    asset: "StudioChatAssetResponse | None" = None
+    revision: "StudioChatAssetRevisionResponse | None" = None
     review_render_requested: bool = True
 
 
@@ -152,7 +154,13 @@ class StudioChatBuildJobStatusResponse(BaseModel):
     asset_review_url: str
     review_job: JobSummary | None = None
     gallery_ready: bool = False
+    requested_views: list[str] = Field(default_factory=list)
+    registered_views: list[str] = Field(default_factory=list)
+    uploaded_views: list[str] = Field(default_factory=list)
     missing_views: list[str] = Field(default_factory=list)
+    missing_registered_views: list[str] = Field(default_factory=list)
+    missing_uploaded_views: list[str] = Field(default_factory=list)
+    diagnostics: list[dict[str, Any]] = Field(default_factory=list)
     artifacts: list[StudioChatReviewArtifact] = Field(default_factory=list)
     phase: str = "queued"
 
@@ -270,6 +278,152 @@ class StudioChatTraceEventResponse(BaseModel):
 
 class StudioChatTraceEventListResponse(BaseModel):
     trace: list[StudioChatTraceEventResponse]
+
+
+class StudioChatMilestoneCreateRequest(BaseModel):
+    thread_id: uuid.UUID | None = None
+    message_id: uuid.UUID | None = None
+    build_job_id: uuid.UUID | None = None
+    label: str | None = None
+
+
+class StudioChatMilestoneFile(BaseModel):
+    source: str
+    path: str
+    filename: str
+    url: str | None = None
+    size_bytes: int | None = None
+
+
+class StudioChatMilestoneRender(BaseModel):
+    view: str
+    path: str
+    filename: str
+    url: str | None = None
+    source_artifact_id: uuid.UUID | None = None
+    size_bytes: int | None = None
+
+
+class StudioChatMilestoneResponse(BaseModel):
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    message_id: uuid.UUID | None
+    asset_id: str | None
+    revision: int | None
+    label: str | None
+    bundle_path: str
+    manifest: dict[str, Any]
+    files: list[StudioChatMilestoneFile] = Field(default_factory=list)
+    renders: list[StudioChatMilestoneRender] = Field(default_factory=list)
+    missing_views: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+
+class StudioChatMilestoneListResponse(BaseModel):
+    milestones: list[StudioChatMilestoneResponse]
+
+
+class StudioChatAssetCreateRequest(BaseModel):
+    thread_id: uuid.UUID
+    asset_id: str
+    base_builder: str | None = None
+    state_json: dict[str, Any] = Field(default_factory=dict)
+    source_blend_path: str | None = None
+    glb_path: str | None = None
+
+    @field_validator("asset_id")
+    @classmethod
+    def asset_id_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("asset_id must not be empty")
+        return value.strip()
+
+
+class StudioChatAssetResponse(BaseModel):
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    asset_id: str
+    base_builder: str | None
+    current_revision: int
+    state_json: dict[str, Any]
+    source_blend_path: str | None
+    glb_path: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StudioChatAssetRevisionResponse(BaseModel):
+    id: uuid.UUID
+    chat_asset_id: uuid.UUID
+    revision: int
+    parent_revision: int | None
+    message_id: uuid.UUID | None
+    job_id: uuid.UUID | None
+    state_before: dict[str, Any]
+    edit_delta: dict[str, Any]
+    state_after: dict[str, Any]
+    source_blend_path: str | None
+    glb_path: str | None
+    review_artifacts: list[Any]
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class StudioChatAssetRevisionListResponse(BaseModel):
+    asset: StudioChatAssetResponse
+    revisions: list[StudioChatAssetRevisionResponse]
+
+
+class StudioChatAssetListResponse(BaseModel):
+    assets: list[StudioChatAssetResponse]
+
+
+class StudioChatAssetEditRequest(BaseModel):
+    thread_id: uuid.UUID | None = None
+    message_id: uuid.UUID | None = None
+    base_revision: int = Field(ge=0)
+    target: str | None = None
+    operation: str
+    view: str | None = None
+    semantic_direction: str | None = None
+    amount: float | None = None
+    preserve: list[str] = Field(default_factory=list)
+    edit_delta: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("operation")
+    @classmethod
+    def operation_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("operation must not be empty")
+        return value.strip()
+
+
+class StudioChatAssetEditResponse(BaseModel):
+    asset: StudioChatAssetResponse
+    revision: StudioChatAssetRevisionResponse
+    accepted: bool = True
+    job_created: bool = False
+    job: JobSummary | None = None
+    review_url: str | None = None
+    asset_review_url: str | None = None
+    diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class StudioChatAssetRevertRequest(BaseModel):
+    thread_id: uuid.UUID | None = None
+    message_id: uuid.UUID | None = None
+    target_revision: int = Field(ge=1)
+    base_revision: int = Field(ge=0)
+
+
+class StudioChatAssetRevertResponse(BaseModel):
+    asset: StudioChatAssetResponse
+    revision: StudioChatAssetRevisionResponse
+    reverted_to_revision: int
 
 
 class StudioChatThreadDetail(BaseModel):

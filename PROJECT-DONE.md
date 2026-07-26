@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-20T10:40:00-04:00
+updated: 2026-07-26T00:00:00-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -16,6 +16,120 @@ wiki_order: 20
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-07-26 — Studio Chat revision browser
+
+Studio Chat now exposes active asset revision history directly in the browser.
+
+- Added revision-history controls for the selected active asset.
+- Added one-click UI rollback/revert to a selected prior revision.
+- Revert actions create visible chat turns and inline revision cards.
+- Edit revision cards now show explicit before/after revision context and can
+  display paired thumbnail strips when cached review artifacts are available.
+- Added local LLM prompt examples for producing `asset_edit_request` from active
+  asset context.
+- Expanded the generic edit compiler with proportional scale, axis scale, and
+  stroke thickness operations plus compile diagnostics.
+- Marked Studio Chat Milestone 15 TODOs complete.
+
+Validation:
+- Studio Chat targeted Docker tests passed: 43 tests.
+- Full local Docker harness suite passed: 153 tests.
+- Python compile checks passed for touched server modules.
+- `node --check` passed for `studio_chat.js`.
+
+---
+
+## 2026-07-26 — Studio Chat active asset edits
+
+Studio Chat now has the first active-asset edit loop.
+
+- Added thread asset listing so the browser can select the current
+  chat-managed asset and revision.
+- Added active asset context to local LLM requests so follow-up prompts can
+  return `asset_edit_request` instead of a fresh build.
+- Added a generic asset-edit compiler for deterministic deltas against compiled
+  asset state: material changes, translation, rotation, and scale.
+- Compiled edits enqueue deterministic rebuild/review jobs through the existing
+  harness job path; unsupported edits are recorded with diagnostics and do not
+  submit render work.
+- Added rollback/revert endpoint that selects a prior revision as the active
+  state with optimistic revision checks.
+- Added inline revision cards for compiled edits, recorded edits, and reverts.
+- Marked Studio Chat Milestone 14 TODOs complete.
+
+Validation:
+- Studio Chat targeted Docker tests passed: 41 tests.
+- Full local Docker harness suite passed: 151 tests.
+- Python compile checks passed for touched server modules.
+- `node --check` passed for `studio_chat.js`.
+
+---
+
+## 2026-07-26 — Studio Chat asset revision state
+
+Studio Chat now has a persistent asset-state layer for chat-managed assets.
+
+- Added `studio_chat_assets` and `studio_chat_asset_revisions` models plus
+  migration `0010_studio_chat_assets`.
+- Build-job creation now creates or updates the active chat asset state and
+  records the first build-backed revision.
+- Added asset state, revision list, and edit-delta endpoints with optimistic
+  revision conflict checks.
+- Edit deltas are recorded as reversible before/after state without letting the
+  local LLM mutate Blender files or submit unsupported render jobs.
+- Preserved `.blend` and GLB paths when the build payload exposes them.
+- Marked Studio Chat Milestone 13 TODOs complete.
+
+Validation:
+- Applied migration `0010_studio_chat_assets` in the Docker-backed local
+  database.
+- Studio Chat targeted Docker tests passed: 38 tests.
+- Full local Docker harness suite passed: 148 tests.
+- Python compile checks passed for touched server modules.
+
+---
+
+## 2026-07-26 — Studio Chat save milestones and review readiness correction
+
+Studio Chat now preserves useful progress states and no longer collapses
+usable render output into a generic failed state when gallery-readiness metadata
+is incomplete.
+
+Save milestone:
+- Added recognized chat commands: `save milestone`, `save this milestone`,
+  `snapshot progress`, and labeled variants such as `save milestone as ...`.
+- Added `studio_chat_milestones`, milestone schemas, create/list/detail
+  endpoints, and immutable milestone bundle storage.
+- Milestone bundles copy current working/job files, registered artifacts,
+  review renders, thread messages, trace data, job payloads, manifests, and
+  partial render sets with explicit missing-view diagnostics.
+- Studio Chat shows inline milestone cards with links to saved manifest,
+  README, and render images.
+- Applied migration `0009_studio_chat_milestones` in the Docker-backed local
+  database.
+
+Review readiness:
+- Centralized asset review view normalization, including canonical `back`
+  storage with `rear` display handling for Studio Chat.
+- Review render jobs now distinguish rendered/registered/uploaded/gallery-ready
+  state instead of marking completed renders as failed when metadata is
+  imperfect.
+- Studio Chat build status now reports requested, registered, uploaded,
+  missing registered, missing uploaded, diagnostics, gallery readiness, and
+  `review_completed_attention`.
+- Inline chat render cards keep showing available thumbnails even when review
+  readiness needs attention, and expose exact diagnostics.
+- Review asset pages use the same registered-view readiness semantics.
+- Added Docker-backed tests for view normalization and the failure mode where
+  render artifacts exist but strict gallery readiness is incomplete.
+
+Validation:
+- Full local Docker harness suite passed: 145 tests.
+- Python compile checks passed for touched server modules.
+- `node --check` passed for `studio_chat.js`.
 
 ---
 

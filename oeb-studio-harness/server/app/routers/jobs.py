@@ -17,7 +17,7 @@ from app.services.asset_review import (
     ReviewAsset,
     asset_review_gallery_url,
     create_asset_review_render_job as create_review_render_job_record,
-    missing_uploaded_views,
+    review_artifact_readiness,
     resolve_review_asset,
 )
 from app.services.worker_updates import worker_can_claim_jobs
@@ -487,17 +487,18 @@ async def complete_job(
 
     if (job.payload or {}).get("job_type") == "asset.review_render":
         artifacts_result = await db.execute(select(Artifact).where(Artifact.job_id == job_id))
-        missing_views = missing_uploaded_views(job, artifacts_result.scalars().all())
-        if missing_views:
+        readiness = review_artifact_readiness(job, artifacts_result.scalars().all())
+        if not readiness["gallery_ready"]:
             summary = dict(body.output_summary or {})
+            summary["review_readiness"] = readiness
             summary["gallery_ready"] = False
-            summary["missing_views"] = missing_views
+            summary["missing_views"] = readiness["missing_registered_views"]
+            summary["missing_uploaded_views"] = readiness["missing_uploaded_views"]
             if (job.payload or {}).get("asset_id"):
                 summary["gallery_url"] = asset_review_gallery_url((job.payload or {})["asset_id"])
             if attempt:
-                attempt.status = "failed"
                 attempt.output_summary = summary
-            job.status = "failed"
+            job.status = "completed"
             job.updated_at = now
             db.add(AuditEvent(
                 event_type="job.asset_review_render.gallery_not_ready",
@@ -505,7 +506,7 @@ async def complete_job(
                 actor_id=token.worker_id,
                 resource_type="job",
                 resource_id=str(job_id),
-                details={"missing_views": missing_views},
+                details=readiness,
             ))
             await db.commit()
             await db.refresh(job)

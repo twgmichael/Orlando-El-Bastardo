@@ -17,7 +17,7 @@ from app.services.asset_review import (
     create_asset_review_render_job,
     image_artifacts_by_view,
     list_review_assets,
-    missing_uploaded_views,
+    review_artifact_readiness,
     resolve_review_asset,
 )
 
@@ -139,8 +139,9 @@ async def review_asset(asset_id: str, request: Request, db: AsyncSession = Depen
         )
         artifacts = artifact_result.scalars().all()
         by_view = image_artifacts_by_view(asset.asset_id, artifacts)
-        missing_views = missing_uploaded_views(latest_job, artifacts)
-        gallery_ready = latest_job.status == "completed" and not missing_views
+        readiness = review_artifact_readiness(latest_job, artifacts)
+        missing_views = readiness["missing_registered_views"]
+        gallery_ready = latest_job.status == "completed" and readiness["gallery_ready"]
 
     action = by_view.get("action")
     return templates.TemplateResponse(request, "review_asset.html", {

@@ -16,6 +16,7 @@ from app.models.audit import AuditEvent
 from app.models.job import Job
 
 REVIEW_VIEWS = ("top", "bottom", "left", "right", "front", "back", "action")
+REVIEW_VIEW_ALIASES = {"rear": "back"}
 ANGLE_VIEWS = ("front", "back", "left", "right", "top", "bottom")
 RENDER_QUALITIES = {"draft", "preview", "final"}
 
@@ -69,6 +70,30 @@ def asset_review_gallery_url(asset_id: str, public_base_url: str | None = None) 
     if not public_base_url:
         return path
     return f"{public_base_url.rstrip('/')}{path}"
+
+
+def normalize_review_view(value: str | None) -> str | None:
+    if not value:
+        return None
+    view = str(value).strip().lower()
+    view = REVIEW_VIEW_ALIASES.get(view, view)
+    return view if view in REVIEW_VIEWS else None
+
+
+def display_review_view(value: str | None) -> str | None:
+    view = normalize_review_view(value)
+    if view == "back":
+        return "rear"
+    return view
+
+
+def normalize_review_views(values: Iterable[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for value in values or REVIEW_VIEWS:
+        view = normalize_review_view(value)
+        if view and view not in normalized:
+            normalized.append(view)
+    return normalized
 
 
 def _known_aliases(asset: ReviewAsset) -> set[str]:
@@ -189,7 +214,7 @@ async def create_asset_review_render_job(
     if quality not in RENDER_QUALITIES:
         raise HTTPException(status_code=422, detail="quality must be draft, preview, or final")
 
-    view_list = list(views)
+    view_list = normalize_review_views(views)
     required_capabilities = ["blender.final_render" if quality == "final" else "blender.preview_render"]
     if require_gpu_cycles:
         required_capabilities.append("gpu.cycles_render")
@@ -244,8 +269,8 @@ async def create_asset_review_render_job(
 
 def view_from_artifact(asset_id: str, artifact: Artifact) -> str | None:
     metadata = artifact.review_metadata or {}
-    view = metadata.get("view")
-    if view in REVIEW_VIEWS:
+    view = normalize_review_view(metadata.get("view"))
+    if view:
         return view
 
     stem = Path(artifact.filename).stem
@@ -254,7 +279,7 @@ def view_from_artifact(asset_id: str, artifact: Artifact) -> str | None:
         view = stem[len(prefix):]
     else:
         view = stem.rsplit("_", 1)[-1]
-    return view if view in REVIEW_VIEWS else None
+    return normalize_review_view(view)
 
 
 def image_artifacts_by_view(asset_id: str, artifacts: Iterable[Artifact]) -> dict[str, Artifact]:
@@ -275,10 +300,69 @@ def missing_uploaded_views(job: Job, artifacts: Iterable[Artifact]) -> list[str]
     asset_id = payload.get("asset_id")
     if not asset_id:
         return list(payload.get("views") or REVIEW_VIEWS)
-    requested = set(payload.get("views") or REVIEW_VIEWS)
+    requested = set(normalize_review_views(payload.get("views") or REVIEW_VIEWS))
     uploaded = {
         view
         for view, artifact in image_artifacts_by_view(asset_id, artifacts).items()
         if view in requested and artifact.provenance == "uploaded"
     }
     return [view for view in REVIEW_VIEWS if view in requested and view not in uploaded]
+
+
+def review_artifact_readiness(job: Job, artifacts: Iterable[Artifact]) -> dict:
+    payload = job.payload or {}
+    requested = normalize_review_views(payload.get("views") or REVIEW_VIEWS)
+    asset_id = payload.get("asset_id")
+    if payload.get("job_type") != "asset.review_render" or not asset_id:
+        return {
+            "requested_views": [],
+            "registered_views": [],
+            "uploaded_views": [],
+            "missing_registered_views": [],
+            "missing_uploaded_views": [],
+            "gallery_ready": False,
+            "diagnostics": [],
+        }
+
+    artifact_list = list(artifacts)
+    by_view = image_artifacts_by_view(str(asset_id), artifact_list)
+    registered_views = [view for view in REVIEW_VIEWS if view in requested and view in by_view]
+    uploaded_views = [
+        view
+        for view in registered_views
+        if by_view[view].provenance == "uploaded"
+    ]
+    missing_registered_views = [
+        view for view in REVIEW_VIEWS if view in requested and view not in registered_views
+    ]
+    missing_uploaded = [
+        view for view in REVIEW_VIEWS if view in requested and view not in uploaded_views
+    ]
+    diagnostics = []
+    if missing_registered_views:
+        diagnostics.append({
+            "type": "missing_registered_views",
+            "views": missing_registered_views,
+            "message": "No registered image artifact matched these requested review views.",
+        })
+    backfilled = [
+        view
+        for view in registered_views
+        if by_view[view].provenance != "uploaded"
+    ]
+    if backfilled:
+        diagnostics.append({
+            "type": "non_uploaded_artifacts",
+            "views": backfilled,
+            "message": "Registered view artifacts exist but were not uploaded by the worker.",
+        })
+
+    return {
+        "requested_views": requested,
+        "registered_views": registered_views,
+        "uploaded_views": uploaded_views,
+        "missing_registered_views": missing_registered_views,
+        "missing_uploaded_views": missing_uploaded,
+        "gallery_ready": not missing_registered_views,
+        "diagnostics": diagnostics,
+    }

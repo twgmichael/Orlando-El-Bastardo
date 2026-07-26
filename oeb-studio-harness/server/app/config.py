@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +28,7 @@ class Settings(BaseSettings):
     )
 
     artifacts_root: str = Field(default="/srv/oeb-studio-harness/artifacts", alias="ARTIFACTS_ROOT")
+    studio_chat_milestones_root: str = Field(default="", alias="OEB_STUDIO_CHAT_MILESTONES_ROOT")
     artifact_public_base_url: str = Field(default="", alias="ARTIFACT_PUBLIC_BASE_URL")
     artifact_worker_path_prefix: str = Field(default="", alias="ARTIFACT_WORKER_PATH_PREFIX")
     artifact_server_path_prefix: str = Field(default="", alias="ARTIFACT_SERVER_PATH_PREFIX")
@@ -70,6 +72,8 @@ class Settings(BaseSettings):
             self.database_url_sync = self.database_url.replace(
                 "postgresql+asyncpg://", "postgresql://"
             )
+        if not self.studio_chat_milestones_root:
+            self.studio_chat_milestones_root = str(Path(self.artifacts_root).parent / "milestones")
         return self
 
 
