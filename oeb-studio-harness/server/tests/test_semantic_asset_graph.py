@@ -335,6 +335,53 @@ def test_legacy_align_centers_with_one_target_requests_clarification():
     assert result.diagnostics[0].code == "insufficient_alignment_targets"
 
 
+def test_match_width_resize_derives_factor_and_resolves_on_top_relationship():
+    graph = SemanticAssetGraph.model_validate(
+        {
+            "asset_id": "rocket_A",
+            "revision": 3,
+            "parts": [
+                {
+                    "id": "rocket_top_cone",
+                    "geometry": {"type": "cone"},
+                    "transform": {"location": [0, 0, 1.2], "scale": [1, 1, 1]},
+                },
+                {
+                    "id": "rocket_body_tube",
+                    "geometry": {"type": "cylinder"},
+                    "transform": {"location": [0, 0, 0], "scale": [0.4, 0.4, 1.4]},
+                },
+            ],
+            "relationships": [
+                {
+                    "id": "cone_on_tube",
+                    "type": "on_top_of",
+                    "subject": "rocket_top_cone",
+                    "target": "rocket_body_tube",
+                }
+            ],
+        }
+    )
+
+    result = compile_graph_operation(
+        graph,
+        GraphOperationRequest(
+            operation="resize",
+            base_revision=3,
+            intent="Reduce the cone width and height proportional to match the tube width.",
+            target_ids=["rocket_top_cone"],
+            parameters={"amount": [0.5, 0.5, 1], "mode": "proportional"},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    cone = next(part for part in result.graph_after.parts if part.id == "rocket_top_cone")
+    assert cone.transform.scale == [0.35, 0.35, 0.35]
+    assert cone.transform.location == [0.0, 0.0, 0.875]
+    assert result.diagnostics[0].code == "match_width_resize_normalized"
+    assert result.diagnostics[0].details["reference_id"] == "rocket_body_tube"
+
+
 def test_failed_compile_does_not_change_input_state():
     graph = _graph()
     before = copy.deepcopy(graph.model_dump(mode="json"))

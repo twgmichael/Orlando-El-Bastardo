@@ -783,6 +783,15 @@
               reference_id: "<stationary_part_id>",
             },
           },
+          resize_part_to_match_width: {
+            operation: "resize",
+            target: "<resized_part_id>",
+            edit_delta: {
+              mode: "match_reference_width",
+              reference_id: "<stationary_reference_id>",
+              proportional: true,
+            },
+          },
           cut_half_sphere: {
             operation: "replace",
             target: "<sphere_id>",
@@ -1483,6 +1492,8 @@
         "For 'center/middle the objects', use operation move, target whole_asset, edit_delta {\"mode\":\"align_centers_xy\"}.",
         "For 'move X to the top of Y', use operation move, target X, edit_delta {\"relation\":\"on_top_of\",\"reference_id\":\"Y\"}.",
         "The target is the moving part and reference_id is stationary. Use exact ids from the active semantic graph.",
+        "For 'resize/reduce X proportionally to match Y width', use operation resize, target X, edit_delta {\"mode\":\"match_reference_width\",\"reference_id\":\"Y\",\"proportional\":true}.",
+        "Do not guess a numeric factor for match requests; the compiler measures both parts.",
         "For 'replace X with Y', use operation replace, target X, edit_delta {\"type\": Y}.",
         "For 'remove/delete X', use operation remove, target X.",
         "For 'add/create X below/above/near Y', use operation add, target Y, semantic_direction below/above/near, edit_delta {\"type\": X}.",

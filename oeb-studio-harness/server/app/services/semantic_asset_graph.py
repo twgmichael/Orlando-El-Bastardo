@@ -524,6 +524,21 @@ def _vertical_half_extent(part: dict[str, Any]) -> float:
     return scale_z / 2.0
 
 
+def _horizontal_diameter(part: dict[str, Any]) -> float:
+    geometry = part.get("geometry") if isinstance(part.get("geometry"), dict) else {}
+    parameters = geometry.get("parameters") if isinstance(geometry.get("parameters"), dict) else {}
+    scale = part.get("transform", {}).get("scale", [1.0, 1.0, 1.0])
+    scale_x = abs(float(scale[0])) if isinstance(scale, list) and len(scale) == 3 else 1.0
+    scale_y = abs(float(scale[1])) if isinstance(scale, list) and len(scale) == 3 else 1.0
+    geometry_type = str(geometry.get("type") or "").lower()
+    if geometry_type == "sphere":
+        return 2.0 * abs(float(parameters.get("radius", 0.5))) * max(scale_x, scale_y)
+    if geometry_type in {"cylinder", "cone"}:
+        default_radius = 0.35 if geometry_type == "cylinder" else 0.4
+        return 2.0 * abs(float(parameters.get("radius", default_radius))) * max(scale_x, scale_y)
+    return max(scale_x, scale_y)
+
+
 def _upsert_spatial_relationship(
     graph_data: dict[str, Any],
     *,
@@ -547,6 +562,36 @@ def _upsert_spatial_relationship(
         "target": target,
         "parameters": {},
     })
+
+
+def _solve_spatial_relationships(graph_data: dict[str, Any], changed_ids: set[str]) -> None:
+    parts = {part["id"]: part for part in graph_data["parts"]}
+    for relationship in graph_data["relationships"]:
+        subject = parts.get(relationship["subject"])
+        target = parts.get(relationship["target"])
+        if subject is None or target is None:
+            continue
+        if subject["id"] not in changed_ids and target["id"] not in changed_ids:
+            continue
+        relation = relationship["type"]
+        target_location = target["transform"]["location"]
+        if relation in {"on_top_of", "above"}:
+            subject["transform"]["location"] = [
+                target_location[0],
+                target_location[1],
+                round(
+                    target_location[2]
+                    + _vertical_half_extent(target)
+                    + _vertical_half_extent(subject),
+                    9,
+                ),
+            ]
+        elif relation in {"below", "under"}:
+            subject["transform"]["location"] = [
+                target_location[0],
+                target_location[1],
+                target_location[2] - _vertical_half_extent(target) - _vertical_half_extent(subject),
+            ]
 
 
 def _edit_distance_at_most_one(left: str, right: str) -> bool:
@@ -648,11 +693,58 @@ def _normalize_relational_move_intent(
     )
 
 
+def _normalize_match_width_resize_intent(
+    graph: SemanticAssetGraph,
+    request: GraphOperationRequest,
+) -> tuple[GraphOperationRequest, GraphDiagnostic | None]:
+    intent = str(request.intent or "").strip().lower()
+    match = re.search(
+        r"\b(?:reduce|resize|scale|shrink)\s+(?:the\s+)?([a-z0-9_-]+)"
+        r".*?\bmatch\s+(?:the\s+)?([a-z0-9_-]+)(?:'s)?\s+width\b",
+        intent,
+    )
+    if not match:
+        return request, None
+    target_term, reference_term = match.groups()
+    target_id = _unique_part_for_term(graph, target_term)
+    reference_id = _unique_part_for_term(graph, reference_term)
+    if not target_id or not reference_id or target_id == reference_id:
+        return request, None
+    normalized = request.model_copy(
+        update={
+            "operation": "resize",
+            "target_ids": [target_id],
+            "parameters": {
+                **request.parameters,
+                "mode": "match_reference_width",
+                "reference_id": reference_id,
+                "proportional": True,
+            },
+        }
+    )
+    return normalized, GraphDiagnostic(
+        stage="normalize",
+        code="match_width_resize_normalized",
+        message=f"Normalized proportional resize: match {target_id} width to {reference_id}.",
+        details={
+            "original_operation": request.operation,
+            "target": target_id,
+            "reference_id": reference_id,
+        },
+    )
+
+
 def compile_graph_operation(
     graph: SemanticAssetGraph,
     request: GraphOperationRequest,
 ) -> GraphOperationResult:
-    request, normalization_diagnostic = _normalize_relational_move_intent(graph, request)
+    normalization_diagnostics: list[GraphDiagnostic] = []
+    request, diagnostic = _normalize_relational_move_intent(graph, request)
+    if diagnostic:
+        normalization_diagnostics.append(diagnostic)
+    request, diagnostic = _normalize_match_width_resize_intent(graph, request)
+    if diagnostic:
+        normalization_diagnostics.append(diagnostic)
     source_operation = request.operation.strip().lower()
     operation = normalize_operation(request.operation)
     if operation not in SUPPORTED_OPERATIONS:
@@ -988,7 +1080,39 @@ def compile_graph_operation(
         for part in selected:
             part["material"] = copy.deepcopy(material)
     elif operation == "resize":
-        if source_operation in {"set_thickness", "adjust_thickness"} or parameters.get("mode") == "thickness":
+        changed_ids = set(selected_ids)
+        if parameters.get("mode") == "match_reference_width":
+            reference_id = str(parameters.get("reference_id") or "")
+            reference = next((part for part in data["parts"] if part["id"] == reference_id), None)
+            if reference is None:
+                return _failure(
+                    "needs_clarification",
+                    operation,
+                    request,
+                    graph,
+                    "reference_not_found",
+                    "Match-width resize requires a known reference_id.",
+                    details={"reference_id": reference_id},
+                )
+            reference_width = _horizontal_diameter(reference)
+            for part in selected:
+                current_width = _horizontal_diameter(part)
+                if current_width <= 0 or reference_width <= 0:
+                    return _failure(
+                        "invalid",
+                        operation,
+                        request,
+                        graph,
+                        "invalid_geometry_width",
+                        "Cannot derive a positive width for proportional matching.",
+                    )
+                factor = round(reference_width / current_width, 9)
+                part["transform"]["scale"] = [
+                    round(component * factor, 9)
+                    for component in part["transform"]["scale"]
+                ]
+            _solve_spatial_relationships(data, changed_ids)
+        elif source_operation in {"set_thickness", "adjust_thickness"} or parameters.get("mode") == "thickness":
             amount = parameters.get("amount")
             if not isinstance(amount, int | float):
                 return _failure("needs_clarification", operation, request, graph, "missing_thickness", "Thickness resize requires a numeric amount.")
@@ -1100,7 +1224,7 @@ def compile_graph_operation(
             changes=changes,
         ),
         diagnostics=[
-            *([normalization_diagnostic] if normalization_diagnostic else []),
+            *normalization_diagnostics,
             GraphDiagnostic(
                 stage="compile",
                 code="compiled",

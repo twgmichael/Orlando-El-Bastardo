@@ -60,6 +60,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "canonical operations: add, remove, replace, move" in asset_edit.system_prompt
     assert '"operation": "resize"' in asset_edit.system_prompt
     assert '"reference_id":"Y"' in asset_edit.system_prompt
+    assert '"mode":"match_reference_width"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
 

@@ -96,6 +96,10 @@ semantic graph. Resolve an obvious minor typo only when exactly one existing
 part is plausible; otherwise ask a clarification question.
 For "align the centers", use operation "move", target a comma-separated list
 of part ids or "whole_asset", and edit_delta {"mode":"align_centers_xy"}.
+For "reduce the cone proportionally to match the tube width", use operation
+"resize", target the cone, and edit_delta
+{"mode":"match_reference_width","reference_id":"tube_id","proportional":true}.
+Do not guess a factor; the deterministic compiler measures both definitions.
 For a sphere cut in half with a flat bottom, use operation "replace", target
 the sphere id, and edit_delta {"mode":"geometry_modifier",
 "shape_modifiers":["half","flat"],"hemisphere_direction":"up"}.
@@ -158,6 +162,11 @@ For "move X to the top of Y", use operation "move", target X, and edit_delta
 reference_id is stationary. Use only ids in the active semantic graph. Resolve
 an obvious minor typo only when exactly one part is plausible; otherwise ask
 one clarification question.
+For "reduce/resize X proportionally to match Y width", use operation "resize",
+target X, and edit_delta
+{"mode":"match_reference_width","reference_id":"Y","proportional":true}.
+Never guess a numeric factor for a match request; the compiler derives it from
+the mathematical geometry definitions.
 For "rotate <part> N degrees on the <view> view", use operation "rotate",
 target the named part id, view the named view, and amount N. The harness owns
 camera-view-to-axis math.
