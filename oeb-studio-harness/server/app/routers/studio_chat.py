@@ -10,6 +10,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2242,6 +2243,31 @@ async def create_studio_chat_asset_edit(
             detail=operation_result.model_dump(mode="json"),
         )
     state_after = state_from_graph(state_before, operation_result.graph_after)
+    try:
+        PrimitiveBuildSpec.model_validate(state_after)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "outcome": "needs_repair",
+                "operation": operation_result.operation,
+                "base_revision": body.base_revision,
+                "proposed_revision": None,
+                "selected_targets": operation_result.selected_targets,
+                "graph_before": operation_result.graph_before.model_dump(mode="json"),
+                "graph_after": None,
+                "diff": None,
+                "diagnostics": [
+                    {
+                        "stage": "build_validation",
+                        "code": "unbuildable_graph_projection",
+                        "message": str(exc),
+                        "path": None,
+                        "details": {},
+                    }
+                ],
+            },
+        ) from exc
     diagnostics = [
         {
             "type": diagnostic.code,
@@ -2273,21 +2299,36 @@ async def create_studio_chat_asset_edit(
                 state_after=state_after,
                 edit_delta=edit_delta,
             )
-            db.add(job)
-            await db.flush()
-            review_url = f"/review/jobs/{job.id}"
-            job.payload = {
-                **(job.payload or {}),
-                "review_url": review_url,
-            }
         except Exception as exc:
-            job = None
-            review_url = None
-            asset_review_url = None
-            diagnostics.append({
-                "type": "job_compile_failed",
-                "message": str(exc),
-            })
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "outcome": "needs_repair",
+                    "operation": operation_result.operation,
+                    "base_revision": body.base_revision,
+                    "proposed_revision": None,
+                    "selected_targets": operation_result.selected_targets,
+                    "graph_before": operation_result.graph_before.model_dump(mode="json"),
+                    "graph_after": None,
+                    "diff": None,
+                    "diagnostics": [
+                        {
+                            "stage": "build_compile",
+                            "code": "job_compile_failed",
+                            "message": str(exc),
+                            "path": None,
+                            "details": {},
+                        }
+                    ],
+                },
+            ) from exc
+        db.add(job)
+        await db.flush()
+        review_url = f"/review/jobs/{job.id}"
+        job.payload = {
+            **(job.payload or {}),
+            "review_url": review_url,
+        }
     revision = await _record_asset_revision(
         db,
         asset=asset,

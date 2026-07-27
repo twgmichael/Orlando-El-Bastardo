@@ -191,6 +191,56 @@ def test_add_places_new_part_relative_to_selected_reference():
     assert result.graph_after.relationships[0].target == "cone"
 
 
+def test_add_rejects_a_new_part_id_as_the_reference_target():
+    result = compile_graph_operation(
+        _graph(),
+        GraphOperationRequest(
+            operation="add",
+            base_revision=3,
+            intent="Add triangle fins to the bottom of the body",
+            target_ids=["new_rocket_fin"],
+            parameters={"type": "triangle", "placement": "bottom"},
+        ),
+    )
+
+    assert result.outcome == "needs_repair"
+    assert result.graph_after is None
+    assert result.diagnostics[0].code == "reference_target_not_found"
+
+
+def test_add_triangle_fins_compiles_to_neutral_radial_wedges():
+    result = compile_graph_operation(
+        _graph(),
+        GraphOperationRequest(
+            operation="add",
+            base_revision=3,
+            intent="Add four triangle fins to the bottom of the body",
+            target_ids=["body"],
+            parameters={
+                "part": {"id": "rocket_fin", "type": "triangle"},
+                "count": 4,
+                "arrangement": "radial",
+                "placement": "bottom",
+            },
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    fins = [part for part in result.graph_after.parts if part.id.startswith("rocket_fin")]
+    assert [part.id for part in fins] == ["rocket_fin", "rocket_fin_2", "rocket_fin_3", "rocket_fin_4"]
+    assert {part.geometry.type for part in fins} == {"wedge"}
+    assert {part.material for part in fins} == {"neutral"}
+    assert len({tuple(round(value, 4) for value in part.transform.location[:2]) for part in fins}) == 4
+    assert all(part.metadata["instance_count"] == 4 for part in fins)
+    fin_relationships = [
+        relationship
+        for relationship in result.graph_after.relationships
+        if relationship.subject.startswith("rocket_fin")
+    ]
+    assert len(fin_relationships) == 4
+    assert {relationship.target for relationship in fin_relationships} == {"body"}
+
+
 def test_validator_rejects_dangling_graph_references():
     graph = _graph()
     data = graph.model_dump(mode="python")

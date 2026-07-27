@@ -84,6 +84,8 @@ PRIMITIVE_ALIASES = {
     "rectangular_prism": "box",
     "tube": "cylinder",
     "ball": "sphere",
+    "triangle": "wedge",
+    "triangular_prism": "wedge",
 }
 
 INTENT_OPERATIONS = {
@@ -789,6 +791,15 @@ def compile_graph_operation(
         return _failure("needs_clarification", operation, request, graph, "missing_target", f"{operation} requires at least one target id.")
     if needs_target and not selected:
         return _failure("needs_clarification", operation, request, graph, "target_not_found", "No requested target exists in the graph.")
+    if operation == "add" and request.target_ids and not selected:
+        return _failure(
+            "needs_repair",
+            operation,
+            request,
+            graph,
+            "reference_target_not_found",
+            "The add reference target does not exist in the graph.",
+        )
 
     preserved_constraints = [
         constraint["id"]
@@ -799,12 +810,11 @@ def compile_graph_operation(
     if operation == "add":
         part = copy.deepcopy(parameters.get("part") or {})
         part_id = _slug(part.get("id") or parameters.get("id"), "new_part")
-        if any(existing["id"] == part_id for existing in data["parts"]):
-            return _failure("needs_repair", operation, request, graph, "duplicate_part_id", f"Part id {part_id} already exists.")
         geometry_type = part.get("geometry", {}).get("type") if isinstance(part.get("geometry"), dict) else None
         geometry_type = geometry_type or part.get("type") or parameters.get("type") or parameters.get("primitive_type")
         if not geometry_type:
             return _failure("needs_clarification", operation, request, graph, "missing_geometry", "Add requires a part geometry type.")
+        geometry_type = PRIMITIVE_ALIASES.get(str(geometry_type).lower(), str(geometry_type).lower())
         transform = copy.deepcopy(part.get("transform") or {})
         requested_location = transform.get("location") or parameters.get("location")
         placement = str(
@@ -813,14 +823,39 @@ def compile_graph_operation(
             or parameters.get("relation")
             or ""
         ).lower()
+        arrangement = str(parameters.get("arrangement") or part.get("arrangement") or "").lower()
+        raw_count = part.get("count") or parameters.get("count") or 1
+        try:
+            count = max(1, min(int(raw_count), 32))
+        except (TypeError, ValueError):
+            count = 1
+        if placement and not selected and requested_location is None:
+            return _failure(
+                "needs_clarification",
+                operation,
+                request,
+                graph,
+                "missing_reference_target",
+                "Relative add placement requires an existing reference target.",
+            )
+        reference = selected[0] if selected else None
+        reference_location = reference["transform"]["location"] if reference else [0.0, 0.0, 0.0]
+        reference_scale = reference["transform"]["scale"] if reference else [1.0, 1.0, 1.0]
+        scale_value = transform.get("scale") or parameters.get("scale")
+        if scale_value is None and arrangement == "radial" and geometry_type == "wedge":
+            radial_size = max(reference_scale[0], reference_scale[1])
+            scale_value = [
+                max(radial_size * 1.5, 0.3),
+                max(radial_size * 0.35, 0.08),
+                max(reference_scale[2] * 0.45, 0.35),
+            ]
+        added_scale = _vector(scale_value, [1.0, 1.0, 1.0])
         if requested_location is None and selected:
-            reference = selected[0]
-            reference_location = reference["transform"]["location"]
-            reference_scale = reference["transform"]["scale"]
-            added_scale = _vector(transform.get("scale") or parameters.get("scale"), [1.0, 1.0, 1.0])
             offset = {
                 "below": [0.0, 0.0, -((reference_scale[2] + added_scale[2]) / 2)],
                 "down": [0.0, 0.0, -((reference_scale[2] + added_scale[2]) / 2)],
+                "bottom": [0.0, 0.0, -(reference_scale[2] / 2) + (added_scale[2] / 2)],
+                "at_bottom_of": [0.0, 0.0, -(reference_scale[2] / 2) + (added_scale[2] / 2)],
                 "above": [0.0, 0.0, (reference_scale[2] + added_scale[2]) / 2],
                 "up": [0.0, 0.0, (reference_scale[2] + added_scale[2]) / 2],
                 "left": [0.0, -((reference_scale[1] + added_scale[1]) / 2), 0.0],
@@ -836,38 +871,61 @@ def compile_graph_operation(
                 reference_location[index] + offset[index]
                 for index in range(3)
             ]
-        data["parts"].append(
-            {
-                "id": part_id,
+        base_rotation = _vector(transform.get("rotation") or parameters.get("rotation"), [0.0, 0.0, 0.0])
+        material = part.get("material") or parameters.get("material") or parameters.get("color") or "neutral"
+        instance_ids = [part_id] if count == 1 else [part_id, *[f"{part_id}_{index}" for index in range(2, count + 1)]]
+        existing_ids = {existing["id"] for existing in data["parts"]}
+        duplicate_id = next((instance_id for instance_id in instance_ids if instance_id in existing_ids), None)
+        if duplicate_id:
+            return _failure("needs_repair", operation, request, graph, "duplicate_part_id", f"Part id {duplicate_id} already exists.")
+        for index, instance_id in enumerate(instance_ids):
+            location = _vector(requested_location, [0.0, 0.0, 0.0])
+            rotation = list(base_rotation)
+            if arrangement == "radial" and reference:
+                angle = (2 * math.pi * index) / count
+                radius = (max(reference_scale[0], reference_scale[1]) + added_scale[0]) / 2
+                location = [
+                    reference_location[0] + math.cos(angle) * radius,
+                    reference_location[1] + math.sin(angle) * radius,
+                    location[2],
+                ]
+                rotation[2] += angle
+            metadata = copy.deepcopy(part.get("metadata") or {})
+            if count > 1:
+                metadata.update({
+                    "arrangement": arrangement or "repeated",
+                    "instance_index": index,
+                    "instance_count": count,
+                })
+            data["parts"].append({
+                "id": instance_id,
                 "name": part.get("name") or part.get("label"),
                 "role": part.get("role"),
                 "geometry": {
-                    "type": PRIMITIVE_ALIASES.get(str(geometry_type).lower(), str(geometry_type).lower()),
+                    "type": geometry_type,
                     "parameters": copy.deepcopy(part.get("parameters") or parameters.get("geometry_parameters") or {}),
                     "operations": copy.deepcopy(part.get("operations") or []),
                 },
                 "transform": {
-                    "location": _vector(requested_location, [0.0, 0.0, 0.0]),
-                    "rotation": _vector(transform.get("rotation") or parameters.get("rotation"), [0.0, 0.0, 0.0]),
-                    "scale": _vector(transform.get("scale") or parameters.get("scale"), [1.0, 1.0, 1.0]),
+                    "location": location,
+                    "rotation": rotation,
+                    "scale": added_scale,
                 },
-                "material": part.get("material") or parameters.get("material") or parameters.get("color"),
+                "material": material,
                 "construction_notes": copy.deepcopy(part.get("construction_notes") or []),
-                "metadata": copy.deepcopy(part.get("metadata") or {}),
-            }
-        )
+                "metadata": metadata,
+            })
         if selected and placement:
             reference_id = selected[0]["id"]
-            data["relationships"].append(
-                {
-                    "id": _slug(None, f"relationship_{part_id}_{placement}_{reference_id}"),
+            for instance_id in instance_ids:
+                data["relationships"].append({
+                    "id": _slug(None, f"relationship_{instance_id}_{placement}_{reference_id}"),
                     "type": placement,
-                    "subject": part_id,
+                    "subject": instance_id,
                     "target": reference_id,
                     "parameters": {},
-                }
-            )
-        selected_ids = [part_id]
+                })
+        selected_ids = instance_ids
     elif operation == "remove":
         blocked = [
             constraint

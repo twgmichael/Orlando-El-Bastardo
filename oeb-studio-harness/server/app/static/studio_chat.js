@@ -1536,6 +1536,83 @@
     };
   }
 
+  function activeGraphParts() {
+    const asset = activeAsset();
+    const stateJson = asset && asset.state_json && typeof asset.state_json === "object"
+      ? asset.state_json
+      : {};
+    const graph = stateJson.semantic_graph && typeof stateJson.semantic_graph === "object"
+      ? stateJson.semantic_graph
+      : {};
+    return Array.isArray(graph.parts) ? graph.parts : [];
+  }
+
+  function inferAddReferenceId(prompt, parts) {
+    const lowered = prompt.toLowerCase();
+    const aliases = {
+      box: ["box", "cube", "block"],
+      sphere: ["sphere", "ball", "orb"],
+      cylinder: ["cylinder", "tube", "post", "column"],
+      cone: ["cone"],
+      torus: ["torus", "ring", "donut"],
+      plane: ["plane", "surface"],
+      wedge: ["wedge", "triangle", "triangular prism"],
+    };
+    const matches = parts.filter((part) => {
+      const idWords = String(part.id || "").toLowerCase().replace(/_/g, " ");
+      if (idWords && lowered.includes(idWords)) return true;
+      const type = part.geometry && part.geometry.type
+        ? String(part.geometry.type).toLowerCase()
+        : "";
+      return (aliases[type] || [type]).some((alias) => alias && new RegExp(`\\b${alias}\\b`, "i").test(lowered));
+    });
+    return matches.length === 1 ? matches[0].id : null;
+  }
+
+  function normalizeAddRequest(request, assistant, assistantJson) {
+    if ((request.operation || "").toLowerCase() !== "add") return request;
+    const parts = activeGraphParts();
+    const existingIds = new Set(parts.map((part) => part.id));
+    const prompt = latestUserIntentText(assistant);
+    const originalJson = assistant
+      && assistant.raw
+      && typeof assistant.raw.original_content === "string"
+      ? parseAssistantJson(assistant.raw.original_content)
+      : null;
+    const intent = (assistantJson && assistantJson.asset_intent)
+      || (originalJson && originalJson.asset_intent)
+      || null;
+    const objects = intent && Array.isArray(intent.objects) ? intent.objects : [];
+    const addedObjects = objects.filter((object) => object && !existingIds.has(object.id));
+    const sourceObject = addedObjects.length === 1 ? addedObjects[0] : null;
+
+    if (!request.target || !existingIds.has(request.target)) {
+      request.target = inferAddReferenceId(prompt, parts);
+    }
+    const delta = { ...(request.edit_delta || {}) };
+    if (sourceObject) {
+      delta.part = {
+        ...(delta.part && typeof delta.part === "object" ? delta.part : {}),
+        id: sourceObject.id || delta.id || undefined,
+        type: sourceObject.type || delta.type || undefined,
+        material: sourceObject.material || delta.material || "neutral",
+        role: sourceObject.description || undefined,
+      };
+      delta.count = Number.isInteger(sourceObject.count) ? sourceObject.count : 1;
+    } else {
+      delta.material = delta.material || "neutral";
+    }
+    if (delta.count > 1 && /\bfins?\b/i.test(prompt)) {
+      delta.arrangement = "radial";
+    }
+    if (/\b(bottom|base|lower)\b/i.test(prompt)) {
+      delta.placement = "bottom";
+      request.semantic_direction = "bottom";
+    }
+    request.edit_delta = delta;
+    return request;
+  }
+
   function latestUserIntentText(assistant) {
     return (latestUserBefore(assistant)?.content || "").trim().toLowerCase();
   }
@@ -1557,7 +1634,8 @@
 
   async function createAssetEdit(assistant, assistantJson) {
     const asset = activeAsset();
-    const request = editRequestFromAssistant(assistantJson);
+    const rawRequest = editRequestFromAssistant(assistantJson);
+    const request = rawRequest ? normalizeAddRequest(rawRequest, assistant, assistantJson) : null;
     if (!asset || !request) return false;
     request.edit_delta = {
       ...(request.edit_delta || {}),
@@ -1648,7 +1726,9 @@
         "Do not guess a numeric factor for match requests; the compiler measures both parts.",
         "For 'replace X with Y', use operation replace, target X, edit_delta {\"type\": Y}.",
         "For 'remove/delete X', use operation remove, target X.",
-        "For 'add/create X below/above/near Y', use operation add, target Y, semantic_direction below/above/near, edit_delta {\"type\": X}.",
+        "For 'add/create X below/above/near Y', use operation add and target the EXISTING reference part Y, never the new part.",
+        "Put the new definition in edit_delta {\"part\":{\"id\":\"new_stable_id\",\"type\":\"X\",\"material\":\"neutral\"}} and use semantic_direction below/above/near.",
+        "For repeated parts include edit_delta count. For fins around a body include edit_delta arrangement \"radial\" and placement \"bottom\".",
         repairIntent ? `The latest user prompt intent is ${repairIntent}; preserve that intent exactly.` : "",
         "This is one repair attempt; do not explain or write Blender code.",
       ].join("\n"),
