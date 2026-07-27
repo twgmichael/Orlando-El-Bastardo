@@ -55,7 +55,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
     asset_edit = presets["asset_edit_translator"]
-    assert "Supported generic operations include remove, recolor, move" in asset_edit.system_prompt
+    assert "Supported generic operations include remove, replace_with, recolor, move" in asset_edit.system_prompt
     assert '"operation": "proportional_scale"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
@@ -374,6 +374,61 @@ def test_compile_asset_edit_state_rotates_target_by_view_and_degrees():
     assert compiled is True
     assert state_after["primitives"][0]["transform"]["rotation"] == [0.0, math.pi, 0.0]
     assert state_after["primitives"][1]["transform"]["rotation"] == [0, 0, 0]
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_replaces_target_type_generically():
+    state_before = {
+        "canonical_id": "ship_test_A",
+        "name": "Test Rocket",
+        "kind": "vehicle",
+        "asset_intent": {
+            "objects": [
+                {"id": "rocket_body", "type": "cube", "material": "blue", "description": "Rocket body"},
+                {"id": "nose_cone", "type": "cone", "material": "blue", "description": "Nose cone"},
+            ]
+        },
+        "primitives": [
+            {
+                "id": "rocket_body",
+                "type": "box",
+                "material": "blue",
+                "transform": {"location": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                "params": {"shape_description": "Rocket body"},
+            },
+            {
+                "id": "nose_cone",
+                "type": "cone",
+                "material": "blue",
+                "transform": {"location": [0, 0, 2], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            },
+        ],
+        "scene_plan": {
+            "objects": [
+                {"id": "rocket_body", "category": "box", "shape": {"primary_form": "box"}, "materials": {"primary": "blue"}},
+                {"id": "nose_cone", "category": "cone", "shape": {"primary_form": "cone"}, "materials": {"primary": "blue"}},
+            ]
+        },
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {
+            "operation": "replace_with",
+            "target": "rocket_body",
+            "edit_delta": {},
+            "type": "tube",
+            "material": "blue",
+        },
+    )
+
+    assert compiled is True
+    assert state_after["primitives"][0]["type"] == "cylinder"
+    assert state_after["primitives"][0]["material"] == "blue"
+    assert state_after["asset_intent"]["objects"][0]["type"] == "tube"
+    assert state_after["scene_plan"]["objects"][0]["category"] == "cylinder"
+    assert state_after["scene_plan"]["objects"][0]["shape"] == {"primary_form": "cylinder"}
+    assert state_after["primitives"][1]["type"] == "cone"
     assert diagnostics[-1]["type"] == "compiled"
 
 

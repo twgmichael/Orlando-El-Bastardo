@@ -742,6 +742,16 @@
         optional: ["target", "view", "semantic_direction", "amount", "preserve", "edit_delta"],
         note: "For follow-up edits to the active asset, return asset_edit_request instead of a fresh build.",
         examples: {
+          replace_part_type: {
+            operation: "replace_with",
+            target: "<part_id>",
+            preserve: ["material", "attachments"],
+            edit_delta: { type: "<new_type>" },
+          },
+          remove_part: {
+            operation: "remove",
+            target: "<part_id>",
+          },
           center_objects: {
             operation: "align_centers",
             target: "whole_asset",
@@ -1324,7 +1334,7 @@
     return {
       thread_id: state.activeThreadId,
       message_id: null,
-      base_revision: Number(source.base_revision || asset.current_revision),
+      base_revision: Number(asset.current_revision),
       target: source.target || null,
       operation: source.operation || "record_intent",
       view: source.view || null,
@@ -1408,6 +1418,8 @@
         "The active asset already exists. Do not return build_asset or asset_intent.",
         "Return asset_edit_request only. For 'center/middle the objects', use",
         "operation align_centers, target whole_asset, preserving each object's Z height.",
+        "For 'replace X with Y', use operation replace_with, target X, edit_delta {\"type\": Y}.",
+        "For 'remove/delete X', use operation remove, target X.",
         "This is one repair attempt; do not explain or write Blender code.",
       ].join("\n"),
       messages: [

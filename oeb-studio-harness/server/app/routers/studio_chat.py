@@ -342,6 +342,56 @@ def _entry_matches_target(entry: dict, target: str | None, removed_ids: set[str]
     return False
 
 
+def _normalized_primitive_type(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    lowered = value.strip().lower().replace(" ", "_")
+    aliases = {
+        "cube": "box",
+        "block": "box",
+        "rectangular_prism": "box",
+        "tube": "cylinder",
+        "post": "cylinder",
+        "column": "cylinder",
+        "ball": "sphere",
+        "orb": "sphere",
+        "donut": "torus",
+        "ring": "torus",
+    }
+    lowered = aliases.get(lowered, lowered)
+    return lowered if lowered in {"box", "sphere", "cylinder", "cone", "torus", "plane", "wedge"} else None
+
+
+def _set_targeted_entry_type(state: dict, target: str | None, matched_ids: set[str], primitive_type: str, material: str | None) -> None:
+    if not target:
+        return
+    display_type = "cube" if primitive_type == "box" else "tube" if primitive_type == "cylinder" else primitive_type
+    asset_intent = state.get("asset_intent")
+    if isinstance(asset_intent, dict):
+        objects = asset_intent.get("objects")
+        if isinstance(objects, list):
+            for entry in objects:
+                if isinstance(entry, dict) and _entry_matches_target(entry, target, matched_ids):
+                    entry["type"] = display_type
+                    if material:
+                        entry["material"] = material
+
+    for plan_key in ("scene_plan", "repaired_scene_plan"):
+        plan = state.get(plan_key)
+        if not isinstance(plan, dict) or not isinstance(plan.get("objects"), list):
+            continue
+        for entry in plan["objects"]:
+            if isinstance(entry, dict) and _entry_matches_target(entry, target, matched_ids):
+                entry["category"] = primitive_type
+                shape = entry.get("shape") if isinstance(entry.get("shape"), dict) else {}
+                shape["primary_form"] = primitive_type
+                entry["shape"] = shape
+                if material:
+                    materials = entry.get("materials") if isinstance(entry.get("materials"), dict) else {}
+                    materials["primary"] = material
+                    entry["materials"] = materials
+
+
 def _remove_targeted_state_entries(state: dict, target: str | None, removed_ids: set[str]) -> None:
     if not target or not removed_ids:
         return
@@ -489,6 +539,12 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
         ], False
 
     material = edit_delta.get("material") or edit_delta.get("color")
+    replacement_type = _normalized_primitive_type(
+        edit_delta.get("type")
+        or edit_delta.get("primitive_type")
+        or edit_delta.get("replacement_type")
+        or edit_delta.get("replace_with")
+    )
     location = _as_number_list(edit_delta.get("location") or edit_delta.get("position"))
     location_delta = _as_number_list(edit_delta.get("location_delta") or edit_delta.get("delta_location"))
     rotation = _as_number_list(edit_delta.get("rotation"))
@@ -623,6 +679,30 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
             changed = True
         elif material and operation in {"set_material", "material", "recolor", "change_color", "color"}:
             primitive["material"] = str(material)
+            changed = True
+        elif operation in {"replace_with", "replace", "set_type", "change_type"}:
+            if not replacement_type:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Replace edit requires a supported replacement type such as tube, cylinder, cube, box, sphere, cone, torus, plane, or wedge.",
+                })
+                continue
+            primitive["type"] = replacement_type
+            if material:
+                primitive["material"] = str(material)
+            params = primitive.setdefault("params", {})
+            params["shape_description"] = str(edit_delta.get("description") or params.get("shape_description") or replacement_type)
+            _set_targeted_entry_type(
+                state_after,
+                str(target) if target else None,
+                {
+                    str(item.get("id") or item.get("label") or item.get("name"))
+                    for item in matched
+                    if isinstance(item, dict) and (item.get("id") or item.get("label") or item.get("name"))
+                },
+                replacement_type,
+                str(material) if material else None,
+            )
             changed = True
         elif location and operation in {"set_location", "position", "move_to"}:
             transform["location"] = location

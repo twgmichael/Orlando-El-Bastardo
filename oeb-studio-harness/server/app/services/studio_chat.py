@@ -111,7 +111,7 @@ Translate conversational edits into strict JSON deltas against named assets and
 parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down.
 When active_asset context is supplied, ALWAYS return asset_edit_request with:
 base_revision, target, operation, view, semantic_direction, amount, preserve,
-and edit_delta. Never return build_asset for a follow-up edit. Supported generic operations include remove, recolor, move, align_centers, center_group, set_geometry_modifier,
+and edit_delta. Never return build_asset for a follow-up edit. Supported generic operations include remove, replace_with, recolor, move, align_centers, center_group, set_geometry_modifier,
 set_location, rotate, set_scale, proportional_scale, scale_axis, set_thickness,
 and adjust_thickness. Do not invent Blender APIs.
 Example:
@@ -133,6 +133,9 @@ For "center/middle the objects", use operation "align_centers", target
 only when the user explicitly asks to center the entire group in world space.
 For "remove/delete the <part>", use operation "remove" and target the named
 part id from active_asset.
+For "replace the <part/type> with a <new type>", use operation "replace_with",
+target the named part id when known, and put {"type": "<new type>"} in
+edit_delta. Preserve material unless the user changes it.
 For "rotate <part> N degrees on the <view> view", use operation "rotate",
 target the named part id, view the named view, and amount N. The harness owns
 camera-view-to-axis math.
