@@ -295,7 +295,7 @@ def _primitive_matches_target(primitive: dict, target: str | None) -> bool:
     if not target or target in {"whole_asset", "asset", "*"}:
         return True
     lowered = target.lower()
-    for key in ("id", "label", "name", "role"):
+    for key in ("id", "label", "name", "role", "type"):
         value = primitive.get(key)
         if isinstance(value, str) and value.lower() == lowered:
             return True
@@ -322,11 +322,95 @@ def _element_matches_target(element: dict, target: str | None) -> bool:
     if not target or target in {"whole_asset", "asset", "*"}:
         return True
     lowered = target.lower()
-    for key in ("id", "label", "name", "role"):
+    for key in ("id", "label", "name", "role", "type", "kind"):
         value = element.get(key)
         if isinstance(value, str) and value.lower() == lowered:
             return True
     return False
+
+
+def _entry_matches_target(entry: dict, target: str | None, removed_ids: set[str]) -> bool:
+    if not target:
+        return False
+    lowered = target.lower()
+    for key in ("id", "label", "name", "role", "type", "category"):
+        value = entry.get(key)
+        if isinstance(value, str):
+            value_lower = value.lower()
+            if value_lower == lowered or value in removed_ids:
+                return True
+    return False
+
+
+def _remove_targeted_state_entries(state: dict, target: str | None, removed_ids: set[str]) -> None:
+    if not target or not removed_ids:
+        return
+
+    asset_intent = state.get("asset_intent")
+    if isinstance(asset_intent, dict):
+        objects = asset_intent.get("objects")
+        if isinstance(objects, list):
+            asset_intent["objects"] = [
+                entry
+                for entry in objects
+                if not (isinstance(entry, dict) and _entry_matches_target(entry, target, removed_ids))
+            ]
+        relationships = asset_intent.get("relationships")
+        if isinstance(relationships, list):
+            asset_intent["relationships"] = [
+                relationship
+                for relationship in relationships
+                if not (
+                    isinstance(relationship, dict)
+                    and (
+                        relationship.get("subject") in removed_ids
+                        or relationship.get("target") in removed_ids
+                        or any(item in removed_ids for item in relationship.get("targets", []) if isinstance(item, str))
+                    )
+                )
+            ]
+
+    for plan_key in ("scene_plan", "repaired_scene_plan"):
+        plan = state.get(plan_key)
+        if not isinstance(plan, dict):
+            continue
+        objects = plan.get("objects")
+        if isinstance(objects, list):
+            plan["objects"] = [
+                entry
+                for entry in objects
+                if not (isinstance(entry, dict) and _entry_matches_target(entry, target, removed_ids))
+            ]
+        relationships = plan.get("relationships")
+        if isinstance(relationships, list):
+            plan["relationships"] = [
+                relationship
+                for relationship in relationships
+                if not (
+                    isinstance(relationship, dict)
+                    and (
+                        relationship.get("subject") in removed_ids
+                        or relationship.get("target") in removed_ids
+                        or any(item in removed_ids for item in relationship.get("targets", []) if isinstance(item, str))
+                    )
+                )
+            ]
+
+    components = state.get("components")
+    if isinstance(components, list):
+        state["components"] = [
+            component
+            for component in components
+            if not (isinstance(component, str) and (component in removed_ids or component.lower() == target.lower()))
+        ]
+
+    for graph in [state.get("construction_graph"), asset_intent.get("construction_graph") if isinstance(asset_intent, dict) else None]:
+        if isinstance(graph, dict) and isinstance(graph.get("elements"), list):
+            graph["elements"] = [
+                element
+                for element in graph["elements"]
+                if not (isinstance(element, dict) and _entry_matches_target(element, target, removed_ids))
+            ]
 
 
 def _numeric_factor(edit_delta: dict, default: float | None = None) -> float | None:
@@ -341,6 +425,40 @@ def _numeric_factor(edit_delta: dict, default: float | None = None) -> float | N
         return None
     factor = float(value)
     return factor if 0.01 <= factor <= 20.0 else None
+
+
+def _rotation_amount_radians(edit_delta: dict) -> float | None:
+    value = edit_delta.get("radians")
+    if value is None:
+        value = edit_delta.get("rotation_amount")
+    if value is None:
+        value = edit_delta.get("degrees")
+    if value is None:
+        value = edit_delta.get("amount")
+    if not isinstance(value, int | float):
+        return None
+    amount = float(value)
+    if abs(amount) > math.tau:
+        amount = math.radians(amount)
+    return amount if -math.tau <= amount <= math.tau else None
+
+
+def _rotation_axis_index(edit_delta: dict) -> int | None:
+    axis = str(edit_delta.get("axis") or "").strip().lower()
+    axis_map = {"x": 0, "+x": 0, "-x": 0, "y": 1, "+y": 1, "-y": 1, "z": 2, "+z": 2, "-z": 2}
+    if axis in axis_map:
+        return axis_map[axis]
+    view = str(edit_delta.get("view") or "").strip().lower()
+    view_axis_map = {
+        "front": 0,
+        "rear": 0,
+        "back": 0,
+        "left": 1,
+        "right": 1,
+        "top": 2,
+        "bottom": 2,
+    }
+    return view_axis_map.get(view)
 
 
 def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dict, list[dict], bool]:
@@ -395,6 +513,33 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
     ]
 
     changed = False
+    if operation in {"remove", "delete", "remove_part", "delete_part"}:
+        if not target or target in {"whole_asset", "asset", "*"}:
+            return state_after, [
+                {
+                    "type": "compile_blocked",
+                    "message": "Remove edit requires a specific target part or primitive.",
+                }
+            ], False
+        removed_ids = {
+            str(primitive.get("id") or primitive.get("label") or primitive.get("name"))
+            for primitive in matched
+            if isinstance(primitive, dict) and (primitive.get("id") or primitive.get("label") or primitive.get("name"))
+        }
+        state_after["primitives"] = [
+            primitive
+            for primitive in primitives
+            if not (isinstance(primitive, dict) and _primitive_matches_target(primitive, target))
+        ]
+        _remove_targeted_state_entries(state_after, str(target), removed_ids)
+        diagnostics.append({
+            "type": "removed",
+            "message": f"Removed {len(matched)} target primitive(s) from the asset state.",
+            "target": target,
+            "removed_ids": sorted(removed_ids),
+        })
+        changed = True
+
     if operation in {"align_centers", "align_objects", "center_objects_on_axis"}:
         locations = [
             _as_number_list(primitive.setdefault("transform", {}).get("location"))
@@ -445,7 +590,7 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
     for primitive in matched:
         transform = primitive.setdefault("transform", {})
         current_scale = _as_number_list(transform.get("scale")) or [1.0, 1.0, 1.0]
-        if operation in {"align_centers", "align_objects", "center_objects_on_axis", "center_group", "center_objects", "center", "align_center"}:
+        if operation in {"remove", "delete", "remove_part", "delete_part", "align_centers", "align_objects", "center_objects_on_axis", "center_group", "center_objects", "center", "align_center"}:
             continue
         if operation in {"set_geometry_modifier", "geometry_modifier", "set_shape_modifier", "shape_modifier", "cut", "hemisphere", "half"}:
             primitive_type = str(primitive.get("type") or "").lower()
@@ -507,6 +652,19 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
             changed = True
         elif rotation and operation in {"set_rotation", "rotate"}:
             transform["rotation"] = rotation
+            changed = True
+        elif operation in {"rotate", "rotate_relative", "adjust_rotation"}:
+            rotation_amount = _rotation_amount_radians(edit_delta)
+            axis_index = _rotation_axis_index(edit_delta)
+            if rotation_amount is None or axis_index is None:
+                diagnostics.append({
+                    "type": "compile_blocked",
+                    "message": "Relative rotate edit requires an axis or view plus a numeric degree/radian amount.",
+                })
+                continue
+            current_rotation = _as_number_list(transform.get("rotation")) or [0.0, 0.0, 0.0]
+            current_rotation[axis_index] += rotation_amount
+            transform["rotation"] = current_rotation
             changed = True
         elif scale and operation in {"set_scale", "scale", "resize"}:
             transform["scale"] = scale

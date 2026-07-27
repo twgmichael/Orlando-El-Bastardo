@@ -55,7 +55,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
     asset_edit = presets["asset_edit_translator"]
-    assert "Supported generic operations include recolor, move" in asset_edit.system_prompt
+    assert "Supported generic operations include remove, recolor, move" in asset_edit.system_prompt
     assert '"operation": "proportional_scale"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
@@ -278,6 +278,102 @@ def test_compile_asset_edit_state_moves_target_by_oeb_direction():
 
     assert compiled is True
     assert state_after["primitives"][0]["transform"]["location"] == [1, 2, 2.75]
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_removes_target_part_generically():
+    state_before = {
+        "canonical_id": "ship_test_A",
+        "name": "Test Rocket",
+        "kind": "vehicle",
+        "asset_intent": {
+            "objects": [
+                {"id": "cone_top_nose", "type": "cone", "description": "cone top nose"},
+                {"id": "tube_body", "type": "cylinder", "description": "tube body"},
+            ],
+            "relationships": [
+                {"subject": "cone_top_nose", "relation": "attached_to", "target": "tube_body"},
+            ],
+        },
+        "primitives": [
+            {
+                "id": "cone_top_nose",
+                "type": "cone",
+                "material": "metal",
+                "transform": {"location": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            },
+            {
+                "id": "tube_body",
+                "type": "cylinder",
+                "material": "metal",
+                "transform": {"location": [0, 0, -1], "rotation": [0, 0, 0], "scale": [0.4, 0.4, 1.4]},
+            },
+        ],
+        "components": ["cone_top_nose", "tube_body"],
+        "scene_plan": {
+            "objects": [
+                {"id": "cone_top_nose", "category": "cone"},
+                {"id": "tube_body", "category": "cylinder"},
+            ],
+            "relationships": [
+                {"subject": "cone_top_nose", "relation": "attached_to", "target": "tube_body"},
+            ],
+        },
+        "repaired_scene_plan": {
+            "objects": [
+                {"id": "cone_top_nose", "category": "cone"},
+                {"id": "tube_body", "category": "cylinder"},
+            ],
+            "relationships": [],
+        },
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "remove", "target": "cone_top_nose"},
+    )
+
+    assert compiled is True
+    assert [primitive["id"] for primitive in state_after["primitives"]] == ["tube_body"]
+    assert [entry["id"] for entry in state_after["asset_intent"]["objects"]] == ["tube_body"]
+    assert state_after["asset_intent"]["relationships"] == []
+    assert state_after["components"] == ["tube_body"]
+    assert [entry["id"] for entry in state_after["scene_plan"]["objects"]] == ["tube_body"]
+    assert [entry["id"] for entry in state_after["repaired_scene_plan"]["objects"]] == ["tube_body"]
+    assert state_after["pending_edit"] is False
+    assert any(item["type"] == "removed" for item in diagnostics)
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_rotates_target_by_view_and_degrees():
+    state_before = {
+        "canonical_id": "ship_test_A",
+        "name": "Test Rocket",
+        "kind": "vehicle",
+        "primitives": [
+            {
+                "id": "cone_top_nose",
+                "type": "cone",
+                "material": "metal",
+                "transform": {"location": [0, 0, 0], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+            },
+            {
+                "id": "tube_body",
+                "type": "cylinder",
+                "material": "metal",
+                "transform": {"location": [0, 0, -1], "rotation": [0, 0, 0], "scale": [0.4, 0.4, 1.4]},
+            },
+        ],
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {"operation": "rotate", "target": "cone_top_nose", "view": "right", "amount": 180},
+    )
+
+    assert compiled is True
+    assert state_after["primitives"][0]["transform"]["rotation"] == [0.0, math.pi, 0.0]
+    assert state_after["primitives"][1]["transform"]["rotation"] == [0, 0, 0]
     assert diagnostics[-1]["type"] == "compiled"
 
 
