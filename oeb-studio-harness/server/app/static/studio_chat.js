@@ -84,9 +84,14 @@
   }
 
   function messagePayload(message) {
+    const originalContent = message.role === "assistant"
+      && message.raw
+      && typeof message.raw.original_content === "string"
+      ? message.raw.original_content
+      : null;
     return {
       role: message.role,
-      content: message.content,
+      content: originalContent || message.content,
     };
   }
 
@@ -127,24 +132,148 @@
     els.error.textContent = "";
   }
 
-  function parseAssistantJson(text) {
-    if (!text || typeof text !== "string") return null;
-    let source = text.trim();
-    if (source.startsWith("```")) {
-      source = source.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  function stripJsonComments(source) {
+    let result = "";
+    let inString = false;
+    let escaped = false;
+    let lineComment = false;
+    let blockComment = false;
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      const next = source[index + 1];
+      if (lineComment) {
+        if (char === "\n") {
+          lineComment = false;
+          result += char;
+        }
+        continue;
+      }
+      if (blockComment) {
+        if (char === "*" && next === "/") {
+          blockComment = false;
+          index += 1;
+        }
+        continue;
+      }
+      if (inString) {
+        result += char;
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+      if (char === "\"") {
+        inString = true;
+        result += char;
+      } else if (char === "/" && next === "/") {
+        lineComment = true;
+        index += 1;
+      } else if (char === "/" && next === "*") {
+        blockComment = true;
+        index += 1;
+      } else {
+        result += char;
+      }
     }
+    return result;
+  }
+
+  function parseJsonCandidate(source) {
+    const candidate = source.trim();
+    if (!candidate) return null;
     try {
-      return JSON.parse(source);
+      const parsed = JSON.parse(candidate);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
     } catch (_err) {
-      const start = source.indexOf("{");
-      const end = source.lastIndexOf("}");
-      if (start < 0 || end <= start) return null;
       try {
-        return JSON.parse(source.slice(start, end + 1));
+        const normalized = stripJsonComments(candidate).replace(/,\s*([}\]])/g, "$1");
+        const parsed = JSON.parse(normalized);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
       } catch (_innerErr) {
         return null;
       }
     }
+  }
+
+  function balancedJsonSpan(source, start) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < source.length; index += 1) {
+      const char = source[index];
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+      if (char === "\"") {
+        inString = true;
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) return { start, end: index + 1 };
+      }
+    }
+    return null;
+  }
+
+  function cleanAssistantProse(text) {
+    return text
+      .replace(
+        /\s*(?:Here(?:'s| is)|Below is)[^.!?\n]*(?:JSON|structured request|structured command)[^.!?\n]*:\s*(?=\n|$)/gim,
+        "",
+      )
+      .replace(/^\s*```(?:json)?\s*$/gim, "")
+      .replace(/\n[ \t]+\n/g, "\n\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function parseAssistantResponse(text) {
+    if (!text || typeof text !== "string") return { parsed: null, prose: "" };
+    const source = text.trim();
+    const fencedPattern = /```(?:json)?\s*([\s\S]*?)```/gi;
+    let fencedMatch = fencedPattern.exec(source);
+    while (fencedMatch) {
+      const parsed = parseJsonCandidate(fencedMatch[1]);
+      if (parsed) {
+        const prose = cleanAssistantProse(
+          `${source.slice(0, fencedMatch.index)}\n${source.slice(fencedPattern.lastIndex)}`,
+        );
+        return { parsed, prose };
+      }
+      fencedMatch = fencedPattern.exec(source);
+    }
+
+    const whole = parseJsonCandidate(source);
+    if (whole) return { parsed: whole, prose: "" };
+
+    for (let start = source.indexOf("{"); start >= 0; start = source.indexOf("{", start + 1)) {
+      const span = balancedJsonSpan(source, start);
+      if (!span) continue;
+      const parsed = parseJsonCandidate(source.slice(span.start, span.end));
+      if (parsed) {
+        const prose = cleanAssistantProse(
+          `${source.slice(0, span.start)}\n${source.slice(span.end)}`,
+        );
+        return { parsed, prose };
+      }
+    }
+    return { parsed: null, prose: cleanAssistantProse(source) };
+  }
+
+  function parseAssistantJson(text) {
+    return parseAssistantResponse(text).parsed;
   }
 
   function assistantControl(message) {
@@ -163,6 +292,22 @@
       escalation,
       blocksBuild: Boolean(clarification || escalation),
     };
+  }
+
+  function assistantVisibleText(message, control) {
+    if (control.clarification || control.escalation) {
+      return control.clarification || control.escalation;
+    }
+    const raw = message && message.raw ? message.raw : {};
+    if (typeof raw.assistant_prose === "string" && raw.assistant_prose.trim()) {
+      return raw.assistant_prose.trim();
+    }
+    const original = typeof raw.original_content === "string"
+      ? raw.original_content
+      : message && message.content;
+    const extracted = parseAssistantResponse(original).prose;
+    if (extracted) return extracted;
+    return original !== (message && message.content) ? message.content.trim() : "";
   }
 
   function stopPolling(jobId) {
@@ -585,9 +730,10 @@
       if (message.role === "assistant") {
         const control = assistantControl(message);
         const buildActive = message.build && buildIsActive(message.build);
-        if (control.clarification || control.escalation) {
+        const visibleText = assistantVisibleText(message, control);
+        if (visibleText) {
           const visible = document.createElement("p");
-          visible.textContent = control.clarification || control.escalation;
+          visible.textContent = visibleText;
           content.appendChild(visible);
         } else if (buildActive) {
           renderAssistantActivityContent(content, "Rendering pipeline", "build-stacked-blocks", "Building");
@@ -1262,18 +1408,24 @@
       });
       state.raw.response = response.raw;
       state.awaitingAssistant = false;
-      const assistantJson = parseAssistantJson(response.message.content);
+      const assistantResponse = parseAssistantResponse(response.message.content);
+      const assistantJson = assistantResponse.parsed;
       const control = assistantControl({
         role: "assistant",
         content: response.message.content,
         raw: { assistant_json: assistantJson },
       });
+      const visibleContent = control.clarification
+        || control.escalation
+        || assistantResponse.prose
+        || "I’ve prepared that asset change.";
       const savedAssistant = await saveThreadMessage(
         "assistant",
-        control.clarification || control.escalation || response.message.content,
+        visibleContent,
         {
           ollama: response.raw,
           original_content: response.message.content,
+          assistant_prose: assistantResponse.prose,
           assistant_json: assistantJson,
         },
       );
@@ -1523,11 +1675,13 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(repairPayload),
       });
-      const repairedJson = parseAssistantJson(response.message.content);
+      const repairedResponse = parseAssistantResponse(response.message.content);
+      const repairedJson = repairedResponse.parsed;
       state.raw.repair_response = response.raw;
       assistant.raw = assistant.raw || {};
       assistant.raw.edit_repair = {
         response: response.raw,
+        prose: repairedResponse.prose,
         original_json: assistantJson,
         repaired_json: repairedJson,
       };

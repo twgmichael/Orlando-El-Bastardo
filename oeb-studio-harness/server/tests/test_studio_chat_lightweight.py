@@ -623,6 +623,33 @@ def test_parse_assistant_json_accepts_fenced_json():
     assert parsed["build_job"]["type"] == "sphere"
 
 
+def test_parse_assistant_json_accepts_prose_and_commented_fenced_json():
+    parsed = parse_assistant_json(
+        """I can resize the cone proportionally. Here is the structured JSON request:
+
+```json
+{
+  "action": "edit_asset",
+  "asset_edit_request": {
+    "operation": "resize",
+    "amount": 0.5, // Reduce by half
+    "edit_delta": {
+      "mode": "match_reference_width",
+      "reference_id": "rocket_body_tube",
+    },
+  }
+}
+```
+
+The cone will retain its material and relationships."""
+    )
+
+    request = parsed["asset_edit_request"]
+    assert request["operation"] == "resize"
+    assert request["amount"] == 0.5
+    assert request["edit_delta"]["mode"] == "match_reference_width"
+
+
 def test_build_spec_from_assistant_response_preserves_sphere_scene_object():
     spec, parsed = build_spec_from_assistant_response(
         "Render a sphere",

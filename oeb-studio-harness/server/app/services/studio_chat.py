@@ -555,6 +555,55 @@ def _balanced_json_object(text: str) -> str | None:
     return None
 
 
+def _normalize_llm_json(text: str) -> str:
+    result: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    line_comment = False
+    block_comment = False
+    while index < len(text):
+        char = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if line_comment:
+            if char == "\n":
+                line_comment = False
+                result.append(char)
+            index += 1
+            continue
+        if block_comment:
+            if char == "*" and following == "/":
+                block_comment = False
+                index += 2
+            else:
+                index += 1
+            continue
+        if in_string:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+        elif char == "/" and following == "/":
+            line_comment = True
+            index += 2
+        elif char == "/" and following == "*":
+            block_comment = True
+            index += 2
+        else:
+            result.append(char)
+            index += 1
+    return re.sub(r",\s*([}\]])", r"\1", "".join(result))
+
+
 def parse_assistant_json(text: str) -> dict[str, Any]:
     try:
         parsed = extract_json(text)
@@ -563,8 +612,10 @@ def parse_assistant_json(text: str) -> dict[str, Any]:
         if not balanced:
             raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
         try:
-            parsed = json.loads(balanced)
+            parsed = json.loads(_normalize_llm_json(balanced))
         except json.JSONDecodeError:
+            raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("asset_edit_request"), dict):
             raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError("assistant response JSON must be an object")
