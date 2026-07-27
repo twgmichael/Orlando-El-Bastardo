@@ -1345,10 +1345,34 @@
     };
   }
 
+  function latestUserIntentText(assistant) {
+    return (latestUserBefore(assistant)?.content || "").trim().toLowerCase();
+  }
+
+  function editConflictsWithUserIntent(request, assistant) {
+    const prompt = latestUserIntentText(assistant);
+    const operation = (request.operation || "").toLowerCase();
+    if (/\b(add|create|append|attach|put)\b/.test(prompt) && ["replace_with", "replace", "remove", "delete"].includes(operation)) {
+      return "add";
+    }
+    if (/\b(remove|delete)\b/.test(prompt) && ["add", "add_part", "create_part", "append_part", "replace_with", "replace"].includes(operation)) {
+      return "remove";
+    }
+    if (/\b(replace|swap|change)\b/.test(prompt) && ["add", "add_part", "create_part", "append_part", "remove", "delete"].includes(operation)) {
+      return "replace";
+    }
+    return null;
+  }
+
   async function createAssetEdit(assistant, assistantJson) {
     const asset = activeAsset();
     const request = editRequestFromAssistant(assistantJson);
     if (!asset || !request) return false;
+    const conflict = editConflictsWithUserIntent(request, assistant);
+    if (conflict && !assistant.additiveIntentRepairAttempted) {
+      assistant.additiveIntentRepairAttempted = true;
+      return repairActiveAssetEdit(assistant, assistantJson, conflict);
+    }
     request.message_id = assistant.id || null;
     setStatus("Compiling asset edit...");
     try {
@@ -1403,7 +1427,7 @@
     }
   }
 
-  async function repairActiveAssetEdit(assistant, assistantJson) {
+  async function repairActiveAssetEdit(assistant, assistantJson, repairIntent) {
     const asset = activeAsset();
     if (!asset) return false;
     setStatus("Repairing active asset edit...");
@@ -1420,6 +1444,8 @@
         "operation align_centers, target whole_asset, preserving each object's Z height.",
         "For 'replace X with Y', use operation replace_with, target X, edit_delta {\"type\": Y}.",
         "For 'remove/delete X', use operation remove, target X.",
+        "For 'add/create/attach X below/above/near Y', use operation add_part, target Y, semantic_direction below/above/near, edit_delta {\"type\": X}.",
+        repairIntent ? `The latest user prompt intent is ${repairIntent}; preserve that intent exactly.` : "",
         "This is one repair attempt; do not explain or write Blender code.",
       ].join("\n"),
       messages: [

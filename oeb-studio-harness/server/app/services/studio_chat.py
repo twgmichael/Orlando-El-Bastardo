@@ -111,7 +111,7 @@ Translate conversational edits into strict JSON deltas against named assets and
 parts. Use +X front, -X rear/back, -Y left, +Y right, +Z up, -Z down.
 When active_asset context is supplied, ALWAYS return asset_edit_request with:
 base_revision, target, operation, view, semantic_direction, amount, preserve,
-and edit_delta. Never return build_asset for a follow-up edit. Supported generic operations include remove, replace_with, recolor, move, align_centers, center_group, set_geometry_modifier,
+and edit_delta. Never return build_asset for a follow-up edit. Supported generic operations include add_part, remove, replace_with, recolor, move, align_centers, center_group, set_geometry_modifier,
 set_location, rotate, set_scale, proportional_scale, scale_axis, set_thickness,
 and adjust_thickness. Do not invent Blender APIs.
 Example:
@@ -136,6 +136,10 @@ part id from active_asset.
 For "replace the <part/type> with a <new type>", use operation "replace_with",
 target the named part id when known, and put {"type": "<new type>"} in
 edit_delta. Preserve material unless the user changes it.
+For "add/create/attach a <new type> below/above/near <part>", use operation
+"add_part", target the existing reference part id, semantic_direction
+"below"|"above"|"near", and put {"type": "<new type>", "material": "<material>"}
+in edit_delta. Add means preserve the target part.
 For "rotate <part> N degrees on the <view> view", use operation "rotate",
 target the named part id, view the named view, and amount N. The harness owns
 camera-view-to-axis math.

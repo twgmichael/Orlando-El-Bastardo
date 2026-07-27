@@ -1,7 +1,7 @@
 ---
 title: Scene Graph Primitive Builder Plan
 created: 2026-07-15T09:25:43-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-27T12:00:00-04:00
 doc_type: plan
 production_area: assets
 department: pipeline
@@ -27,6 +27,27 @@ generator. It should quickly preserve creative intent, make spatial decisions
 visible, and produce reviewable renders while final assets are sourced, built,
 or replaced from modular kits.
 
+## Original OEB Direction
+
+This plan predates the later Pascal Editor discussion. The original OEB
+direction, recorded 2026-07-15, was already to move beyond prompt-shaped
+primitive strings into a semantic scene plan that preserves objects,
+relationships, placement, modifiers, and source phrases before any Blender
+primitive is generated.
+
+The original requirements were:
+
+- Keep creative language as the user-facing input.
+- Have the local LLM translate language into structured semantic intent.
+- Preserve named objects, relationships, modifiers, materials, and placement.
+- Use deterministic harness code to validate, repair, and compile the plan.
+- Generate primitive build specs and review renders as artifacts of intent.
+- Avoid hardcoding every possible room, prop, staging phrase, or object type in
+  Python.
+
+That direction came from OEB's own conversation-to-build work and the failure
+mode of component strings being too lossy for production use.
+
 ## Problem
 
 The first conversation-to-build slice proved the harness can produce rendered
@@ -48,6 +69,8 @@ reusable category and relationship rules.
 creative request
   -> local LLM scene-plan extraction
   -> repair/validation pass
+  -> semantic asset graph
+  -> validated operation compiler
   -> primitive build spec
   -> harness job
   -> Blender primitive render
@@ -57,6 +80,143 @@ creative request
 The creative user should only provide the creative request. Prompt directives,
 schema rules, validation, repair, logging, and job submission belong inside the
 harness.
+
+The semantic graph is the editable product. Primitive build specs, GLBs,
+Blender scenes, previews, and review renders are deterministic realizations or
+artifacts of a graph revision unless production-specific work makes one of
+those realizations authoritative.
+
+## Shared Operation Contract
+
+All graph changes must be expressed as structured commands and must pass
+through the same headless compiler and validator whether they originate in
+Studio Chat, a WebGL editor, an agent/MCP client, a test, or a future embedded
+editor.
+
+The first generic operation vocabulary is:
+
+- `add`
+- `remove`
+- `replace`
+- `move`
+- `rotate`
+- `attach`
+- `recolor`
+- `resize`
+- `group`
+- `undo`
+
+Each proposed operation must include the requested intent, named target or
+targets, expected base revision, parameters, and constraints that must remain
+true. Before mutation, the harness must:
+
+1. Resolve and display the selected targets.
+2. Compare the proposed operation with the requested intent.
+3. Compile the operation deterministically.
+4. Validate graph invariants and constraints.
+5. Produce a reviewable diff.
+6. Commit a new revision only after validation succeeds.
+
+This is the boundary that prevents an instruction such as "add a tube" from
+silently compiling into "replace the cone." A failed proposal preserves the
+current graph unchanged and returns a structured diagnostic suitable for
+retry, clarification, or human correction.
+
+The core must operate without a browser. The browser viewport, chat, undo
+history, render queue, tests, and agents are clients of one canonical graph and
+revision stream rather than owners of parallel state.
+
+## Lessons From Similar Projects
+
+Similar open source 3D sandbox and WebGL editor projects sharpen the roadmap,
+but they do not replace OEB's plan or become source dependencies by default.
+The useful lesson is architectural: interactive 3D editing works best when the
+scene is editable semantic state, not only a mesh export or a one-shot build
+result.
+
+Borrow these ideas as references:
+
+- A semantic scene graph that remains the source of truth.
+- Structured edit operations shared by chat, UI, agents, tests, and render.
+- Agent/MCP-style separation between resources, tools, prompts, and mutation
+  authority.
+- Live editor state that can be inspected, diffed, validated, undone, and
+  rendered.
+- Human review affordances before committing risky mutations.
+
+Do not borrow source code, schemas, or application boundaries until OEB's own
+contracts are stable.
+
+## Pascal Editor Reference Boundary
+
+Pascal Editor is an architectural reference, not a current dependency. It is
+useful because it reinforces the "editable semantic scene" direction OEB
+already had, and because its agent-facing scene manipulation model is close to
+the workflow OEB wants for chat, WebGL, and future MCP-style tools.
+
+Use Pascal Editor to clarify priorities:
+
+- The graph is the editable product.
+- The operation API is the shared mutation boundary.
+- Agents inspect and propose changes; deterministic tools validate and apply.
+- Browser editing, chat editing, and headless automation must share one core.
+
+Do not embed a full external editor yet. First stabilize:
+
+1. OEB semantic asset graph and constraint representation.
+2. Revision identity, optimistic concurrency, diffs, and undo.
+3. Deterministic operation vocabulary, compiler, and validator.
+4. Agent resources and mutation tools separated from translation prompts.
+5. A lightweight WebGL sandbox that exercises the same headless core.
+
+After those contracts survive real editing workflows, evaluate whether
+Pascal-style components reduce implementation cost without becoming a second
+source of truth.
+
+## TODO
+
+- [x] Define the OEB semantic asset graph schema for assets, scene parts,
+  geometry definitions, transforms, materials, relationships, attachments,
+  constraints, construction notes, and revision identity.
+- [x] Define the shared operation contract for `add`, `remove`, `replace`,
+  `move`, `rotate`, `attach`, `detach`, `recolor`, `resize`, `group`,
+  `ungroup`, and `undo`.
+- [x] Build a headless operation compiler that consumes graph state and
+  operation requests, then returns `compiled`, `needs_repair`,
+  `needs_clarification`, `unsupported`, or `invalid`.
+- [x] Add graph invariant and constraint validation before any operation can
+  commit a new revision.
+- [x] Produce reviewable graph diffs showing selected targets, intended
+  operation, preserved constraints, and before/after state before mutation.
+- [x] Make Studio Chat asset edits use the graph and operation contract instead
+  of ad hoc primitive-state patching.
+- [x] Expose agent/MCP-style scene resources separately from mutation tools:
+  scene summary, selected revision, part catalog, constraints, inspect,
+  propose, validate, apply, undo, and render.
+- [ ] Add a lightweight WebGL sandbox only after the graph and operation
+  contract are stable enough for both chat and headless tests.
+- [ ] Evaluate Pascal-style embedding or component reuse only after OEB's graph,
+  operation API, revision model, and validation rules survive real editing
+  workflows.
+
+Milestone 16 implementation:
+
+- `app/schemas/semantic_asset_graph.py` defines the canonical graph, operation,
+  result, diagnostic, and diff contracts.
+- `app/services/semantic_asset_graph.py` provides the browser-independent
+  normalizer, validator, compiler, graph diff, summary, part catalog, and
+  primitive-builder projection.
+- `GET /api/v1/studio-chat/assets/{asset_id}/graph` exposes inspectable graph
+  resources.
+- `POST .../operations/propose` and `POST .../operations/validate` compile
+  without mutation.
+- `POST .../operations/apply` uses the same request contract and commits only
+  a `compiled` proposal; the existing edit route uses this same core.
+- The existing revert route compiles through `undo`.
+- Accepted edits continue to create deterministic Blender build/review jobs;
+  rejected proposals create neither a revision nor a job.
+- Primitive arrays remain a derived worker projection inside asset state while
+  the semantic graph is authoritative.
 
 ## Scene Plan Schema
 

@@ -1,7 +1,7 @@
 ---
 title: Architecture
 created: 2026-07-03T21:43:45-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-07-27T12:00:00-04:00
 doc_type: spec
 production_area: pipeline
 department: pipeline
@@ -41,6 +41,97 @@ wiki_order: 10
 - Do not let target-specific requirements leak into authoring.
 - Keep intent separate from resolved assets where possible.
 - Validate every scene before export.
+
+## Mathematics, Language, And Blueprint
+
+At the center of every 3D model are mathematics and language. Mathematics
+defines what can exist; language defines what is intended. The Blueprint
+connects the two by describing mathematical constructions in human terms so
+any compatible builder can realize them.
+
+The studio catalogs mathematical definitions and operations, not every
+conceivable shape. A primitive is a named mathematical definition rather than
+necessarily a saved object. Shapes emerge by composing primitives, operations,
+constraints, and relationships.
+
+Store mathematics rather than meshes whenever mathematics fully preserves the
+intent. A particular mesh becomes authoritative only when its exact realization
+carries meaningful artistic or production decisions, including sculpting,
+topology, UV layout, rigging, simulation results, or deliberate optimization.
+
+```text
+human language
+  -> Blueprint (precise intent)
+  -> semantic asset graph
+  -> deterministic mathematical operations
+  -> builder-specific geometry
+  -> rendered pixels
+```
+
+## Canonical Semantic State
+
+The durable editable model is a semantic asset or scene graph, not a generated
+GLB and not the transient state of a browser or DCC. The graph contains named
+parts, relationships, transforms, materials, constraints, construction
+definitions, and revision identity.
+
+Chat, viewport, renderer, undo history, agents, and headless tests must all
+read and write this same canonical state. A browser editor is one client of the
+graph; it must not become a second source of truth.
+
+Every mutation crosses one structured operation API. The initial vocabulary
+should cover:
+
+- `add`
+- `remove`
+- `replace`
+- `move`
+- `rotate`
+- `attach`
+- `recolor`
+- `resize`
+- `group`
+- `undo`
+
+Operations name their targets, expected base revision, parameters, and
+preserved constraints. They produce a proposed graph diff before mutation.
+The same operation compiler and validator serve UI actions, agent actions,
+tests, and headless automation.
+
+Validation must compare requested intent, selected targets, proposed operations,
+and graph invariants before committing a revision. A request to add a tube
+must not be accepted as an operation that replaces a cone. Stale revisions,
+missing or ambiguous targets, unsupported operations, and broken constraints
+must fail without mutating canonical state.
+
+Agent and MCP interfaces should expose information and authority separately:
+
+- resources: scene summary, selected revision, part catalog, and constraints
+- tools: inspect, propose, validate, apply, undo, and render
+- prompts: task-specific translation guidance and examples
+
+Agents use the same operation API as human-facing clients. Human-in-the-loop
+surfaces should show the proposed edit, selected targets, graph diff,
+validation result, and resulting revision, with undo and retry available.
+
+## Editor Adoption Sequence
+
+Learn from Pascal Editor's architecture before considering its application or
+components. Borrow its semantic scene graph, operation-driven editing,
+agent-access pattern, shared live state, and review affordances now.
+
+Adopt editor capability in this order:
+
+1. Define the OEB semantic asset graph and revision model.
+2. Implement the deterministic, headless operation compiler and validator.
+3. Add a lightweight WebGL sandbox that edits the same graph through the same
+   operation API.
+4. Evaluate Pascal-style components or embedding only when they save work
+   without changing the established contracts.
+
+Do not embed a full external editor before asset state, revisions, and the
+operation vocabulary are stable. The editor must conform to OEB's core rather
+than define it.
 
 ## LLM role
 

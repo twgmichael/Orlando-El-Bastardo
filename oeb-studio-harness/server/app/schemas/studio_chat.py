@@ -4,6 +4,8 @@ import uuid
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.semantic_asset_graph import GraphOperationResult
+
 from app.schemas.conversation import PrimitiveBuildSpec
 from app.schemas.job import JobSummary
 
@@ -411,6 +413,7 @@ class StudioChatAssetEditResponse(BaseModel):
     review_url: str | None = None
     asset_review_url: str | None = None
     diagnostics: list[dict[str, Any]] = Field(default_factory=list)
+    operation_result: GraphOperationResult | None = None
 
 
 class StudioChatAssetRevertRequest(BaseModel):

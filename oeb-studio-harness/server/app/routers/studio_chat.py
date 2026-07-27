@@ -73,6 +73,11 @@ from app.schemas.studio_chat import (
     StudioChatTraceEventResponse,
 )
 from app.schemas.job import JobSummary
+from app.schemas.semantic_asset_graph import (
+    GraphOperationRequest,
+    GraphOperationResult,
+    SemanticAssetGraphResponse,
+)
 from app.services.asset_review import (
     display_review_view,
     image_artifacts_by_view,
@@ -89,6 +94,13 @@ from app.services.studio_chat import (
     primitive_registry,
     resolve_primitive_spec,
     studio_chat_presets,
+)
+from app.services.semantic_asset_graph import (
+    compile_graph_operation,
+    graph_from_state,
+    graph_summary,
+    part_catalog,
+    state_from_graph,
 )
 
 router = APIRouter(prefix="/studio-chat", tags=["studio-chat"])
@@ -392,6 +404,104 @@ def _set_targeted_entry_type(state: dict, target: str | None, matched_ids: set[s
                     entry["materials"] = materials
 
 
+def _display_primitive_type(primitive_type: str) -> str:
+    return "cube" if primitive_type == "box" else "tube" if primitive_type == "cylinder" else primitive_type
+
+
+def _unique_part_id(state: dict, base_id: str) -> str:
+    existing: set[str] = set()
+    for primitive in state.get("primitives") if isinstance(state.get("primitives"), list) else []:
+        if isinstance(primitive, dict) and isinstance(primitive.get("id"), str):
+            existing.add(primitive["id"])
+    asset_intent = state.get("asset_intent")
+    objects = asset_intent.get("objects") if isinstance(asset_intent, dict) else None
+    if isinstance(objects, list):
+        for obj in objects:
+            if isinstance(obj, dict) and isinstance(obj.get("id"), str):
+                existing.add(obj["id"])
+    candidate = _safe_slug(base_id, "new_part")
+    if candidate not in existing:
+        return candidate
+    index = 2
+    while f"{candidate}_{index}" in existing:
+        index += 1
+    return f"{candidate}_{index}"
+
+
+def _append_added_part_state_entries(
+    state: dict,
+    *,
+    part_id: str,
+    primitive_type: str,
+    material: str,
+    transform: dict,
+    reference_id: str | None,
+    placement: str,
+) -> None:
+    display_type = _display_primitive_type(primitive_type)
+    position = transform.get("location") if isinstance(transform.get("location"), list) else [0.0, 0.0, 0.0]
+    rotation = transform.get("rotation") if isinstance(transform.get("rotation"), list) else [0.0, 0.0, 0.0]
+    description = f"{material} {display_type}".strip()
+
+    asset_intent = state.setdefault("asset_intent", {})
+    if isinstance(asset_intent, dict):
+        objects = asset_intent.setdefault("objects", [])
+        if isinstance(objects, list):
+            objects.append({
+                "id": part_id,
+                "type": display_type,
+                "material": material,
+                "count": 1,
+                "placement": placement,
+                "orientation": {"position": position, "rotation": rotation},
+                "description": description,
+                "label": part_id,
+                "position": position,
+                "rotation": rotation,
+            })
+        relationships = asset_intent.setdefault("relationships", [])
+        if isinstance(relationships, list) and reference_id:
+            relationships.append({
+                "subject": part_id,
+                "relation": placement,
+                "target": reference_id,
+            })
+
+    for plan_key in ("scene_plan", "repaired_scene_plan"):
+        plan = state.get(plan_key)
+        if not isinstance(plan, dict):
+            continue
+        objects = plan.setdefault("objects", [])
+        if isinstance(objects, list):
+            objects.append({
+                "id": part_id,
+                "label": part_id,
+                "category": primitive_type,
+                "count": 1,
+                "size": None,
+                "placement": placement,
+                "mounting": None,
+                "shape": {"primary_form": primitive_type},
+                "required_features": [],
+                "source_phrases": [],
+                "materials": {"primary": material},
+                "style_details": [],
+                "parts": [],
+                "orientation": {"position": position, "rotation": rotation},
+            })
+        relationships = plan.setdefault("relationships", [])
+        if isinstance(relationships, list) and reference_id:
+            relationships.append({
+                "subject": part_id,
+                "relation": placement,
+                "target": reference_id,
+            })
+
+    components = state.setdefault("components", [])
+    if isinstance(components, list) and part_id not in components:
+        components.append(part_id)
+
+
 def _remove_targeted_state_entries(state: dict, target: str | None, removed_ids: set[str]) -> None:
     if not target or not removed_ids:
         return
@@ -596,6 +706,88 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
         })
         changed = True
 
+    if operation in {"add", "add_part", "create_part", "append_part"}:
+        if not replacement_type:
+            return state_after, [
+                {
+                    "type": "compile_blocked",
+                    "message": "Add edit requires a supported type such as tube, cylinder, cube, box, sphere, cone, torus, plane, or wedge.",
+                }
+            ], False
+        reference = matched[0]
+        reference_transform = reference.setdefault("transform", {})
+        reference_location = _as_number_list(reference_transform.get("location")) or [0.0, 0.0, 0.0]
+        reference_scale = _as_number_list(reference_transform.get("scale")) or [1.0, 1.0, 1.0]
+        add_scale = _as_number_list(edit_delta.get("scale")) or [1.0, 1.0, 1.0]
+        placement = str(edit_delta.get("placement") or semantic_direction or edit_delta.get("relation") or "").strip().lower()
+        offset = [0.0, 0.0, 0.0]
+        if placement in {"below", "down", "under", "underneath", "-z"}:
+            placement = "below"
+            offset[2] = -((reference_scale[2] + add_scale[2]) / 2)
+        elif placement in {"above", "up", "on_top_of", "top", "+z"}:
+            placement = "above"
+            offset[2] = (reference_scale[2] + add_scale[2]) / 2
+        elif placement in {"left", "-y"}:
+            placement = "left_of"
+            offset[1] = -((reference_scale[1] + add_scale[1]) / 2)
+        elif placement in {"right", "+y"}:
+            placement = "right_of"
+            offset[1] = (reference_scale[1] + add_scale[1]) / 2
+        elif placement in {"front", "forward", "+x"}:
+            placement = "in_front_of"
+            offset[0] = (reference_scale[0] + add_scale[0]) / 2
+        elif placement in {"rear", "back", "-x"}:
+            placement = "behind"
+            offset[0] = -((reference_scale[0] + add_scale[0]) / 2)
+        else:
+            placement = "near"
+            offset[1] = (reference_scale[1] + add_scale[1]) / 2
+        add_location = _as_number_list(edit_delta.get("location") or edit_delta.get("position")) or [
+            reference_location[index] + offset[index]
+            for index in range(3)
+        ]
+        add_rotation = _as_number_list(edit_delta.get("rotation")) or [0.0, 0.0, 0.0]
+        add_material = str(material or edit_delta.get("new_material") or "neutral")
+        reference_id = (
+            str(reference.get("id") or reference.get("label") or reference.get("name"))
+            if isinstance(reference, dict) and (reference.get("id") or reference.get("label") or reference.get("name"))
+            else None
+        )
+        base_id = str(edit_delta.get("id") or edit_delta.get("part_id") or f"{add_material}_{_display_primitive_type(replacement_type)}_{placement}_{reference_id or 'asset'}")
+        part_id = _unique_part_id(state_after, base_id)
+        new_primitive = {
+            "id": part_id,
+            "type": replacement_type,
+            "label": part_id,
+            "material": add_material,
+            "transform": {
+                "location": add_location,
+                "rotation": add_rotation,
+                "scale": add_scale,
+            },
+            "params": {
+                "shape_description": str(edit_delta.get("description") or f"{add_material} {_display_primitive_type(replacement_type)}"),
+                "shape_modifiers": [],
+            },
+        }
+        state_after.setdefault("primitives", []).append(new_primitive)
+        _append_added_part_state_entries(
+            state_after,
+            part_id=part_id,
+            primitive_type=replacement_type,
+            material=add_material,
+            transform=new_primitive["transform"],
+            reference_id=reference_id,
+            placement=placement,
+        )
+        diagnostics.append({
+            "type": "added",
+            "message": f"Added {part_id} {placement} {reference_id or 'target'}.",
+            "target": target,
+            "part_id": part_id,
+        })
+        changed = True
+
     if operation in {"align_centers", "align_objects", "center_objects_on_axis"}:
         locations = [
             _as_number_list(primitive.setdefault("transform", {}).get("location"))
@@ -646,7 +838,7 @@ def _compile_asset_edit_state(state_before: dict, edit_delta: dict) -> tuple[dic
     for primitive in matched:
         transform = primitive.setdefault("transform", {})
         current_scale = _as_number_list(transform.get("scale")) or [1.0, 1.0, 1.0]
-        if operation in {"remove", "delete", "remove_part", "delete_part", "align_centers", "align_objects", "center_objects_on_axis", "center_group", "center_objects", "center", "align_center"}:
+        if operation in {"add", "add_part", "create_part", "append_part", "remove", "delete", "remove_part", "delete_part", "align_centers", "align_objects", "center_objects_on_axis", "center_group", "center_objects", "center", "align_center"}:
             continue
         if operation in {"set_geometry_modifier", "geometry_modifier", "set_shape_modifier", "shape_modifier", "cut", "hemisphere", "half"}:
             primitive_type = str(primitive.get("type") or "").lower()
@@ -888,7 +1080,7 @@ async def _upsert_asset_state_from_build(
     now = _now()
     state_before = dict(asset.state_json) if asset and isinstance(asset.state_json, dict) else {}
     source_blend_path, glb_path = _state_paths_from_payload(build_payload)
-    state_after = {
+    raw_state_after = {
         **spec,
         "asset_id": asset_id,
         "source_job_id": str(job.id),
@@ -898,13 +1090,21 @@ async def _upsert_asset_state_from_build(
         parent_revision = asset.current_revision
         revision_number = asset.current_revision + 1
         asset.current_revision = revision_number
-        asset.state_json = state_after
         asset.source_blend_path = source_blend_path or asset.source_blend_path
         asset.glb_path = glb_path or asset.glb_path
         asset.updated_at = now
     else:
         parent_revision = None
         revision_number = 1
+    graph = graph_from_state(
+        raw_state_after,
+        asset_id=asset_id,
+        revision=revision_number,
+    )
+    state_after = state_from_graph(raw_state_after, graph)
+    if asset:
+        asset.state_json = state_after
+    else:
         asset = StudioChatAsset(
             thread_id=thread_id,
             asset_id=asset_id,
@@ -1845,12 +2045,14 @@ async def create_studio_chat_asset(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Studio chat asset already exists for this thread")
     now = _now()
+    graph = graph_from_state(body.state_json, asset_id=body.asset_id, revision=1)
+    canonical_state = state_from_graph(body.state_json, graph)
     asset = StudioChatAsset(
         thread_id=body.thread_id,
         asset_id=body.asset_id,
         base_builder=body.base_builder,
         current_revision=1,
-        state_json=body.state_json,
+        state_json=canonical_state,
         source_blend_path=body.source_blend_path,
         glb_path=body.glb_path,
         created_at=now,
@@ -1867,7 +2069,7 @@ async def create_studio_chat_asset(
         job_id=None,
         state_before={},
         edit_delta={"operation": "manual_asset_state_create"},
-        state_after=body.state_json,
+        state_after=canonical_state,
         source_blend_path=body.source_blend_path,
         glb_path=body.glb_path,
         status_value="created",
@@ -1916,6 +2118,73 @@ async def list_studio_chat_asset_revisions(
     )
 
 
+@router.get("/assets/{asset_id}/graph", response_model=SemanticAssetGraphResponse)
+async def get_studio_chat_asset_graph(
+    asset_id: str,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, thread_id)
+    graph = graph_from_state(
+        dict(asset.state_json or {}),
+        asset_id=asset.asset_id,
+        revision=asset.current_revision,
+    )
+    return SemanticAssetGraphResponse(
+        graph=graph,
+        summary=graph_summary(graph),
+        part_catalog=part_catalog(graph),
+        constraints=graph.constraints,
+    )
+
+
+@router.post("/assets/{asset_id}/operations/propose", response_model=GraphOperationResult)
+async def propose_studio_chat_asset_operation(
+    asset_id: str,
+    body: GraphOperationRequest,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    asset = await _get_chat_asset_or_404(db, asset_id, thread_id)
+    graph = graph_from_state(
+        dict(asset.state_json or {}),
+        asset_id=asset.asset_id,
+        revision=asset.current_revision,
+    )
+    return compile_graph_operation(graph, body)
+
+
+@router.post("/assets/{asset_id}/operations/validate", response_model=GraphOperationResult)
+async def validate_studio_chat_asset_operation(
+    asset_id: str,
+    body: GraphOperationRequest,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    return await propose_studio_chat_asset_operation(asset_id, body, thread_id, db)
+
+
+@router.post("/assets/{asset_id}/operations/apply", response_model=StudioChatAssetEditResponse)
+async def apply_studio_chat_asset_operation(
+    asset_id: str,
+    body: GraphOperationRequest,
+    thread_id: uuid.UUID | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    edit_body = StudioChatAssetEditRequest(
+        thread_id=thread_id,
+        base_revision=body.base_revision,
+        target=",".join(body.target_ids) or None,
+        operation=body.operation,
+        preserve=body.preserve,
+        edit_delta={
+            **body.parameters,
+            "intent": body.intent,
+        },
+    )
+    return await create_studio_chat_asset_edit(asset_id, edit_body, db)
+
+
 @router.post("/assets/{asset_id}/edits", response_model=StudioChatAssetEditResponse)
 async def create_studio_chat_asset_edit(
     asset_id: str,
@@ -1934,16 +2203,61 @@ async def create_studio_chat_asset_edit(
         )
     now = _now()
     state_before = dict(asset.state_json or {})
-    edit_delta = {
-        **body.edit_delta,
+    edit_delta = {**body.edit_delta, "operation": body.operation, "preserve": body.preserve}
+    for key, value in {
         "target": body.target,
-        "operation": body.operation,
         "view": body.view,
         "semantic_direction": body.semantic_direction,
         "amount": body.amount,
-        "preserve": body.preserve,
+    }.items():
+        if value is not None:
+            edit_delta[key] = value
+    operation_parameters = {
+        key: value
+        for key, value in edit_delta.items()
+        if key not in {"operation", "target", "preserve", "intent", "requested_intent"}
+        and value is not None
     }
-    state_after, diagnostics, compiled = _compile_asset_edit_state(state_before, edit_delta)
+    target_ids = []
+    if body.target:
+        target_ids = [item.strip() for item in body.target.split(",") if item.strip()]
+    operation_request = GraphOperationRequest(
+        operation=body.operation,
+        base_revision=body.base_revision,
+        intent=body.edit_delta.get("intent") or body.edit_delta.get("requested_intent"),
+        target_ids=target_ids,
+        parameters=operation_parameters,
+        preserve=body.preserve,
+    )
+    graph_before = graph_from_state(
+        state_before,
+        asset_id=asset.asset_id,
+        revision=asset.current_revision,
+    )
+    operation_result = compile_graph_operation(graph_before, operation_request)
+    compiled = operation_result.outcome == "compiled" and operation_result.graph_after is not None
+    if not compiled:
+        raise HTTPException(
+            status_code=422,
+            detail=operation_result.model_dump(mode="json"),
+        )
+    state_after = state_from_graph(state_before, operation_result.graph_after)
+    diagnostics = [
+        {
+            "type": diagnostic.code,
+            "stage": diagnostic.stage,
+            "message": diagnostic.message,
+            "path": diagnostic.path,
+            "details": diagnostic.details,
+        }
+        for diagnostic in operation_result.diagnostics
+    ]
+    edit_delta["graph_operation"] = operation_request.model_dump(mode="json")
+    edit_delta["graph_diff"] = (
+        operation_result.diff.model_dump(mode="json")
+        if operation_result.diff is not None
+        else None
+    )
     revision_number = asset.current_revision + 1
     asset.current_revision = revision_number
     asset.state_json = state_after
@@ -2035,6 +2349,7 @@ async def create_studio_chat_asset_edit(
         review_url=review_url,
         asset_review_url=asset_review_url,
         diagnostics=diagnostics,
+        operation_result=operation_result,
     )
 
 
@@ -2065,7 +2380,26 @@ async def revert_studio_chat_asset(
         raise HTTPException(status_code=404, detail="Target revision not found")
 
     state_before = dict(asset.state_json or {})
-    state_after = dict(target_revision.state_after or {})
+    graph_before = graph_from_state(
+        state_before,
+        asset_id=asset.asset_id,
+        revision=asset.current_revision,
+    )
+    target_graph = graph_from_state(
+        dict(target_revision.state_after or {}),
+        asset_id=asset.asset_id,
+        revision=body.target_revision,
+    )
+    undo_request = GraphOperationRequest(
+        operation="undo",
+        base_revision=body.base_revision,
+        intent=f"undo to revision {body.target_revision}",
+        parameters={"previous_graph": target_graph.model_dump(mode="json")},
+    )
+    operation_result = compile_graph_operation(graph_before, undo_request)
+    if operation_result.outcome != "compiled" or operation_result.graph_after is None:
+        raise HTTPException(status_code=422, detail=operation_result.model_dump(mode="json"))
+    state_after = state_from_graph(state_before, operation_result.graph_after)
     revision_number = asset.current_revision + 1
     asset.current_revision = revision_number
     asset.state_json = state_after
@@ -2080,7 +2414,16 @@ async def revert_studio_chat_asset(
         message_id=body.message_id,
         job_id=None,
         state_before=state_before,
-        edit_delta={"operation": "revert", "target_revision": body.target_revision},
+        edit_delta={
+            "operation": "undo",
+            "target_revision": body.target_revision,
+            "graph_operation": undo_request.model_dump(mode="json"),
+            "graph_diff": (
+                operation_result.diff.model_dump(mode="json")
+                if operation_result.diff is not None
+                else None
+            ),
+        },
         state_after=state_after,
         source_blend_path=asset.source_blend_path,
         glb_path=asset.glb_path,

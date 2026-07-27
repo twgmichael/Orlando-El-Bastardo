@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-23T18:15:00-04:00
+updated: 2026-07-27T12:00:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -143,6 +143,27 @@ visible shot.
      construction-graph/state level with clear compile diagnostics.
    - [x] Studio Chat Milestone 15 — validate browser syntax and Docker-backed
      server tests.
+   - [x] Studio Chat Milestone 16 — implement
+     `SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md` as the OEB Semantic Asset Graph
+     + Operation Contract milestone: define canonical editable graph state for
+     parts, geometry, transforms, materials, relationships, attachments,
+     constraints, construction notes, and revision identity.
+   - [x] Studio Chat Milestone 16 — define the shared operation vocabulary and
+     request/response contract for `add`, `remove`, `replace`, `move`,
+     `rotate`, `attach`, `detach`, `recolor`, `resize`, `group`, `ungroup`,
+     and `undo`.
+   - [x] Studio Chat Milestone 16 — move asset edits from ad hoc primitive-state
+     patching to the shared headless operation compiler and graph validator.
+   - [x] Studio Chat Milestone 16 — produce reviewable graph diffs before
+     mutation, including selected targets, intended operation, preserved
+     constraints, before/after state, and structured diagnostics.
+   - [x] Studio Chat Milestone 16 — expose agent/MCP-style scene resources and
+     mutation tools separately from translation prompts: scene summary,
+     selected revision, part catalog, constraints, inspect, propose, validate,
+     apply, undo, and render.
+   - [x] Studio Chat Milestone 16 — defer WebGL sandbox or Pascal-style
+     embedding until OEB's graph, operation contract, revision model, and
+     validation rules are stable enough to be the single source of truth.
    - [ ] Studio Chat Milestone 17 — define a broad asset-intent envelope and
      preserve complete raw local LLM requests/responses plus unknown fields
      before parsing or normalization.

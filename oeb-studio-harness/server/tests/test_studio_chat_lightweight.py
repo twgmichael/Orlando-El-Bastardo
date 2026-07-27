@@ -55,7 +55,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
     asset_edit = presets["asset_edit_translator"]
-    assert "Supported generic operations include remove, replace_with, recolor, move" in asset_edit.system_prompt
+    assert "Supported generic operations include add_part, remove, replace_with, recolor, move" in asset_edit.system_prompt
     assert '"operation": "proportional_scale"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
@@ -429,6 +429,70 @@ def test_compile_asset_edit_state_replaces_target_type_generically():
     assert state_after["scene_plan"]["objects"][0]["category"] == "cylinder"
     assert state_after["scene_plan"]["objects"][0]["shape"] == {"primary_form": "cylinder"}
     assert state_after["primitives"][1]["type"] == "cone"
+    assert diagnostics[-1]["type"] == "compiled"
+
+
+def test_compile_asset_edit_state_adds_part_below_target_without_replacing_it():
+    state_before = {
+        "canonical_id": "ship_test_A",
+        "name": "Test Rocket",
+        "kind": "vehicle",
+        "asset_intent": {
+            "objects": [
+                {"id": "nose_cone", "type": "cone", "material": "blue", "description": "Nose cone"},
+            ],
+            "relationships": [],
+        },
+        "primitives": [
+            {
+                "id": "nose_cone",
+                "type": "cone",
+                "material": "blue",
+                "transform": {"location": [0, 0, 2], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
+                "params": {"shape_description": "Nose cone"},
+            },
+        ],
+        "components": ["nose_cone"],
+        "scene_plan": {
+            "objects": [
+                {"id": "nose_cone", "category": "cone", "shape": {"primary_form": "cone"}, "materials": {"primary": "blue"}},
+            ],
+            "relationships": [],
+        },
+        "repaired_scene_plan": {
+            "objects": [
+                {"id": "nose_cone", "category": "cone", "shape": {"primary_form": "cone"}, "materials": {"primary": "blue"}},
+            ],
+            "relationships": [],
+        },
+    }
+
+    state_after, diagnostics, compiled = _compile_asset_edit_state(
+        state_before,
+        {
+            "operation": "add_part",
+            "target": "nose_cone",
+            "semantic_direction": "below",
+            "type": "tube",
+            "material": "red",
+        },
+    )
+
+    assert compiled is True
+    assert [primitive["type"] for primitive in state_after["primitives"]] == ["cone", "cylinder"]
+    assert state_after["primitives"][0]["id"] == "nose_cone"
+    added = state_after["primitives"][1]
+    assert added["material"] == "red"
+    assert added["transform"]["location"] == [0.0, 0.0, 1.0]
+    assert [entry["id"] for entry in state_after["asset_intent"]["objects"]] == [
+        "nose_cone",
+        "red_tube_below_nose_cone",
+    ]
+    assert state_after["asset_intent"]["relationships"] == [
+        {"subject": "red_tube_below_nose_cone", "relation": "below", "target": "nose_cone"}
+    ]
+    assert state_after["components"] == ["nose_cone", "red_tube_below_nose_cone"]
+    assert any(item["type"] == "added" for item in diagnostics)
     assert diagnostics[-1]["type"] == "compiled"
 
 
