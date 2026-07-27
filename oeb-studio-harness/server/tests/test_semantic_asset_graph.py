@@ -216,6 +216,125 @@ def test_validator_rejects_attachment_cycles():
     assert any(diagnostic.code == "attachment_cycle" for diagnostic in validate_graph(invalid))
 
 
+def test_existing_graph_drops_references_to_parts_that_never_compiled():
+    state = {
+        "semantic_graph": {
+            "asset_id": "rocket_A",
+            "revision": 2,
+            "parts": [
+                {"id": "cone", "geometry": {"type": "cone"}},
+                {"id": "tube", "geometry": {"type": "cylinder"}},
+            ],
+            "relationships": [
+                {"id": "cone_on_tube", "type": "on_top_of", "subject": "cone", "target": "tube"},
+            ],
+            "attachments": [
+                {"id": "tube_to_missing_fin", "child": "tube", "parent": "missing_fin"},
+            ],
+        }
+    }
+
+    graph = graph_from_state(state)
+
+    assert [relationship.id for relationship in graph.relationships] == ["cone_on_tube"]
+    assert graph.attachments == []
+    assert graph.metadata["normalization_diagnostics"][0]["id"] == "tube_to_missing_fin"
+
+
+def test_relational_move_places_cone_on_top_of_tube():
+    graph = SemanticAssetGraph.model_validate(
+        {
+            "asset_id": "rocket_A",
+            "revision": 2,
+            "parts": [
+                {
+                    "id": "cone",
+                    "geometry": {"type": "cone", "parameters": {"depth": 1.0}},
+                    "transform": {"location": [0, 0, 0], "scale": [1, 1, 1]},
+                },
+                {
+                    "id": "tube",
+                    "geometry": {"type": "cylinder", "parameters": {"depth": 1.0}},
+                    "transform": {"location": [0, 0, 0], "scale": [0.4, 0.4, 1.4]},
+                },
+            ],
+        }
+    )
+
+    result = compile_graph_operation(
+        graph,
+        GraphOperationRequest(
+            operation="move",
+            base_revision=2,
+            intent="Move the cone to the top of the tube.",
+            target_ids=["cone"],
+            parameters={"relation": "on_top_of", "reference_id": "tube"},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    cone = next(part for part in result.graph_after.parts if part.id == "cone")
+    assert cone.transform.location == [0.0, 0.0, 1.2]
+    assert result.graph_after.relationships[0].type == "on_top_of"
+    assert result.graph_after.relationships[0].subject == "cone"
+    assert result.graph_after.relationships[0].target == "tube"
+
+
+def test_relational_intent_repairs_legacy_operation_and_unique_cone_typo():
+    graph = SemanticAssetGraph.model_validate(
+        {
+            "asset_id": "rocket_A",
+            "revision": 2,
+            "parts": [
+                {
+                    "id": "rocket_top_cone",
+                    "geometry": {"type": "cone"},
+                    "transform": {"location": [0, 0, 0], "scale": [1, 1, 1]},
+                },
+                {
+                    "id": "rocket_body_tube",
+                    "geometry": {"type": "cylinder"},
+                    "transform": {"location": [0, 0, 0], "scale": [0.4, 0.4, 1.4]},
+                },
+            ],
+        }
+    )
+
+    result = compile_graph_operation(
+        graph,
+        GraphOperationRequest(
+            operation="align_centers",
+            base_revision=2,
+            intent="Move the code to the top of the tube.",
+            target_ids=["rocket_body_tube"],
+            parameters={"semantic_direction": "down", "amount": 0.25},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    assert result.operation == "move"
+    assert result.selected_targets == ["rocket_top_cone"]
+    cone = next(part for part in result.graph_after.parts if part.id == "rocket_top_cone")
+    assert cone.transform.location == [0.0, 0.0, 1.2]
+    assert result.diagnostics[0].code == "relational_move_normalized"
+    assert result.diagnostics[0].details["original_operation"] == "align_centers"
+
+
+def test_legacy_align_centers_with_one_target_requests_clarification():
+    result = compile_graph_operation(
+        _graph(),
+        GraphOperationRequest(
+            operation="align_centers",
+            base_revision=3,
+            target_ids=["body"],
+        ),
+    )
+
+    assert result.outcome == "needs_clarification"
+    assert result.operation == "move"
+    assert result.diagnostics[0].code == "insufficient_alignment_targets"
+
+
 def test_failed_compile_does_not_change_input_state():
     graph = _graph()
     before = copy.deepcopy(graph.model_dump(mode="json"))

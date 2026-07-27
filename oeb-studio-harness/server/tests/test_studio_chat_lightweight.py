@@ -52,11 +52,14 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt
     assert "+X front" in asset_builder.system_prompt
     assert "Do not write Blender code" in asset_builder.system_prompt
+    assert "Use only these canonical operations" in asset_builder.system_prompt
+    assert '"relation":"on_top_of"' in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
     asset_edit = presets["asset_edit_translator"]
-    assert "Supported generic operations include add_part, remove, replace_with, recolor, move" in asset_edit.system_prompt
-    assert '"operation": "proportional_scale"' in asset_edit.system_prompt
+    assert "canonical operations: add, remove, replace, move" in asset_edit.system_prompt
+    assert '"operation": "resize"' in asset_edit.system_prompt
+    assert '"reference_id":"Y"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
 
 

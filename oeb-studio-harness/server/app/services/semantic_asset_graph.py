@@ -46,6 +46,21 @@ OPERATION_ALIASES = {
     "resize_axis": "resize",
     "add_attachment": "attach",
     "remove_attachment": "detach",
+    "align_centers": "move",
+    "align_objects": "move",
+    "center_objects_on_axis": "move",
+    "center_group": "move",
+    "center_objects": "move",
+    "align_center": "move",
+    "set_geometry_modifier": "replace",
+    "geometry_modifier": "replace",
+    "set_shape_modifier": "replace",
+    "shape_modifier": "replace",
+    "cut": "replace",
+    "hemisphere": "replace",
+    "half": "replace",
+    "set_thickness": "resize",
+    "adjust_thickness": "resize",
 }
 
 SUPPORTED_OPERATIONS = {
@@ -109,6 +124,68 @@ def _part_id(entry: dict[str, Any], index: int) -> str:
     return _slug(entry.get("id") or entry.get("label") or entry.get("name"), f"part_{index + 1}")
 
 
+def _repair_graph_data_references(graph_data: dict[str, Any]) -> dict[str, Any]:
+    """Remove references to geometry that never compiled, recording every repair."""
+    known = {
+        str(part.get("id"))
+        for part in graph_data.get("parts", [])
+        if isinstance(part, dict) and part.get("id")
+    }
+    repairs: list[dict[str, Any]] = []
+
+    def retain(collection: str, predicate) -> None:
+        entries = graph_data.get(collection)
+        if not isinstance(entries, list):
+            graph_data[collection] = []
+            return
+        kept = []
+        for entry in entries:
+            if isinstance(entry, dict) and predicate(entry):
+                kept.append(entry)
+            else:
+                repairs.append({
+                    "code": "dropped_dangling_graph_reference",
+                    "collection": collection,
+                    "id": entry.get("id") if isinstance(entry, dict) else None,
+                })
+        graph_data[collection] = kept
+
+    retain("relationships", lambda entry: entry.get("subject") in known and entry.get("target") in known)
+    retain("attachments", lambda entry: entry.get("child") in known and entry.get("parent") in known)
+    retain(
+        "constraints",
+        lambda entry: isinstance(entry.get("targets"), list)
+        and all(target in known for target in entry["targets"]),
+    )
+    groups = graph_data.get("groups")
+    if isinstance(groups, list):
+        repaired_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            original = list(group.get("members") or [])
+            group["members"] = [member for member in original if member in known]
+            if group["members"]:
+                repaired_groups.append(group)
+            if group["members"] != original:
+                repairs.append({
+                    "code": "dropped_dangling_group_member",
+                    "collection": "groups",
+                    "id": group.get("id"),
+                })
+        graph_data["groups"] = repaired_groups
+    else:
+        graph_data["groups"] = []
+    if repairs:
+        metadata = graph_data.setdefault("metadata", {})
+        existing = metadata.get("normalization_diagnostics")
+        metadata["normalization_diagnostics"] = [
+            *(existing if isinstance(existing, list) else []),
+            *repairs,
+        ]
+    return graph_data
+
+
 def graph_from_state(
     state: dict[str, Any],
     *,
@@ -122,7 +199,7 @@ def graph_from_state(
             graph_data["asset_id"] = asset_id
         if revision is not None:
             graph_data["revision"] = revision
-        return SemanticAssetGraph.model_validate(graph_data)
+        return SemanticAssetGraph.model_validate(_repair_graph_data_references(graph_data))
 
     primitives = state.get("primitives")
     parts = []
@@ -212,7 +289,7 @@ def graph_from_state(
         notes = []
     resolved_asset_id = asset_id or state.get("canonical_id") or state.get("asset_id") or "unnamed_asset"
     return SemanticAssetGraph.model_validate(
-        {
+        _repair_graph_data_references({
             "asset_id": str(resolved_asset_id),
             "revision": revision if revision is not None else int(state.get("revision") or 0),
             "parts": parts,
@@ -227,7 +304,7 @@ def graph_from_state(
                 "style": state.get("style"),
                 "legacy_projection": True,
             },
-        }
+        })
     )
 
 
@@ -434,10 +511,149 @@ def _rotation_amount(parameters: dict[str, Any]) -> tuple[int | None, float | No
     return axis_index, amount
 
 
+def _vertical_half_extent(part: dict[str, Any]) -> float:
+    geometry = part.get("geometry") if isinstance(part.get("geometry"), dict) else {}
+    parameters = geometry.get("parameters") if isinstance(geometry.get("parameters"), dict) else {}
+    scale = part.get("transform", {}).get("scale", [1.0, 1.0, 1.0])
+    scale_z = abs(float(scale[2])) if isinstance(scale, list) and len(scale) == 3 else 1.0
+    geometry_type = str(geometry.get("type") or "").lower()
+    if geometry_type == "sphere":
+        return abs(float(parameters.get("radius", 0.5))) * scale_z
+    if geometry_type in {"cylinder", "cone"}:
+        return abs(float(parameters.get("depth", 1.0))) * scale_z / 2.0
+    return scale_z / 2.0
+
+
+def _upsert_spatial_relationship(
+    graph_data: dict[str, Any],
+    *,
+    subject: str,
+    relation: str,
+    target: str,
+) -> None:
+    spatial_types = {
+        "above", "below", "on_top_of", "under", "left_of", "right_of",
+        "in_front_of", "behind", "aligned_with",
+    }
+    graph_data["relationships"] = [
+        item
+        for item in graph_data["relationships"]
+        if not (item["subject"] == subject and item["type"] in spatial_types)
+    ]
+    graph_data["relationships"].append({
+        "id": _slug(None, f"relationship_{subject}_{relation}_{target}"),
+        "type": relation,
+        "subject": subject,
+        "target": target,
+        "parameters": {},
+    })
+
+
+def _edit_distance_at_most_one(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) <= 1
+    shorter, longer = (left, right) if len(left) < len(right) else (right, left)
+    short_index = 0
+    differences = 0
+    for character in longer:
+        if short_index < len(shorter) and shorter[short_index] == character:
+            short_index += 1
+        else:
+            differences += 1
+            if differences > 1:
+                return False
+    return True
+
+
+def _part_terms(part: Any) -> set[str]:
+    values = [
+        getattr(part, "id", None),
+        getattr(part, "name", None),
+        getattr(part, "role", None),
+        getattr(getattr(part, "geometry", None), "type", None),
+    ]
+    terms = {
+        token
+        for value in values
+        if value
+        for token in re.findall(r"[a-z0-9]+", str(value).lower())
+    }
+    geometry_type = str(getattr(getattr(part, "geometry", None), "type", "")).lower()
+    if geometry_type == "cylinder":
+        terms.add("tube")
+    elif geometry_type == "box":
+        terms.add("cube")
+    elif geometry_type == "sphere":
+        terms.add("ball")
+    return terms
+
+
+def _unique_part_for_term(graph: SemanticAssetGraph, term: str) -> str | None:
+    normalized = _slug(term, "")
+    exact = [part.id for part in graph.parts if normalized in _part_terms(part)]
+    if len(exact) == 1:
+        return exact[0]
+    fuzzy = [
+        part.id
+        for part in graph.parts
+        if any(_edit_distance_at_most_one(normalized, candidate) for candidate in _part_terms(part))
+    ]
+    return fuzzy[0] if len(fuzzy) == 1 else None
+
+
+def _normalize_relational_move_intent(
+    graph: SemanticAssetGraph,
+    request: GraphOperationRequest,
+) -> tuple[GraphOperationRequest, GraphDiagnostic | None]:
+    intent = str(request.intent or "").strip().lower()
+    match = re.search(
+        r"\bmove\s+(?:the\s+)?([a-z0-9_-]+)\s+"
+        r"(?:to|onto)\s+(?:the\s+)?(top|bottom)\s+of\s+(?:the\s+)?([a-z0-9_-]+)",
+        intent,
+    )
+    if not match:
+        return request, None
+    moving_term, side, reference_term = match.groups()
+    moving_id = _unique_part_for_term(graph, moving_term)
+    reference_id = _unique_part_for_term(graph, reference_term)
+    if not moving_id or not reference_id or moving_id == reference_id:
+        return request, None
+    relation = "on_top_of" if side == "top" else "below"
+    normalized = request.model_copy(
+        update={
+            "operation": "move",
+            "target_ids": [moving_id],
+            "parameters": {
+                **request.parameters,
+                "relation": relation,
+                "reference_id": reference_id,
+            },
+        }
+    )
+    return normalized, GraphDiagnostic(
+        stage="normalize",
+        code="relational_move_normalized",
+        message=f"Normalized relational move: {moving_id} {relation} {reference_id}.",
+        details={
+            "original_operation": request.operation,
+            "moving_term": moving_term,
+            "reference_term": reference_term,
+            "target": moving_id,
+            "reference_id": reference_id,
+        },
+    )
+
+
 def compile_graph_operation(
     graph: SemanticAssetGraph,
     request: GraphOperationRequest,
 ) -> GraphOperationResult:
+    request, normalization_diagnostic = _normalize_relational_move_intent(graph, request)
+    source_operation = request.operation.strip().lower()
     operation = normalize_operation(request.operation)
     if operation not in SUPPORTED_OPERATIONS:
         return _failure("unsupported", operation, request, graph, "unsupported_operation", f"Unsupported graph operation: {request.operation}")
@@ -586,34 +802,174 @@ def compile_graph_operation(
             group["members"] = [member for member in group["members"] if member not in selected_set]
         data["groups"] = [group for group in data["groups"] if group["members"]]
     elif operation == "replace":
-        geometry_type = parameters.get("type") or parameters.get("primitive_type") or parameters.get("replacement_type") or parameters.get("replace_with")
-        if not geometry_type:
-            return _failure("needs_clarification", operation, request, graph, "missing_geometry", "Replace requires a replacement geometry type.")
-        for part in selected:
-            part["geometry"]["type"] = PRIMITIVE_ALIASES.get(str(geometry_type).lower(), str(geometry_type).lower())
-            if isinstance(parameters.get("geometry_parameters"), dict):
-                part["geometry"]["parameters"] = copy.deepcopy(parameters["geometry_parameters"])
-            if parameters.get("material") or parameters.get("color"):
-                part["material"] = parameters.get("material") or parameters.get("color")
-    elif operation == "move":
-        absolute = parameters.get("location") or parameters.get("position")
-        delta = parameters.get("location_delta") or parameters.get("delta_location")
-        if absolute is None and delta is None and isinstance(parameters.get("amount"), int | float):
-            amount = float(parameters["amount"])
-            direction = str(parameters.get("semantic_direction") or parameters.get("direction") or "").lower()
-            delta = {
-                "front": [amount, 0, 0], "forward": [amount, 0, 0],
-                "rear": [-amount, 0, 0], "back": [-amount, 0, 0],
-                "left": [0, -amount, 0], "right": [0, amount, 0],
-                "up": [0, 0, amount], "down": [0, 0, -amount],
-            }.get(direction)
-        if absolute is None and delta is None:
-            return _failure("needs_clarification", operation, request, graph, "missing_translation", "Move requires a location or translation delta.")
-        for part in selected:
-            current = part["transform"]["location"]
-            part["transform"]["location"] = _vector(absolute, current) if absolute is not None else [
-                current[index] + _vector(delta, [0, 0, 0])[index] for index in range(3)
+        modifier_mode = (
+            parameters.get("mode") == "geometry_modifier"
+            or source_operation in {
+                "set_geometry_modifier", "geometry_modifier", "set_shape_modifier",
+                "shape_modifier", "cut", "hemisphere", "half",
+            }
+            or isinstance(parameters.get("shape_modifiers"), list)
+        )
+        if modifier_mode:
+            requested_modifiers = [
+                str(item).strip().lower()
+                for item in parameters.get("shape_modifiers", [])
+                if str(item).strip()
             ]
+            if source_operation in {"cut", "hemisphere", "half"} and "half" not in requested_modifiers:
+                requested_modifiers.append("half")
+            if "half" in requested_modifiers and "flat" not in requested_modifiers:
+                requested_modifiers.append("flat")
+            for part in selected:
+                if part["geometry"]["type"] != "sphere":
+                    return _failure(
+                        "needs_repair",
+                        operation,
+                        request,
+                        graph,
+                        "geometry_modifier_target_mismatch",
+                        "Half/hemisphere modifiers require a sphere target.",
+                    )
+                existing = part["geometry"]["parameters"].get("shape_modifiers")
+                existing = existing if isinstance(existing, list) else []
+                part["geometry"]["parameters"]["shape_modifiers"] = list(dict.fromkeys(existing + requested_modifiers))
+                direction = str(parameters.get("hemisphere_direction") or parameters.get("direction") or "up").lower()
+                if direction in {"down", "-z", "bottom", "flat_up", "flat-top"}:
+                    part["transform"]["rotation"] = [math.pi, 0.0, 0.0]
+                elif direction in {"up", "+z", "top", "flat_down", "flat-bottom"}:
+                    part["transform"]["rotation"] = [0.0, 0.0, 0.0]
+                else:
+                    return _failure(
+                        "needs_clarification",
+                        operation,
+                        request,
+                        graph,
+                        "invalid_hemisphere_direction",
+                        "Hemisphere direction must be up or down.",
+                    )
+        else:
+            geometry_type = parameters.get("type") or parameters.get("primitive_type") or parameters.get("replacement_type") or parameters.get("replace_with")
+            if not geometry_type:
+                return _failure("needs_clarification", operation, request, graph, "missing_geometry", "Replace requires a replacement geometry type.")
+            for part in selected:
+                part["geometry"]["type"] = PRIMITIVE_ALIASES.get(str(geometry_type).lower(), str(geometry_type).lower())
+                if isinstance(parameters.get("geometry_parameters"), dict):
+                    part["geometry"]["parameters"] = copy.deepcopy(parameters["geometry_parameters"])
+                if parameters.get("material") or parameters.get("color"):
+                    part["material"] = parameters.get("material") or parameters.get("color")
+    elif operation == "move":
+        move_mode = str(parameters.get("mode") or "").lower()
+        if source_operation in {"align_centers", "align_objects", "center_objects_on_axis"}:
+            move_mode = "align_centers_xy"
+        elif source_operation in {"center_group", "center_objects", "align_center"}:
+            move_mode = "center_group"
+        relation = str(parameters.get("relation") or parameters.get("placement") or "").lower()
+        reference_id = str(
+            parameters.get("reference_id")
+            or parameters.get("reference")
+            or parameters.get("anchor")
+            or ""
+        )
+        if relation in {"top", "above"}:
+            relation = "on_top_of"
+        elif relation in {"bottom", "below"}:
+            relation = "below"
+        if relation:
+            reference = next((part for part in data["parts"] if part["id"] == reference_id), None)
+            if reference is None:
+                return _failure(
+                    "needs_clarification",
+                    operation,
+                    request,
+                    graph,
+                    "reference_not_found",
+                    "Relational move requires a known reference_id.",
+                    details={"reference_id": reference_id},
+                )
+            for part in selected:
+                reference_location = reference["transform"]["location"]
+                location = list(part["transform"]["location"])
+                if relation in {"on_top_of", "above"}:
+                    location = [
+                        reference_location[0],
+                        reference_location[1],
+                        reference_location[2] + _vertical_half_extent(reference) + _vertical_half_extent(part),
+                    ]
+                elif relation in {"below", "under"}:
+                    location = [
+                        reference_location[0],
+                        reference_location[1],
+                        reference_location[2] - _vertical_half_extent(reference) - _vertical_half_extent(part),
+                    ]
+                elif relation == "left_of":
+                    location[1] = reference_location[1] - 1.0
+                elif relation == "right_of":
+                    location[1] = reference_location[1] + 1.0
+                elif relation == "in_front_of":
+                    location[0] = reference_location[0] + 1.0
+                elif relation == "behind":
+                    location[0] = reference_location[0] - 1.0
+                elif relation == "aligned_with":
+                    location[0:2] = reference_location[0:2]
+                else:
+                    return _failure(
+                        "needs_clarification",
+                        operation,
+                        request,
+                        graph,
+                        "unsupported_spatial_relation",
+                        f"Unsupported relational move: {relation}",
+                    )
+                part["transform"]["location"] = location
+                _upsert_spatial_relationship(
+                    data,
+                    subject=part["id"],
+                    relation=relation,
+                    target=reference_id,
+                )
+        elif move_mode == "align_centers_xy":
+            if len(selected) < 2:
+                return _failure(
+                    "needs_clarification",
+                    operation,
+                    request,
+                    graph,
+                    "insufficient_alignment_targets",
+                    "Center alignment requires at least two selected parts.",
+                )
+            center_x = sum(part["transform"]["location"][0] for part in selected) / len(selected)
+            center_y = sum(part["transform"]["location"][1] for part in selected) / len(selected)
+            for part in selected:
+                part["transform"]["location"][0:2] = [center_x, center_y]
+        elif move_mode == "center_group":
+            centroid = [
+                sum(part["transform"]["location"][index] for part in selected) / len(selected)
+                for index in range(3)
+            ]
+            for part in selected:
+                part["transform"]["location"] = [
+                    part["transform"]["location"][index] - centroid[index]
+                    for index in range(3)
+                ]
+        else:
+            absolute = parameters.get("location") or parameters.get("position")
+            delta = parameters.get("location_delta") or parameters.get("delta_location")
+            if absolute is None and delta is None and isinstance(parameters.get("amount"), int | float):
+                amount = float(parameters["amount"])
+                direction = str(parameters.get("semantic_direction") or parameters.get("direction") or "").lower()
+                delta = {
+                    "front": [amount, 0, 0], "forward": [amount, 0, 0],
+                    "rear": [-amount, 0, 0], "back": [-amount, 0, 0],
+                    "left": [0, -amount, 0], "right": [0, amount, 0],
+                    "up": [0, 0, amount], "down": [0, 0, -amount],
+                }.get(direction)
+            if absolute is None and delta is None:
+                return _failure("needs_clarification", operation, request, graph, "missing_translation", "Move requires a location, translation delta, or relation plus reference_id.")
+            for part in selected:
+                current = part["transform"]["location"]
+                part["transform"]["location"] = _vector(absolute, current) if absolute is not None else [
+                    current[index] + _vector(delta, [0, 0, 0])[index] for index in range(3)
+                ]
     elif operation == "rotate":
         absolute = parameters.get("rotation")
         if absolute is not None:
@@ -632,21 +988,34 @@ def compile_graph_operation(
         for part in selected:
             part["material"] = copy.deepcopy(material)
     elif operation == "resize":
-        scale = parameters.get("scale")
-        factor = parameters.get("factor") or parameters.get("scale_factor")
-        if factor is None and normalize_operation(request.operation) == "resize":
-            factor = parameters.get("amount")
-        if scale is None and not isinstance(factor, int | float):
-            return _failure("needs_clarification", operation, request, graph, "missing_scale", "Resize requires a scale vector or numeric factor.")
-        if isinstance(factor, int | float) and not 0.01 <= float(factor) <= 20:
-            return _failure("invalid", operation, request, graph, "invalid_scale_factor", "Resize factor must be between 0.01 and 20.")
-        for part in selected:
-            if scale is not None:
-                part["transform"]["scale"] = _vector(scale, part["transform"]["scale"])
-            else:
-                part["transform"]["scale"] = [component * float(factor) for component in part["transform"]["scale"]]
-                if set(request.target_ids) & {"asset", "whole_asset", "*"}:
-                    part["transform"]["location"] = [component * float(factor) for component in part["transform"]["location"]]
+        if source_operation in {"set_thickness", "adjust_thickness"} or parameters.get("mode") == "thickness":
+            amount = parameters.get("amount")
+            if not isinstance(amount, int | float):
+                return _failure("needs_clarification", operation, request, graph, "missing_thickness", "Thickness resize requires a numeric amount.")
+            for part in selected:
+                current = part["transform"]["scale"]
+                thickness = float(amount) if source_operation != "adjust_thickness" else current[0] + float(amount)
+                if not 0.01 <= thickness <= 20.0:
+                    return _failure("invalid", operation, request, graph, "invalid_thickness", "Thickness must resolve between 0.01 and 20.")
+                part["transform"]["scale"][0:2] = [thickness, thickness]
+            scale = None
+            factor = None
+        else:
+            scale = parameters.get("scale")
+            factor = parameters.get("factor") or parameters.get("scale_factor")
+            if factor is None and normalize_operation(request.operation) == "resize":
+                factor = parameters.get("amount")
+            if scale is None and not isinstance(factor, int | float):
+                return _failure("needs_clarification", operation, request, graph, "missing_scale", "Resize requires a scale vector or numeric factor.")
+            if isinstance(factor, int | float) and not 0.01 <= float(factor) <= 20:
+                return _failure("invalid", operation, request, graph, "invalid_scale_factor", "Resize factor must be between 0.01 and 20.")
+            for part in selected:
+                if scale is not None:
+                    part["transform"]["scale"] = _vector(scale, part["transform"]["scale"])
+                else:
+                    part["transform"]["scale"] = [component * float(factor) for component in part["transform"]["scale"]]
+                    if set(request.target_ids) & {"asset", "whole_asset", "*"}:
+                        part["transform"]["location"] = [component * float(factor) for component in part["transform"]["location"]]
     elif operation == "attach":
         parent = str(parameters.get("parent") or parameters.get("target") or "")
         children = selected_ids
@@ -731,6 +1100,7 @@ def compile_graph_operation(
             changes=changes,
         ),
         diagnostics=[
+            *([normalization_diagnostic] if normalization_diagnostic else []),
             GraphDiagnostic(
                 stage="compile",
                 code="compiled",

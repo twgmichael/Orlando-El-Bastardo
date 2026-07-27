@@ -704,12 +704,24 @@
     const intent = stateJson.asset_intent && typeof stateJson.asset_intent === "object"
       ? stateJson.asset_intent
       : {};
+    const graph = stateJson.semantic_graph && typeof stateJson.semantic_graph === "object"
+      ? stateJson.semantic_graph
+      : null;
+    const graphParts = graph && Array.isArray(graph.parts) ? graph.parts : [];
     const compactState = {
       canonical_id: stateJson.canonical_id || asset.asset_id,
       name: stateJson.name || intent.name || asset.asset_id,
       kind: stateJson.kind || intent.kind || null,
       description: stateJson.description || intent.description || null,
-      parts: Array.isArray(intent.objects)
+      parts: graphParts.length
+        ? graphParts.map((part) => ({
+          id: part.id || null,
+          type: part.geometry && part.geometry.type ? part.geometry.type : null,
+          material: part.material || null,
+          role: part.role || null,
+          transform: part.transform || {},
+        }))
+        : Array.isArray(intent.objects)
         ? intent.objects.map((part) => ({
           id: part.id || part.label || null,
           type: part.type || null,
@@ -718,7 +730,11 @@
           description: part.description || null,
         }))
         : [],
-      relationships: Array.isArray(intent.relationships) ? intent.relationships : [],
+      relationships: graph && Array.isArray(graph.relationships)
+        ? graph.relationships
+        : (Array.isArray(intent.relationships) ? intent.relationships : []),
+      attachments: graph && Array.isArray(graph.attachments) ? graph.attachments : [],
+      constraints: graph && Array.isArray(graph.constraints) ? graph.constraints : [],
       primitives: Array.isArray(stateJson.primitives)
         ? stateJson.primitives.map((primitive) => ({
           id: primitive.id || primitive.label || null,
@@ -740,10 +756,11 @@
         return_field: "asset_edit_request",
         required: ["operation", "base_revision"],
         optional: ["target", "view", "semantic_direction", "amount", "preserve", "edit_delta"],
+        operations: ["add", "remove", "replace", "move", "rotate", "attach", "detach", "recolor", "resize", "group", "ungroup", "undo"],
         note: "For follow-up edits to the active asset, return asset_edit_request instead of a fresh build.",
         examples: {
           replace_part_type: {
-            operation: "replace_with",
+            operation: "replace",
             target: "<part_id>",
             preserve: ["material", "attachments"],
             edit_delta: { type: "<new_type>" },
@@ -753,14 +770,24 @@
             target: "<part_id>",
           },
           center_objects: {
-            operation: "align_centers",
+            operation: "move",
             target: "whole_asset",
+            edit_delta: { mode: "align_centers_xy" },
             preserve: ["vertical_heights", "materials", "relationships"],
           },
+          move_part_on_top_of_another: {
+            operation: "move",
+            target: "<moving_part_id>",
+            edit_delta: {
+              relation: "on_top_of",
+              reference_id: "<stationary_part_id>",
+            },
+          },
           cut_half_sphere: {
-            operation: "set_geometry_modifier",
+            operation: "replace",
             target: "<sphere_id>",
             edit_delta: {
+              mode: "geometry_modifier",
               shape_modifiers: ["half", "flat"],
               hemisphere_direction: "up",
             },
@@ -907,7 +934,10 @@
     }
     if (!response.ok) {
       const detail = payload && payload.detail ? payload.detail : response.statusText;
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      const error = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      error.status = response.status;
+      error.detail = detail;
+      throw error;
     }
     return payload;
   }
@@ -1368,6 +1398,10 @@
     const asset = activeAsset();
     const request = editRequestFromAssistant(assistantJson);
     if (!asset || !request) return false;
+    request.edit_delta = {
+      ...(request.edit_delta || {}),
+      requested_intent: latestUserIntentText(assistant),
+    };
     const conflict = editConflictsWithUserIntent(request, assistant);
     if (conflict && !assistant.additiveIntentRepairAttempted) {
       assistant.additiveIntentRepairAttempted = true;
@@ -1418,6 +1452,10 @@
       setStatus(result.job_created ? `Edit job queued: ${result.job.id}` : "Edit recorded");
       return true;
     } catch (err) {
+      if (err.status === 422 && !assistant.compilerRepairAttempted) {
+        assistant.compilerRepairAttempted = true;
+        return repairActiveAssetEdit(assistant, assistantJson, "compiler_rejected");
+      }
       showError("Could not create asset edit", err.message);
       setStatus("Asset edit failed");
       return true;
@@ -1440,11 +1478,14 @@
         systemPromptWithActiveAsset(),
         "EDIT REPAIR OVERRIDE:",
         "The active asset already exists. Do not return build_asset or asset_intent.",
-        "Return asset_edit_request only. For 'center/middle the objects', use",
-        "operation align_centers, target whole_asset, preserving each object's Z height.",
-        "For 'replace X with Y', use operation replace_with, target X, edit_delta {\"type\": Y}.",
+        "Return asset_edit_request only. Use only add, remove, replace, move, rotate, attach, detach, recolor, resize, group, ungroup, undo.",
+        "Never emit align_centers, center_group, set_geometry_modifier, replace_with, add_part, or proportional_scale.",
+        "For 'center/middle the objects', use operation move, target whole_asset, edit_delta {\"mode\":\"align_centers_xy\"}.",
+        "For 'move X to the top of Y', use operation move, target X, edit_delta {\"relation\":\"on_top_of\",\"reference_id\":\"Y\"}.",
+        "The target is the moving part and reference_id is stationary. Use exact ids from the active semantic graph.",
+        "For 'replace X with Y', use operation replace, target X, edit_delta {\"type\": Y}.",
         "For 'remove/delete X', use operation remove, target X.",
-        "For 'add/create/attach X below/above/near Y', use operation add_part, target Y, semantic_direction below/above/near, edit_delta {\"type\": X}.",
+        "For 'add/create X below/above/near Y', use operation add, target Y, semantic_direction below/above/near, edit_delta {\"type\": X}.",
         repairIntent ? `The latest user prompt intent is ${repairIntent}; preserve that intent exactly.` : "",
         "This is one repair attempt; do not explain or write Blender code.",
       ].join("\n"),
