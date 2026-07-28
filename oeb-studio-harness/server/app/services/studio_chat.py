@@ -50,6 +50,11 @@ For arrangements or multi-object requests, prefer this asset_intent shape:
   "construction_notes": "short note",
   "construction_graph": null
 }
+The singular target is authoritative. Use targets only when a genuinely
+multi-target relation such as between requires it; never use targets to append
+unrelated parts to a single-target relation. For attached_to, subject is the
+attached child and target is the supporting parent. Transforms and relationships
+must agree and must not place distinct parts in the same space.
 Use objects[] for object lists; do not use assets[] unless the user is asking
 for multiple separate library assets. Default unspecified materials to neutral.
 When the user names a concrete simple object, use that concrete type value
@@ -90,6 +95,9 @@ replace_with, add_part, or proportional_scale.
 For "move the cone to the top of the tube", target the cone and return:
 {"operation":"move","target":"cone_id","edit_delta":
 {"relation":"on_top_of","reference_id":"tube_id"}}.
+For "move X down until it touches/intersects Y", use the same relational move:
+target X and edit_delta {"relation":"on_top_of","reference_id":"Y"}. Do not
+guess a numeric distance; the deterministic compiler measures both surfaces.
 The target is always the part being changed; reference_id is the stationary
 part used for relational placement. Use only ids present in active_asset's
 semantic graph. Resolve an obvious minor typo only when exactly one existing
@@ -114,7 +122,9 @@ When review renders are requested and no custom view list is supplied, use
 review_views: ["top", "bottom", "left", "right", "front", "rear", "action"].
 Use all seven views exactly, including "action". Missing "action" is invalid.
 Use semantic view names only; do not invent axis/side pairs.
-Return JSON only. For a build return action, confidence,
+Return JSON only. Include assistant_message as one concise, natural-language
+acknowledgment for the user; do not merely repeat their request and do not put
+JSON or implementation details in that field. For a build return action, confidence,
 clarification_question, escalation_reason, and asset_intent. For an active
 asset edit return those same envelope fields plus asset_edit_request instead of
 asset_intent. The JSON schema is strict only at the container level;
@@ -162,6 +172,9 @@ For "move X to the top of Y", use operation "move", target X, and edit_delta
 reference_id is stationary. Use only ids in the active semantic graph. Resolve
 an obvious minor typo only when exactly one part is plausible; otherwise ask
 one clarification question.
+For "move X down until it touches/intersects Y", also use operation "move",
+target X, and edit_delta {"relation":"on_top_of","reference_id":"Y"}. Do not
+guess a numeric distance; the deterministic compiler measures both surfaces.
 For "reduce/resize X proportionally to match Y width", use operation "resize",
 target X, and edit_delta
 {"mode":"match_reference_width","reference_id":"Y","proportional":true}.
@@ -466,7 +479,7 @@ PRIMITIVE_REGISTRY_V01 = {
             "params": {},
         },
         "wedge": {
-            "aliases": ["ramp", "triangular_prism"],
+            "aliases": ["ramp", "triangle", "triangular", "triangular_prism"],
             "params": {},
         },
     },
@@ -601,7 +614,21 @@ def _normalize_llm_json(text: str) -> str:
         else:
             result.append(char)
             index += 1
-    return re.sub(r",\s*([}\]])", r"\1", "".join(result))
+    normalized = re.sub(r",\s*([}\]])", r"\1", "".join(result))
+    numeric_division = re.compile(
+        r"(?<![\w.])(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\s*/\s*"
+        r"(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?![\w.])"
+    )
+    segments = re.split(r'("(?:\\.|[^"\\])*")', normalized)
+    for idx in range(0, len(segments), 2):
+        def divide(match: re.Match[str]) -> str:
+            denominator = float(match.group(2))
+            if denominator == 0:
+                return match.group(0)
+            return json.dumps(float(match.group(1)) / denominator)
+
+        segments[idx] = numeric_division.sub(divide, segments[idx])
+    return "".join(segments)
 
 
 def parse_assistant_json(text: str) -> dict[str, Any]:
@@ -612,10 +639,19 @@ def parse_assistant_json(text: str) -> dict[str, Any]:
         if not balanced:
             raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
         try:
-            parsed = json.loads(_normalize_llm_json(balanced))
-        except json.JSONDecodeError:
-            raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
-        if not isinstance(parsed, dict) or not isinstance(parsed.get("asset_edit_request"), dict):
+            def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+                result: dict[str, Any] = {}
+                for key, value in pairs:
+                    if key in result:
+                        raise ValueError(f"duplicate JSON key: {key}")
+                    result[key] = value
+                return result
+
+            parsed = json.loads(
+                _normalize_llm_json(balanced),
+                object_pairs_hook=unique_object,
+            )
+        except (json.JSONDecodeError, ValueError):
             raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError("assistant response JSON must be an object")
@@ -993,15 +1029,28 @@ def _normalize_asset_intent_object(item: Any, idx: int) -> dict[str, Any]:
             normalized["material"] = primary_part["color"]
     if "color" in normalized and "material" not in normalized:
         normalized["material"] = normalized["color"]
-    object_text = " ".join(
+    semantic_text = " ".join(
         str(normalized.get(key) or "")
-        for key in ("id", "name", "label", "description", "type")
+        for key in ("id", "name", "label", "description", "role")
     ).lower()
+    object_text = f"{semantic_text} {normalized.get('type') or ''}".strip()
     raw_type = normalize_id(normalized.get("type"), "")
     if raw_type in {"custom", "custom_semantic_type", "semantic_type", "object", "asset", "part"}:
         inferred_type = _primitive_type_from_text(object_text)
         if inferred_type:
             normalized["type"] = inferred_type
+    else:
+        # A concrete mathematical term in the part's semantic identity is an
+        # intent constraint. Do not accept a resolver's unrelated fallback
+        # primitive merely because it populated the `type` field.
+        semantic_types = {
+            mention["type"]
+            for mention in _primitive_mentions_from_text(semantic_text)
+        }
+        if len(semantic_types) == 1:
+            normalized["type"] = next(iter(semantic_types))
+        elif canonical_type := canonical_primitive_type(normalized.get("type")):
+            normalized["type"] = canonical_type
     placement = normalize_id(normalized.get("placement"), "")
     if placement in {"", "center", "custom"}:
         if re.search(r"\bright\b", object_text):
@@ -1037,6 +1086,28 @@ def _normalize_asset_intent_structure(asset_intent: dict[str, Any], creative_req
             _normalize_asset_intent_object(item, idx)
             for idx, item in enumerate(normalized["objects"])
         ]
+    objects = normalized.get("objects") if isinstance(normalized.get("objects"), list) else []
+    object_counts = {
+        str(obj.get("id")): (_quantity_from_value(obj.get("count")) or 1)
+        for obj in objects
+        if isinstance(obj, dict) and obj.get("id")
+    }
+    relationships = normalized.get("relationships")
+    if isinstance(relationships, list):
+        for relationship in relationships:
+            if not isinstance(relationship, dict):
+                continue
+            relation = normalize_id(relationship.get("relation") or relationship.get("type"), "")
+            subject = str(relationship.get("subject") or "")
+            target = str(relationship.get("target") or "")
+            if (
+                relation in {"attached_to", "mounted_on", "parented_to"}
+                and object_counts.get(subject, 1) == 1
+                and object_counts.get(target, 1) > 1
+            ):
+                relationship["subject"], relationship["target"] = target, subject
+                relationship.pop("targets", None)
+                relationship["normalized_direction"] = "reversed_by_cardinality"
     normalized["name"] = _first_text_value(
         normalized.get("name"),
         normalized.get("title"),
@@ -1688,6 +1759,17 @@ def build_spec_with_primitive_resolver(
 
     broad_asset_intent = _payload_is_broad_asset_intent(parsed, creative_request)
     direct_payload = None if broad_asset_intent else _primitive_payload_from_parsed(parsed, creative_request)
+    if (
+        not broad_asset_intent
+        and direct_payload is None
+        and parsed.get("action") != "fallback_intent"
+    ):
+        parsed = _fallback_payload_from_intent(
+            creative_request,
+            messages,
+            reason="assistant_build_contract_unrecognized",
+        )
+        direct_payload = _primitive_payload_from_parsed(parsed, creative_request)
     if direct_payload:
         try:
             resolved = validate_primitive_spec(direct_payload, creative_request)
@@ -1911,7 +1993,7 @@ def infer_kind(request: str, spec: dict | None = None) -> str:
         return "location"
     if text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf", "stool", "bed")):
         return "prop"
-    if is_aircraft_request(request) or text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
+    if is_aircraft_request(request) or text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "rocket", "missile", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
         return "vehicle"
     return "asset"
 
@@ -2435,9 +2517,6 @@ def _rotation_from_object(obj: dict[str, Any]) -> list[float]:
 def _scale_from_object(obj: dict[str, Any], primitive_type: str) -> list[float]:
     transform = obj.get("transform") if isinstance(obj.get("transform"), dict) else {}
     value = transform.get("scale") or obj.get("scale") or obj.get("size")
-    default = [1.0, 1.0, 1.0]
-    if primitive_type == "cylinder":
-        default = [0.4, 0.4, 1.4]
     text = " ".join(
         str(value)
         for value in (
@@ -2450,12 +2529,79 @@ def _scale_from_object(obj: dict[str, Any], primitive_type: str) -> list[float]:
         )
         if value is not None
     ).lower()
+    default = [1.0, 1.0, 1.0]
+    if primitive_type == "cylinder" and text_has_any(text, ("tube", "body", "shaft", "column")):
+        default = [1.0, 1.0, 1.4]
     if primitive_type == "sphere":
         if text_has_any(text, ("squished", "flattened", "flat", "squash", "squashed", "disk", "disc")):
             default = [1.45, 1.45, 0.28]
         if "half" in text or "hemisphere" in text:
             default = [1.0, 1.0, 0.5]
     return _coerce_vec3(value, "object.scale", default, 0.01, 20.0)
+
+
+def _primitive_half_extents(primitive: dict[str, Any]) -> list[float]:
+    primitive_type = str(primitive.get("type") or "")
+    transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
+    scale = transform.get("scale") if isinstance(transform.get("scale"), list) else [1.0, 1.0, 1.0]
+    params = primitive.get("params") if isinstance(primitive.get("params"), dict) else {}
+    if primitive_type == "sphere":
+        radius = float(params.get("radius", 0.5))
+        return [radius * scale[0], radius * scale[1], radius * scale[2]]
+    if primitive_type == "cylinder":
+        radius = float(params.get("radius", 0.35))
+        depth = float(params.get("depth", 1.0))
+        return [radius * scale[0], radius * scale[1], (depth * scale[2]) / 2.0]
+    if primitive_type == "cone":
+        radius = float(params.get("radius", 0.4))
+        depth = float(params.get("depth", 1.0))
+        return [radius * scale[0], radius * scale[1], (depth * scale[2]) / 2.0]
+    if primitive_type == "torus":
+        radius = float(params.get("major_radius", 0.45)) + float(params.get("minor_radius", 0.08))
+        minor_radius = float(params.get("minor_radius", 0.08))
+        return [radius * scale[0], radius * scale[1], minor_radius * scale[2]]
+    return [0.5 * scale[0], 0.5 * scale[1], 0.5 * scale[2]]
+
+
+def _primitive_vertical_bounds(primitive: dict[str, Any]) -> tuple[float, float]:
+    """Return the primitive's local min/max Z offsets from its origin."""
+    half_height = _primitive_half_extents(primitive)[2]
+    primitive_type = str(primitive.get("type") or "")
+    params = primitive.get("params") if isinstance(primitive.get("params"), dict) else {}
+    modifiers = {
+        str(item).strip().lower()
+        for item in params.get("shape_modifiers", [])
+        if isinstance(item, str)
+    }
+    if primitive_type != "sphere" or not modifiers.intersection({"half", "hemisphere"}):
+        return (-half_height, half_height)
+
+    direction = str(params.get("hemisphere_direction") or "").strip().lower()
+    if direction in {"down", "-z", "bottom", "flat_up", "flat-top"}:
+        points_up = False
+    elif direction in {"up", "+z", "top", "flat_down", "flat-bottom"}:
+        points_up = True
+    else:
+        transform = primitive.get("transform") if isinstance(primitive.get("transform"), dict) else {}
+        rotation = transform.get("rotation") if isinstance(transform.get("rotation"), list) else [0.0, 0.0, 0.0]
+        rotation_x = float(rotation[0]) if len(rotation) > 0 else 0.0
+        rotation_y = float(rotation[1]) if len(rotation) > 1 else 0.0
+        points_up = math.cos(rotation_x) * math.cos(rotation_y) >= 0.0
+    return (0.0, half_height) if points_up else (-half_height, 0.0)
+
+
+def _object_has_explicit_scale(obj: dict[str, Any]) -> bool:
+    transform = obj.get("transform") if isinstance(obj.get("transform"), dict) else {}
+    return any(value is not None for value in (transform.get("scale"), obj.get("scale"), obj.get("size")))
+
+
+def _attachment_vertical_direction(text: str) -> str:
+    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
+    if tokens & {"bottom", "lower", "base", "foot", "feet", "fin", "fins", "landing"}:
+        return "bottom"
+    if tokens & {"top", "upper", "cap", "crown", "roof"}:
+        return "top"
+    return "center"
 
 
 def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str, Any]]:
@@ -2465,6 +2611,9 @@ def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str,
     if not objects:
         return []
     primitives: list[dict[str, Any]] = []
+    copies_by_base: dict[str, list[dict[str, Any]]] = {}
+    explicit_scale_by_base: dict[str, bool] = {}
+    semantic_text_by_base: dict[str, str] = {}
     for idx, obj in enumerate(objects):
         if not isinstance(obj, dict):
             continue
@@ -2473,24 +2622,91 @@ def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str,
             continue
         object_id = _safe_id(obj.get("id") or obj.get("name") or obj.get("label"), f"{primitive_type}_{idx + 1}")
         material = _material_from_object(obj)
-        primitives.append({
-            "id": object_id,
-            "type": primitive_type,
-            "label": str(obj.get("label") or obj.get("name") or object_id),
-            "material": material,
-            "transform": {
-                "location": _location_from_object(obj, idx),
-                "rotation": _rotation_from_object(obj),
-                "scale": _scale_from_object(obj, primitive_type),
-            },
-            "params": {
-                "shape_description": str(obj.get("description") or ""),
-                "shape_modifiers": [
-                    modifier for modifier in ("half", "flat", "squished", "flattened", "hemisphere")
-                    if modifier in str(obj.get("description") or object_id).lower()
-                ],
-            },
-        })
+        quantity = _quantity_from_value(obj.get("count")) or _quantity_from_value(obj.get("quantity")) or 1
+        base_location = _location_from_object(obj, idx)
+        explicit_scale_by_base[object_id] = _object_has_explicit_scale(obj)
+        semantic_text_by_base[object_id] = " ".join(
+            str(obj.get(key) or "")
+            for key in ("id", "label", "name", "description", "role", "placement")
+        )
+        for copy_idx in range(quantity):
+            copy_id = object_id if quantity == 1 else _safe_id(
+                f"{object_id}_{copy_idx + 1}",
+                f"{primitive_type}_{idx + 1}_{copy_idx + 1}",
+            )
+            copy_location = base_location.copy()
+            if quantity > 1:
+                angle = (2.0 * math.pi * copy_idx) / quantity
+                copy_location[0] += math.cos(angle)
+                copy_location[1] += math.sin(angle)
+            primitive = {
+                "id": copy_id,
+                "type": primitive_type,
+                "label": str(obj.get("label") or obj.get("name") or object_id),
+                "material": material,
+                "transform": {
+                    "location": copy_location,
+                    "rotation": _rotation_from_object(obj),
+                    "scale": _scale_from_object(obj, primitive_type),
+                },
+                "params": {
+                    "shape_description": str(obj.get("description") or ""),
+                    "shape_modifiers": [
+                        modifier for modifier in ("half", "flat", "squished", "flattened", "hemisphere")
+                        if modifier in str(obj.get("description") or object_id).lower()
+                    ],
+                },
+            }
+            primitives.append(primitive)
+            copies_by_base.setdefault(object_id, []).append(primitive)
+    primitive_by_id = {primitive["id"]: primitive for primitive in primitives}
+    for relationship in _normalize_scene_relationships(spec.get("relationships")):
+        subject = primitive_by_id.get(relationship["subject"])
+        subject_list = [subject] if subject else copies_by_base.get(relationship["subject"], [])
+        target = primitive_by_id.get(relationship["target"])
+        if not subject_list or not target:
+            continue
+        target_location = target["transform"]["location"]
+        target_extents = _primitive_half_extents(target)
+        if relationship["relation"] == "on_top_of":
+            _, target_max_z = _primitive_vertical_bounds(target)
+            for subject_primitive in subject_list:
+                subject_min_z, _ = _primitive_vertical_bounds(subject_primitive)
+                subject_primitive["transform"]["location"] = [
+                    target_location[0],
+                    target_location[1],
+                    target_location[2] + target_max_z - subject_min_z,
+                ]
+        elif relationship["relation"] in {"attached_to", "mounted_on", "parented_to"}:
+            base_id = relationship["subject"]
+            direction = _attachment_vertical_direction(
+                f"{request} {semantic_text_by_base.get(base_id, '')}"
+            )
+            quantity = len(subject_list)
+            for copy_idx, subject_primitive in enumerate(subject_list):
+                if quantity > 1 and not explicit_scale_by_base.get(base_id, False):
+                    subject_primitive["transform"]["scale"] = [
+                        max(target_extents[0] * 1.5, 0.35),
+                        max(min(target_extents[1] * 0.35, 0.18), 0.08),
+                        max(min(target_extents[2] * 0.8, 0.65), 0.3),
+                    ]
+                subject_extents = _primitive_half_extents(subject_primitive)
+                angle = (2.0 * math.pi * copy_idx) / quantity if quantity > 1 else 0.0
+                radius = max(target_extents[0], target_extents[1]) + (subject_extents[0] * 0.5)
+                z_location = target_location[2]
+                if direction == "bottom":
+                    z_location = target_location[2] - target_extents[2] + subject_extents[2]
+                elif direction == "top":
+                    z_location = target_location[2] + target_extents[2] - subject_extents[2]
+                subject_primitive["transform"]["location"] = [
+                    target_location[0] + (math.cos(angle) * radius),
+                    target_location[1] + (math.sin(angle) * radius),
+                    z_location,
+                ]
+                if quantity > 1:
+                    rotation = subject_primitive["transform"]["rotation"].copy()
+                    rotation[2] += angle
+                    subject_primitive["transform"]["rotation"] = rotation
     return primitives
 
 
@@ -2504,8 +2720,14 @@ def _normalize_scene_relationships(value: Any) -> list[dict[str, str]]:
             continue
         subject = _first_text_value(item.get("subject"), item.get("source"), fallback="")
         relation = _first_text_value(item.get("relation"), item.get("type"), fallback="related_to")
+        primary_target = item.get("target")
         targets = item.get("targets")
-        target_values = targets if isinstance(targets, list) else [item.get("target")]
+        if _first_text_value(primary_target, fallback=""):
+            target_values = [primary_target]
+        elif isinstance(targets, list):
+            target_values = targets
+        else:
+            target_values = []
         for target_idx, target_value in enumerate(target_values):
             target = _first_text_value(target_value, fallback="")
             if not subject or not target:

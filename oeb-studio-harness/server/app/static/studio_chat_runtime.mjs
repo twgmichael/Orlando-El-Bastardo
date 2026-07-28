@@ -50,6 +50,42 @@ function stripJsonComments(source) {
   return result;
 }
 
+function normalizeNumericDivisions(source) {
+  const divisionPattern = /(^|[^\w.])(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)(?![\w.])/gi;
+  let result = "";
+  let segment = "";
+  let inString = false;
+  let escaped = false;
+  const normalizeSegment = (value) => value.replace(
+    divisionPattern,
+    (match, prefix, numerator, denominator) => {
+      const divisor = Number(denominator);
+      if (!Number.isFinite(divisor) || divisor === 0) return match;
+      return `${prefix}${Number(numerator) / divisor}`;
+    },
+  );
+  for (const char of source) {
+    if (inString) {
+      result += char;
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+    } else if (char === "\"") {
+      result += normalizeSegment(segment);
+      segment = "";
+      result += char;
+      inString = true;
+    } else {
+      segment += char;
+    }
+  }
+  return result + normalizeSegment(segment);
+}
+
 function parseJsonCandidate(source) {
   const candidate = source.trim();
   if (!candidate) return null;
@@ -58,7 +94,9 @@ function parseJsonCandidate(source) {
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
   } catch (_err) {
     try {
-      const normalized = stripJsonComments(candidate).replace(/,\s*([}\]])/g, "$1");
+      const normalized = normalizeNumericDivisions(
+        stripJsonComments(candidate).replace(/,\s*([}\]])/g, "$1"),
+      );
       const parsed = JSON.parse(normalized);
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
     } catch (_innerErr) {

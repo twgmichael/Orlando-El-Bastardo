@@ -43,6 +43,8 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
 
     assert "valid JSON asset intent" in asset_builder.system_prompt
     assert "Do not collapse objects into generic boxes unless the user explicitly asks for a box" in asset_builder.system_prompt
+    assert "assistant_message" in asset_builder.system_prompt
+    assert "do not merely repeat their request" in asset_builder.system_prompt
     assert "Use objects[] for object lists" in asset_builder.system_prompt
     assert "Do not output the literal placeholder" in asset_builder.system_prompt
     assert "Treat the newest user prompt as controlling" in asset_builder.system_prompt
@@ -55,6 +57,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "Do not write Blender code" in asset_builder.system_prompt
     assert "Use only these canonical operations" in asset_builder.system_prompt
     assert '"relation":"on_top_of"' in asset_builder.system_prompt
+    assert "until it touches/intersects" in asset_builder.system_prompt
     assert asset_builder.temperature == 0.2
     assert "Preserve asset intent" in primitive_resolver.system_prompt
     asset_edit = presets["asset_edit_translator"]
@@ -658,6 +661,27 @@ The cone will retain its material and relationships."""
     assert request["edit_delta"]["mode"] == "match_reference_width"
 
 
+def test_parse_assistant_json_repairs_numeric_division_without_discarding_build_intent():
+    parsed = parse_assistant_json(
+        """{
+          "action": "build_asset",
+          "asset_intent": {
+            "name": "balanced_form",
+            "objects": [{
+              "id": "angled_panel",
+              "type": "wedge",
+              "orientation": {"rotation": [0, 3.141592654 / 2, 0]}
+            }]
+          }
+        }"""
+    )
+
+    assert parsed["action"] == "build_asset"
+    assert parsed["asset_intent"]["objects"][0]["orientation"]["rotation"][1] == pytest.approx(
+        math.pi / 2,
+    )
+
+
 def test_build_spec_from_assistant_response_preserves_sphere_scene_object():
     spec, parsed = build_spec_from_assistant_response(
         "Render a sphere",
@@ -737,6 +761,49 @@ def test_flying_saucer_asset_intent_with_shape_modifiers_normalizes_without_500_
     assert "flat" in spec.primitives[0].params["shape_modifiers"]
     assert "squished" in spec.primitives[1].params["shape_modifiers"]
     assert "asset_review_renders" in spec.deliverables
+
+
+def test_half_sphere_on_top_uses_flat_face_as_contact_surface():
+    spec, _ = build_spec_from_assistant_response(
+        "Build a half sphere with a flat bottom on top of a squished sphere.",
+        """{
+          "action": "build_asset",
+          "confidence": 1,
+          "clarification_question": null,
+          "escalation_reason": null,
+          "asset_intent": {
+            "name": "Flying Saucer",
+            "kind": "vehicle",
+            "description": "A half sphere sitting on a squished sphere.",
+            "objects": [
+              {
+                "id": "dome",
+                "type": "sphere",
+                "material": "neutral",
+                "count": 1,
+                "orientation": {"position": [0, 0, 1], "rotation": [0, 0, 0]},
+                "description": "half sphere with flat bottom"
+              },
+              {
+                "id": "lower_body",
+                "type": "sphere",
+                "material": "neutral",
+                "count": 1,
+                "orientation": {"position": [0, 0, 0], "rotation": [0, 0, 0]},
+                "description": "squished sphere"
+              }
+            ],
+            "relationships": [
+              {"subject": "dome", "relation": "on_top_of", "target": "lower_body"}
+            ]
+          }
+        }""",
+    )
+
+    dome, lower_body = spec.primitives
+    assert lower_body.transform.scale == [1.45, 1.45, 0.28]
+    assert dome.transform.location[:2] == lower_body.transform.location[:2]
+    assert dome.transform.location[2] - lower_body.transform.location[2] == pytest.approx(0.14)
 
 
 def test_asset_edit_centers_group_without_changing_relative_offsets():
@@ -1404,6 +1471,84 @@ def test_multi_object_intent_repairs_placeholder_types_and_null_relationship_tar
     ]
 
 
+def test_semantic_part_identity_overrides_unrelated_fallback_geometry_and_expands_count():
+    spec, _ = build_spec_from_assistant_response(
+        "Build a marker with a tapered cap above a tube and four triangular grips.",
+        """{
+          "action": "build_asset",
+          "asset_intent": {
+            "name": "marker",
+            "kind": "prop",
+            "objects": [
+              {
+                "id": "tapered_cap_cone",
+                "type": "cube",
+                "material": "blue",
+                "description": "cone cap"
+              },
+              {
+                "id": "central_tube",
+                "type": "cube",
+                "material": "red",
+                "description": "tube body"
+              },
+              {
+                "id": "triangular_grips",
+                "type": "triangle",
+                "material": "gray",
+                "count": 4,
+                "orientation": {"rotation": [0, 3.141592654 / 2, 0]},
+                "description": "lower triangular grips"
+              }
+            ],
+            "relationships": [
+              {
+                "subject": "tapered_cap_cone",
+                "relation": "on_top_of",
+                "target": "central_tube",
+                "targets": ["triangular_grips"]
+              },
+              {"subject": "central_tube", "relation": "attached_to", "target": "triangular_grips"}
+            ]
+          }
+        }""",
+    )
+
+    assert [primitive.type for primitive in spec.primitives] == [
+        "cone",
+        "cylinder",
+        "wedge",
+        "wedge",
+        "wedge",
+        "wedge",
+    ]
+    assert [primitive.id for primitive in spec.primitives[2:]] == [
+        "triangular_grips_1",
+        "triangular_grips_2",
+        "triangular_grips_3",
+        "triangular_grips_4",
+    ]
+    assert spec.primitives[0].transform.location[2] > spec.primitives[1].transform.location[2]
+    assert len({tuple(primitive.transform.location) for primitive in spec.primitives[2:]}) == 4
+    assert spec.primitives[2].transform.rotation[1] == pytest.approx(math.pi / 2)
+    assert all(
+        primitive.transform.scale[0] < spec.primitives[1].transform.scale[0]
+        for primitive in spec.primitives[2:]
+    )
+    assert all(
+        primitive.transform.location[2] < spec.primitives[1].transform.location[2]
+        for primitive in spec.primitives[2:]
+    )
+    assert len({primitive.transform.rotation[2] for primitive in spec.primitives[2:]}) == 4
+    assert spec.scene_plan.relationships[0].target == "central_tube"
+    assert spec.asset_intent["relationships"][1]["subject"] == "triangular_grips"
+    assert spec.asset_intent["relationships"][1]["target"] == "central_tube"
+
+
+def test_rocket_is_classified_by_asset_kind_not_as_a_scene_set():
+    assert studio_chat.infer_kind("Build a reusable rocket asset.") == "vehicle"
+
+
 def test_explicit_set_request_enables_scene_shell():
     spec, parsed = build_spec_from_assistant_response(
         "Build a small office set.",
@@ -1634,8 +1779,8 @@ def test_malformed_quantity_response_keeps_count_and_color():
 ```""",
     )
 
-    assert parsed["action"] == "fallback_intent"
-    assert resolver["source"] == "fallback_intent"
+    assert parsed["action"] == "build"
+    assert resolver["source"] == "assistant_json"
     assert spec.components == ["sphere", "sphere"]
     assert [primitive.type for primitive in spec.primitives] == ["sphere", "sphere"]
     assert [primitive.material for primitive in spec.primitives] == ["blue", "blue"]

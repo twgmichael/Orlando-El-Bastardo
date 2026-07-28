@@ -247,6 +247,12 @@ def graph_from_state(
         raw_relationships = scene_plan.get("relationships")
     relationships = []
     attachments = []
+    known_part_ids = {str(part["id"]) for part in parts}
+    part_aliases: dict[str, list[str]] = {}
+    for part in parts:
+        alias = str(part.get("name") or "")
+        if alias:
+            part_aliases.setdefault(alias, []).append(str(part["id"]))
     for index, item in enumerate(raw_relationships or []):
         if not isinstance(item, dict):
             continue
@@ -255,34 +261,42 @@ def graph_from_state(
         relation = str(item.get("relation") or item.get("type") or "related_to")
         if not subject or not target:
             continue
-        if relation in {"attached_to", "mounted_on", "parented_to"}:
-            attachments.append(
-                {
-                    "id": _slug(item.get("id"), f"attachment_{subject}_{target}_{index + 1}"),
-                    "child": subject,
-                    "parent": target,
-                    "socket": item.get("socket"),
-                    "parameters": {
-                        key: copy.deepcopy(value)
-                        for key, value in item.items()
-                        if key not in {"id", "subject", "target", "relation", "type", "socket"}
-                    },
-                }
-            )
-        else:
-            relationships.append(
-                {
-                    "id": _slug(item.get("id"), f"relationship_{subject}_{relation}_{target}_{index + 1}"),
-                    "type": relation,
-                    "subject": subject,
-                    "target": target,
-                    "parameters": {
-                        key: copy.deepcopy(value)
-                        for key, value in item.items()
-                        if key not in {"id", "subject", "target", "relation", "type"}
-                    },
-                }
-            )
+        subject_ids = [subject] if subject in known_part_ids else part_aliases.get(subject, [subject])
+        target_ids = [target] if target in known_part_ids else part_aliases.get(target, [target])
+        for subject_idx, subject_id in enumerate(subject_ids):
+            for target_idx, target_id in enumerate(target_ids):
+                expansion_suffix = f"{index + 1}_{subject_idx + 1}_{target_idx + 1}"
+                expands_reference = len(subject_ids) > 1 or len(target_ids) > 1
+                source_id = item.get("id")
+                expanded_id = f"{source_id}_{expansion_suffix}" if source_id and expands_reference else source_id
+                if relation in {"attached_to", "mounted_on", "parented_to"}:
+                    attachments.append(
+                        {
+                            "id": _slug(expanded_id, f"attachment_{subject_id}_{target_id}_{expansion_suffix}"),
+                            "child": subject_id,
+                            "parent": target_id,
+                            "socket": item.get("socket"),
+                            "parameters": {
+                                key: copy.deepcopy(value)
+                                for key, value in item.items()
+                                if key not in {"id", "subject", "target", "relation", "type", "socket"}
+                            },
+                        }
+                    )
+                else:
+                    relationships.append(
+                        {
+                            "id": _slug(expanded_id, f"relationship_{subject_id}_{relation}_{target_id}_{expansion_suffix}"),
+                            "type": relation,
+                            "subject": subject_id,
+                            "target": target_id,
+                            "parameters": {
+                                key: copy.deepcopy(value)
+                                for key, value in item.items()
+                                if key not in {"id", "subject", "target", "relation", "type"}
+                            },
+                        }
+                    )
 
     notes = intent.get("construction_notes")
     if isinstance(notes, str):
@@ -526,6 +540,32 @@ def _vertical_half_extent(part: dict[str, Any]) -> float:
     return scale_z / 2.0
 
 
+def _vertical_bounds(part: dict[str, Any]) -> tuple[float, float]:
+    """Return local min/max Z offsets, including one-sided hemisphere geometry."""
+    half_extent = _vertical_half_extent(part)
+    geometry = part.get("geometry") if isinstance(part.get("geometry"), dict) else {}
+    parameters = geometry.get("parameters") if isinstance(geometry.get("parameters"), dict) else {}
+    modifiers = {
+        str(item).strip().lower()
+        for item in parameters.get("shape_modifiers", [])
+        if isinstance(item, str)
+    }
+    if str(geometry.get("type") or "").lower() != "sphere" or not modifiers.intersection({"half", "hemisphere"}):
+        return (-half_extent, half_extent)
+
+    direction = str(parameters.get("hemisphere_direction") or "").strip().lower()
+    if direction in {"down", "-z", "bottom", "flat_up", "flat-top"}:
+        points_up = False
+    elif direction in {"up", "+z", "top", "flat_down", "flat-bottom"}:
+        points_up = True
+    else:
+        rotation = part.get("transform", {}).get("rotation", [0.0, 0.0, 0.0])
+        rotation_x = float(rotation[0]) if isinstance(rotation, list) and len(rotation) > 0 else 0.0
+        rotation_y = float(rotation[1]) if isinstance(rotation, list) and len(rotation) > 1 else 0.0
+        points_up = math.cos(rotation_x) * math.cos(rotation_y) >= 0.0
+    return (0.0, half_extent) if points_up else (-half_extent, 0.0)
+
+
 def _horizontal_diameter(part: dict[str, Any]) -> float:
     geometry = part.get("geometry") if isinstance(part.get("geometry"), dict) else {}
     parameters = geometry.get("parameters") if isinstance(geometry.get("parameters"), dict) else {}
@@ -578,21 +618,25 @@ def _solve_spatial_relationships(graph_data: dict[str, Any], changed_ids: set[st
         relation = relationship["type"]
         target_location = target["transform"]["location"]
         if relation in {"on_top_of", "above"}:
+            subject_min_z, _ = _vertical_bounds(subject)
+            _, target_max_z = _vertical_bounds(target)
             subject["transform"]["location"] = [
                 target_location[0],
                 target_location[1],
                 round(
                     target_location[2]
-                    + _vertical_half_extent(target)
-                    + _vertical_half_extent(subject),
+                    + target_max_z
+                    - subject_min_z,
                     9,
                 ),
             ]
         elif relation in {"below", "under"}:
+            _, subject_max_z = _vertical_bounds(subject)
+            target_min_z, _ = _vertical_bounds(target)
             subject["transform"]["location"] = [
                 target_location[0],
                 target_location[1],
-                target_location[2] - _vertical_half_extent(target) - _vertical_half_extent(subject),
+                target_location[2] + target_min_z - subject_max_z,
             ]
 
 
@@ -652,11 +696,66 @@ def _unique_part_for_term(graph: SemanticAssetGraph, term: str) -> str | None:
     return fuzzy[0] if len(fuzzy) == 1 else None
 
 
+def _unique_part_for_phrase(graph: SemanticAssetGraph, phrase: str) -> str | None:
+    terms = {
+        token
+        for token in re.findall(r"[a-z0-9]+", phrase.lower())
+        if token not in {"a", "an", "the", "it", "object", "part"}
+    }
+    if not terms:
+        return None
+    matches = [
+        part.id
+        for part in graph.parts
+        if terms.issubset(_part_terms(part))
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(terms) == 1:
+        return _unique_part_for_term(graph, next(iter(terms)))
+    return None
+
+
 def _normalize_relational_move_intent(
     graph: SemanticAssetGraph,
     request: GraphOperationRequest,
 ) -> tuple[GraphOperationRequest, GraphDiagnostic | None]:
     intent = str(request.intent or "").strip().lower()
+    contact_match = re.search(
+        r"\bmove\s+(?:the\s+)?(.+?)\s+down\s+"
+        r"(?:until|till)\s+(?:it\s+)?"
+        r"(?:touches|contacts|intersects(?:\s+with)?)\s+"
+        r"(?:the\s+)?(.+?)(?:[.!?]|$)",
+        intent,
+    )
+    if contact_match:
+        moving_phrase, reference_phrase = contact_match.groups()
+        moving_id = _unique_part_for_phrase(graph, moving_phrase)
+        reference_id = _unique_part_for_phrase(graph, reference_phrase)
+        if moving_id and reference_id and moving_id != reference_id:
+            normalized = request.model_copy(
+                update={
+                    "operation": "move",
+                    "target_ids": [moving_id],
+                    "parameters": {
+                        **request.parameters,
+                        "relation": "on_top_of",
+                        "reference_id": reference_id,
+                    },
+                }
+            )
+            return normalized, GraphDiagnostic(
+                stage="normalize",
+                code="contact_move_normalized",
+                message=f"Normalized contact move: {moving_id} on_top_of {reference_id}.",
+                details={
+                    "original_operation": request.operation,
+                    "moving_phrase": moving_phrase,
+                    "reference_phrase": reference_phrase,
+                    "target": moving_id,
+                    "reference_id": reference_id,
+                },
+            )
     match = re.search(
         r"\bmove\s+(?:the\s+)?([a-z0-9_-]+)\s+"
         r"(?:to|onto)\s+(?:the\s+)?(top|bottom)\s+of\s+(?:the\s+)?([a-z0-9_-]+)",
@@ -1157,16 +1256,20 @@ def compile_graph_operation(
                 reference_location = reference["transform"]["location"]
                 location = list(part["transform"]["location"])
                 if relation in {"on_top_of", "above"}:
+                    part_min_z, _ = _vertical_bounds(part)
+                    _, reference_max_z = _vertical_bounds(reference)
                     location = [
                         reference_location[0],
                         reference_location[1],
-                        reference_location[2] + _vertical_half_extent(reference) + _vertical_half_extent(part),
+                        reference_location[2] + reference_max_z - part_min_z,
                     ]
                 elif relation in {"below", "under"}:
+                    _, part_max_z = _vertical_bounds(part)
+                    reference_min_z, _ = _vertical_bounds(reference)
                     location = [
                         reference_location[0],
                         reference_location[1],
-                        reference_location[2] - _vertical_half_extent(reference) - _vertical_half_extent(part),
+                        reference_location[2] + reference_min_z - part_max_z,
                     ]
                 elif relation == "left_of":
                     location[1] = reference_location[1] - 1.0

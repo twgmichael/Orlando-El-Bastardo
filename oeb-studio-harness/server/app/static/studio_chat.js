@@ -189,6 +189,42 @@
     return result;
   }
 
+  function normalizeNumericDivisions(source) {
+    const divisionPattern = /(^|[^\w.])(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)(?![\w.])/gi;
+    let result = "";
+    let segment = "";
+    let inString = false;
+    let escaped = false;
+    const normalizeSegment = (value) => value.replace(
+      divisionPattern,
+      (match, prefix, numerator, denominator) => {
+        const divisor = Number(denominator);
+        if (!Number.isFinite(divisor) || divisor === 0) return match;
+        return `${prefix}${Number(numerator) / divisor}`;
+      },
+    );
+    for (const char of source) {
+      if (inString) {
+        result += char;
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === "\"") {
+          inString = false;
+        }
+      } else if (char === "\"") {
+        result += normalizeSegment(segment);
+        segment = "";
+        result += char;
+        inString = true;
+      } else {
+        segment += char;
+      }
+    }
+    return result + normalizeSegment(segment);
+  }
+
   function parseJsonCandidate(source) {
     const candidate = source.trim();
     if (!candidate) return null;
@@ -197,7 +233,9 @@
       return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
     } catch (_err) {
       try {
-        const normalized = stripJsonComments(candidate).replace(/,\s*([}\]])/g, "$1");
+        const normalized = normalizeNumericDivisions(
+          stripJsonComments(candidate).replace(/,\s*([}\]])/g, "$1"),
+        );
         const parsed = JSON.parse(normalized);
         return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
       } catch (_innerErr) {
@@ -306,6 +344,32 @@
       escalation,
       blocksBuild: Boolean(clarification || escalation),
     };
+  }
+
+  function structuredAssistantSummary(parsed) {
+    if (!parsed || typeof parsed !== "object") return "";
+    if (typeof parsed.assistant_message === "string" && parsed.assistant_message.trim()) {
+      return parsed.assistant_message.trim();
+    }
+    const edit = parsed.asset_edit_request && typeof parsed.asset_edit_request === "object"
+      ? parsed.asset_edit_request
+      : null;
+    if (edit) {
+      const operation = String(edit.operation || "update").replaceAll("_", " ");
+      const target = String(edit.target || "the active asset").replaceAll("_", " ");
+      return `I’ll ${operation} ${target}.`;
+    }
+    const intent = parsed.asset_intent && typeof parsed.asset_intent === "object"
+      ? parsed.asset_intent
+      : null;
+    if (intent) {
+      const name = String(intent.name || "that asset").replaceAll("_", " ");
+      const description = typeof intent.description === "string" ? intent.description.trim() : "";
+      return description
+        ? `I’ll build ${name}: ${description}`
+        : `I’ll build ${name}.`;
+    }
+    return "";
   }
 
   function assistantVisibleText(message, control) {
@@ -1495,7 +1559,8 @@
       const visibleContent = control.clarification
         || control.escalation
         || assistantResponse.prose
-        || "I’ve prepared that asset change.";
+        || structuredAssistantSummary(assistantJson)
+        || "I’m ready to apply that asset change.";
       const savedAssistant = await saveThreadMessage(
         "assistant",
         visibleContent,

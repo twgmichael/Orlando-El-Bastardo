@@ -61,6 +61,30 @@ def test_legacy_state_becomes_canonical_semantic_graph():
     assert part_catalog(graph)[0]["material"] == "orange"
 
 
+def test_graph_from_state_expands_group_aliases_into_stable_attachments():
+    graph = graph_from_state(
+        {
+            "canonical_id": "asset_repeated_parts_A",
+            "primitives": [
+                {"id": "panel_1", "label": "panels", "type": "wedge"},
+                {"id": "panel_2", "label": "panels", "type": "wedge"},
+                {"id": "central_support", "label": "support", "type": "cylinder"},
+            ],
+            "asset_intent": {
+                "relationships": [
+                    {"subject": "panels", "relation": "attached_to", "target": "central_support"}
+                ]
+            },
+        }
+    )
+
+    assert [(attachment.child, attachment.parent) for attachment in graph.attachments] == [
+        ("panel_1", "central_support"),
+        ("panel_2", "central_support"),
+    ]
+    assert validate_graph(graph) == []
+
+
 def test_compile_is_pure_and_returns_reviewable_diff():
     graph = _graph()
     before = graph.model_dump(mode="json")
@@ -396,6 +420,57 @@ def test_relational_move_places_cone_on_top_of_tube():
     assert result.graph_after.relationships[0].type == "on_top_of"
     assert result.graph_after.relationships[0].subject == "cone"
     assert result.graph_after.relationships[0].target == "tube"
+
+
+def test_relational_move_places_hemisphere_flat_face_on_reference_surface():
+    graph = SemanticAssetGraph.model_validate(
+        {
+            "asset_id": "saucer_A",
+            "revision": 1,
+            "parts": [
+                {
+                    "id": "half_sphere_id",
+                    "geometry": {
+                        "type": "sphere",
+                        "parameters": {"shape_modifiers": ["half", "flat"]},
+                    },
+                    "transform": {
+                        "location": [0, 0, 0.39],
+                        "rotation": [0, 0, 3.141592654],
+                        "scale": [1, 1, 0.5],
+                    },
+                },
+                {
+                    "id": "squished_sphere_id",
+                    "geometry": {
+                        "type": "sphere",
+                        "parameters": {"shape_modifiers": ["squished"]},
+                    },
+                    "transform": {
+                        "location": [0.5, -0.25, 0],
+                        "rotation": [0, 0, 0],
+                        "scale": [1.45, 1.45, 0.28],
+                    },
+                },
+            ],
+        }
+    )
+
+    result = compile_graph_operation(
+        graph,
+        GraphOperationRequest(
+            operation="move",
+            base_revision=1,
+            intent="Move the half sphere down until it intersects with the squished sphere.",
+            target_ids=["half_sphere_id"],
+            parameters={"semantic_direction": "down"},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    dome = next(part for part in result.graph_after.parts if part.id == "half_sphere_id")
+    assert dome.transform.location == [0.5, -0.25, 0.14]
+    assert result.diagnostics[0].code == "contact_move_normalized"
 
 
 def test_relational_intent_repairs_legacy_operation_and_unique_cone_typo():
