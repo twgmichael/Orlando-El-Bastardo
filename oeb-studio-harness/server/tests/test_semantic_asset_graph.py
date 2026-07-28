@@ -197,7 +197,7 @@ def test_add_rejects_a_new_part_id_as_the_reference_target():
         GraphOperationRequest(
             operation="add",
             base_revision=3,
-            intent="Add triangle fins to the bottom of the body",
+            intent="Add a triangle fin.",
             target_ids=["new_rocket_fin"],
             parameters={"type": "triangle", "placement": "bottom"},
         ),
@@ -239,6 +239,74 @@ def test_add_triangle_fins_compiles_to_neutral_radial_wedges():
     ]
     assert len(fin_relationships) == 4
     assert {relationship.target for relationship in fin_relationships} == {"body"}
+
+
+def test_relational_add_replaces_invented_targets_without_object_specific_rules():
+    graph = _graph()
+    result = compile_graph_operation(
+        graph,
+        GraphOperationRequest(
+            operation="add",
+            base_revision=3,
+            intent="Add triangular panels to the bottom of the body.",
+            target_ids=["invented_panel_1", "invented_panel_2"],
+            parameters={"semantic_direction": "below"},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    assert result.diagnostics[0].code == "relational_add_normalized"
+    assert result.diagnostics[0].details["original_targets"] == [
+        "invented_panel_1",
+        "invented_panel_2",
+    ]
+    added = next(part for part in result.graph_after.parts if part.id == "added_triangle")
+    assert added.geometry.type == "wedge"
+    assert added.material == "neutral"
+    assert result.graph_after.relationships[-1].target == "body"
+
+
+def test_add_accepts_multiple_declared_part_definitions_and_counts():
+    result = compile_graph_operation(
+        _graph(),
+        GraphOperationRequest(
+            operation="add",
+            base_revision=3,
+            intent="Add repeated triangular panels below the body.",
+            target_ids=["body"],
+            parameters={
+                "placement": "below",
+                "parts": [
+                    {
+                        "id": "left_panel",
+                        "type": "triangle",
+                        "material": "gray",
+                        "count": 2,
+                        "transform": {"location": [0, -1, -1], "scale": [0.5, 0.1, 0.5]},
+                    },
+                    {
+                        "id": "right_panel",
+                        "type": "triangle",
+                        "material": "gray",
+                        "count": 2,
+                        "transform": {"location": [0, 1, -1], "scale": [0.5, 0.1, 0.5]},
+                    },
+                ],
+            },
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    added = [
+        part
+        for part in result.graph_after.parts
+        if part.id.startswith("left_panel") or part.id.startswith("right_panel")
+    ]
+    assert [part.id for part in added] == [
+        "left_panel", "left_panel_2", "right_panel", "right_panel_2",
+    ]
+    assert {part.geometry.type for part in added} == {"wedge"}
+    assert {part.material for part in added} == {"gray"}
 
 
 def test_validator_rejects_dangling_graph_references():

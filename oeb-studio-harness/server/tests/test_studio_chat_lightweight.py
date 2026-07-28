@@ -18,6 +18,7 @@ from app.routers.studio_chat import (
     _revision_response,
     _state_paths_from_payload,
     _thread_title_from_prompt,
+    studio_chat_runtime_version,
 )
 from app.services import studio_chat
 from app.services.studio_chat import (
@@ -62,6 +63,13 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert '"reference_id":"Y"' in asset_edit.system_prompt
     assert '"mode":"match_reference_width"' in asset_edit.system_prompt
     assert primitive_resolver.temperature == 0.1
+
+
+def test_studio_chat_runtime_version_is_content_addressed():
+    version = studio_chat_runtime_version()
+
+    assert len(version) == 16
+    assert all(character in "0123456789abcdef" for character in version)
 
 
 def test_ollama_chat_payload_keeps_system_prompt_and_history_visible():

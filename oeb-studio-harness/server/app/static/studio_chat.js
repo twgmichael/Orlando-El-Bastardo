@@ -13,6 +13,13 @@
     messages: [],
     awaitingAssistant: false,
     pollTimers: {},
+    runtime: {
+      version: null,
+      shellVersion: "1",
+      module: null,
+      heartbeatTimer: null,
+      updating: false,
+    },
     lightbox: {
       artifacts: [],
       index: 0,
@@ -239,7 +246,7 @@
       .trim();
   }
 
-  function parseAssistantResponse(text) {
+  function parseAssistantResponseFallback(text) {
     if (!text || typeof text !== "string") return { parsed: null, prose: "" };
     const source = text.trim();
     const fencedPattern = /```(?:json)?\s*([\s\S]*?)```/gi;
@@ -270,6 +277,13 @@
       }
     }
     return { parsed: null, prose: cleanAssistantProse(source) };
+  }
+
+  function parseAssistantResponse(text) {
+    const runtimeParser = state.runtime.module && state.runtime.module.parseAssistantResponse;
+    return typeof runtimeParser === "function"
+      ? runtimeParser(text)
+      : parseAssistantResponseFallback(text);
   }
 
   function parseAssistantJson(text) {
@@ -1097,6 +1111,69 @@
     return payload;
   }
 
+  async function refreshClientRuntime(options) {
+    if (state.runtime.updating) return false;
+    state.runtime.updating = true;
+    const initial = Boolean(options && options.initial);
+    try {
+      const health = await fetchJson("/api/v1/studio-chat/runtime-health", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
+      const reloadRequired = String(health.shell_version) !== state.runtime.shellVersion
+        || Number(health.runtime_api_version) !== 1;
+      state.raw.runtime_health = {
+        ...health,
+        checked_at: new Date().toISOString(),
+        reload_required: reloadRequired,
+      };
+      if (reloadRequired) {
+        renderDebug();
+        if (!initial) setStatus("A Studio Chat shell update is available; reload when convenient.");
+        return false;
+      }
+      if (health.runtime_version === state.runtime.version && state.runtime.module) {
+        renderDebug();
+        return false;
+      }
+      const runtimeUrl = `${health.runtime_url}?v=${encodeURIComponent(health.runtime_version)}`;
+      const nextRuntime = await import(runtimeUrl);
+      if (
+        Number(nextRuntime.RUNTIME_API_VERSION) !== Number(health.runtime_api_version)
+        || typeof nextRuntime.parseAssistantResponse !== "function"
+      ) {
+        throw new Error("Downloaded Studio Chat runtime does not satisfy the advertised API.");
+      }
+      const previousVersion = state.runtime.version;
+      state.runtime.module = nextRuntime;
+      state.runtime.version = health.runtime_version;
+      state.raw.runtime_health.applied_at = new Date().toISOString();
+      state.raw.runtime_health.previous_version = previousVersion;
+      renderDebug();
+      if (previousVersion && !initial) {
+        setStatus(`Studio Chat runtime updated: ${health.runtime_version}`);
+      }
+      return true;
+    } catch (err) {
+      state.raw.runtime_health = {
+        ...(state.raw.runtime_health || {}),
+        checked_at: new Date().toISOString(),
+        error: err.message,
+      };
+      renderDebug();
+      return false;
+    } finally {
+      state.runtime.updating = false;
+    }
+  }
+
+  function startRuntimeHeartbeat() {
+    if (state.runtime.heartbeatTimer) clearInterval(state.runtime.heartbeatTimer);
+    state.runtime.heartbeatTimer = setInterval(() => {
+      refreshClientRuntime().catch(() => {});
+    }, 15000);
+  }
+
   function renderThreadOptions() {
     els.threadList.innerHTML = "";
     for (const thread of state.threads) {
@@ -1558,14 +1635,21 @@
       plane: ["plane", "surface"],
       wedge: ["wedge", "triangle", "triangular prism"],
     };
-    const matches = parts.filter((part) => {
+    const matchesTerm = (part, text) => {
       const idWords = String(part.id || "").toLowerCase().replace(/_/g, " ");
-      if (idWords && lowered.includes(idWords)) return true;
+      if (idWords && text.includes(idWords)) return true;
       const type = part.geometry && part.geometry.type
         ? String(part.geometry.type).toLowerCase()
         : "";
-      return (aliases[type] || [type]).some((alias) => alias && new RegExp(`\\b${alias}\\b`, "i").test(lowered));
-    });
+      return (aliases[type] || [type]).some((alias) => alias && new RegExp(`\\b${alias}\\b`, "i").test(text));
+    };
+    const relationMatch = lowered.match(/\b(?:top|bottom|base)\s+of\s+(?:the\s+)?([a-z0-9_-]+)/)
+      || lowered.match(/\b(?:below|under|underneath|above|over|near|beside)\s+(?:the\s+)?([a-z0-9_-]+)/);
+    if (relationMatch) {
+      const relationalMatches = parts.filter((part) => matchesTerm(part, relationMatch[1]));
+      if (relationalMatches.length === 1) return relationalMatches[0].id;
+    }
+    const matches = parts.filter((part) => matchesTerm(part, lowered));
     return matches.length === 1 ? matches[0].id : null;
   }
 
@@ -1584,30 +1668,59 @@
       || null;
     const objects = intent && Array.isArray(intent.objects) ? intent.objects : [];
     const addedObjects = objects.filter((object) => object && !existingIds.has(object.id));
-    const sourceObject = addedObjects.length === 1 ? addedObjects[0] : null;
 
     if (!request.target || !existingIds.has(request.target)) {
-      request.target = inferAddReferenceId(prompt, parts);
+      const addedIds = new Set(addedObjects.map((object) => object.id));
+      const relationships = intent && Array.isArray(intent.relationships) ? intent.relationships : [];
+      const references = new Set();
+      for (const relationship of relationships) {
+        if (!relationship || typeof relationship !== "object") continue;
+        if (addedIds.has(relationship.subject) && existingIds.has(relationship.target)) {
+          references.add(relationship.target);
+        }
+        if (addedIds.has(relationship.target) && existingIds.has(relationship.subject)) {
+          references.add(relationship.subject);
+        }
+      }
+      request.target = references.size === 1
+        ? Array.from(references)[0]
+        : inferAddReferenceId(prompt, parts);
     }
     const delta = { ...(request.edit_delta || {}) };
-    if (sourceObject) {
+    const proposedParts = addedObjects.map((object) => {
+      const orientation = object.orientation && typeof object.orientation === "object"
+        ? object.orientation
+        : {};
+      return {
+        id: object.id || undefined,
+        type: object.type || undefined,
+        material: object.material || "neutral",
+        role: object.description || undefined,
+        count: Number.isInteger(object.count) ? object.count : 1,
+        placement: object.placement || undefined,
+        transform: {
+          location: Array.isArray(orientation.position) ? orientation.position : undefined,
+          rotation: Array.isArray(orientation.rotation) ? orientation.rotation : undefined,
+          scale: Array.isArray(orientation.scale) ? orientation.scale : undefined,
+        },
+      };
+    });
+    if (proposedParts.length === 1) {
       delta.part = {
         ...(delta.part && typeof delta.part === "object" ? delta.part : {}),
-        id: sourceObject.id || delta.id || undefined,
-        type: sourceObject.type || delta.type || undefined,
-        material: sourceObject.material || delta.material || "neutral",
-        role: sourceObject.description || undefined,
+        ...proposedParts[0],
       };
-      delta.count = Number.isInteger(sourceObject.count) ? sourceObject.count : 1;
+    } else if (proposedParts.length > 1) {
+      delta.parts = proposedParts;
     } else {
       delta.material = delta.material || "neutral";
-    }
-    if (delta.count > 1 && /\bfins?\b/i.test(prompt)) {
-      delta.arrangement = "radial";
     }
     if (/\b(bottom|base|lower)\b/i.test(prompt)) {
       delta.placement = "bottom";
       request.semantic_direction = "bottom";
+      for (const part of proposedParts) {
+        if (part.transform) part.transform.location = undefined;
+      }
     }
     request.edit_delta = delta;
     return request;
@@ -1728,7 +1841,7 @@
         "For 'remove/delete X', use operation remove, target X.",
         "For 'add/create X below/above/near Y', use operation add and target the EXISTING reference part Y, never the new part.",
         "Put the new definition in edit_delta {\"part\":{\"id\":\"new_stable_id\",\"type\":\"X\",\"material\":\"neutral\"}} and use semantic_direction below/above/near.",
-        "For repeated parts include edit_delta count. For fins around a body include edit_delta arrangement \"radial\" and placement \"bottom\".",
+        "For repeated parts include count and an explicit mathematical arrangement such as linear, radial, or grid.",
         repairIntent ? `The latest user prompt intent is ${repairIntent}; preserve that intent exactly.` : "",
         "This is one repair attempt; do not explain or write Blender code.",
       ].join("\n"),
@@ -2069,7 +2182,17 @@
     }
   });
 
-  loadControls().catch((err) => {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshClientRuntime().catch(() => {});
+  });
+
+  async function initializeStudioChat() {
+    await refreshClientRuntime({ initial: true });
+    startRuntimeHeartbeat();
+    await loadControls();
+  }
+
+  initializeStudioChat().catch((err) => {
     showError("Could not initialize studio chat", err.message);
     setStatus("Ollama unavailable");
     renderTranscript();

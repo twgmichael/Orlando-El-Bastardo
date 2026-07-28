@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import math
 import re
@@ -8,7 +9,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -105,6 +106,13 @@ from app.services.semantic_asset_graph import (
 )
 
 router = APIRouter(prefix="/studio-chat", tags=["studio-chat"])
+STUDIO_CHAT_RUNTIME_API_VERSION = 1
+STUDIO_CHAT_SHELL_VERSION = "1"
+STUDIO_CHAT_RUNTIME_PATH = Path(__file__).resolve().parent.parent / "static" / "studio_chat_runtime.mjs"
+
+
+def studio_chat_runtime_version() -> str:
+    return hashlib.sha256(STUDIO_CHAT_RUNTIME_PATH.read_bytes()).hexdigest()[:16]
 
 
 def _review_render_views(review_views: list[str]) -> list[str]:
@@ -1371,6 +1379,20 @@ async def studio_chat_models():
     )
 
 
+@router.get("/runtime-health")
+async def studio_chat_runtime_health(response: Response):
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return {
+        "status": "ok",
+        "server_time": _now().isoformat(),
+        "runtime_version": studio_chat_runtime_version(),
+        "runtime_api_version": STUDIO_CHAT_RUNTIME_API_VERSION,
+        "shell_version": STUDIO_CHAT_SHELL_VERSION,
+        "runtime_url": "/static/studio_chat_runtime.mjs",
+    }
+
+
 @router.get("/presets", response_model=StudioChatPresetList)
 async def studio_chat_role_presets():
     return StudioChatPresetList(presets=studio_chat_presets())
@@ -2204,7 +2226,25 @@ async def create_studio_chat_asset_edit(
         )
     now = _now()
     state_before = dict(asset.state_json or {})
+    current_revision_result = await db.execute(
+        select(StudioChatAssetRevision).where(
+            StudioChatAssetRevision.chat_asset_id == asset.id,
+            StudioChatAssetRevision.revision == asset.current_revision,
+        )
+    )
+    current_revision_record = current_revision_result.scalar_one_or_none()
+    recovered_unbuilt_revision = (
+        current_revision_record
+        if current_revision_record
+        and current_revision_record.status == "delta_recorded"
+        and current_revision_record.job_id is None
+        else None
+    )
+    if recovered_unbuilt_revision:
+        state_before = dict(recovered_unbuilt_revision.state_before or {})
     edit_delta = {**body.edit_delta, "operation": body.operation, "preserve": body.preserve}
+    if recovered_unbuilt_revision:
+        edit_delta["recovered_unbuilt_revision"] = recovered_unbuilt_revision.revision
     for key, value in {
         "target": body.target,
         "view": body.view,
