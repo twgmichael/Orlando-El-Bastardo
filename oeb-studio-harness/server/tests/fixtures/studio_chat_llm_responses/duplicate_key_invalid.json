@@ -1,0 +1,7 @@
+{
+  "behavior": "ambiguous duplicate JSON keys are invalid rather than guessed",
+  "creative_request": "Build a cube.",
+  "raw_response": "{\"action\":\"build_asset\",\"action\":\"edit_asset\",\"asset_intent\":{\"name\":\"Cube\",\"objects\":[{\"id\":\"cube\",\"type\":\"cube\"}]}}",
+  "expected_outcome": "invalid",
+  "expected_diagnostic_code": "assistant_json_invalid"
+}

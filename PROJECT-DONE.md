@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-26T00:00:00-04:00
+updated: 2026-07-28T14:30:00-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -16,6 +16,42 @@ wiki_order: 20
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-07-28 — Studio Chat Milestone 17 output resilience
+
+Implemented the local-LLM output resilience boundary for Studio Chat.
+
+- Added a broad build-pipeline result contract with explicit `compiled`,
+  `needs_repair`, `needs_clarification`, `unsupported`, and `invalid`
+  outcomes.
+- Preserved complete raw requests/responses, parsed responses, rich unknown
+  fields, normalized asset intent, resolver attempts, repair counts,
+  diagnostics, and trace correlation.
+- Added tolerant JSON ingestion for fenced or prose-wrapped objects, comments,
+  trailing commas, and numeric division, with an auditable repair log.
+- Added idempotent semantic-preserving normalization and explicit change
+  records, plus relationship-reference, duplicate-id, finite-number, executable
+  geometry, and required-artifact validation.
+- Enforced the compiled-only submission gate at the build endpoint. Every
+  other outcome returns a structured diagnostic and creates no worker job.
+- Bounded local repair to one pass by default and allowed a second pass only
+  for explicitly recoverable validation classes.
+- Added useful browser-visible failure summaries containing reason, suggested
+  action, diagnostic code, and trace id while retaining full Raw Debug data.
+- Added a curated real-response fixture corpus for tolerant repairs, unknown
+  fields, duplicate keys, dangling relationships, clarification, escalation,
+  and the rocket semantic-type correction.
+- Added contract, invariant, repair-success, repair-exhaustion, submission-gate,
+  endpoint, and fixture behavior tests.
+- Marked Studio Chat Milestone 17 TODOs complete.
+
+Validation:
+- Studio Chat Milestone 17 and related focused Docker tests passed: 98 tests.
+- Full local Docker harness suite passed: 209 tests.
+- JavaScript syntax checks passed for `studio_chat.js` and
+  `studio_chat_runtime.mjs`.
 
 ---
 

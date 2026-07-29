@@ -1,0 +1,7 @@
+{
+  "behavior": "unsupported visual judgment is preserved and does not submit",
+  "creative_request": "Build the most emotionally perfect abstract sculpture.",
+  "raw_response": "{\"action\":\"escalate\",\"confidence\":0.3,\"clarification_question\":null,\"escalation_reason\":\"The request requires subjective visual judgment that has no deterministic construction contract.\",\"asset_intent\":{\"name\":\"Abstract Sculpture\",\"purpose\":\"emotional impact\",\"future_semantics\":{\"preserve\":true}}}",
+  "expected_outcome": "unsupported",
+  "expected_diagnostic_code": "intent_escalated"
+}

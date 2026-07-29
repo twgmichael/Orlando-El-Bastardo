@@ -2108,14 +2108,29 @@
       setStatus(`Build job queued: ${result.job.id}`);
       startBuildPolling(result.job.id, assistant);
     } catch (err) {
+      const pipeline = err.detail && typeof err.detail === "object" ? err.detail : null;
+      const diagnostic = pipeline && Array.isArray(pipeline.diagnostics)
+        ? pipeline.diagnostics[0]
+        : null;
+      const failureSummary = diagnostic
+        ? [
+          diagnostic.reason,
+          diagnostic.suggested_next_action,
+          diagnostic.code ? `Code: ${diagnostic.code}` : null,
+          pipeline.trace_id ? `Trace: ${pipeline.trace_id}` : null,
+        ].filter(Boolean).join(" ")
+        : err.message;
+      if (pipeline) {
+        state.raw.build_pipeline = pipeline;
+      }
       assistant.build = {
         result: null,
         status: null,
-        error: err.message,
+        error: failureSummary,
       };
       renderTranscript();
-      showError("Could not create build job", err.message);
-      setStatus("Build job failed");
+      showError("Build was not submitted", failureSummary);
+      setStatus(pipeline ? `Build ${pipeline.outcome}` : "Build job failed");
     } finally {
       renderDebug();
       els.createBuildJob.disabled = !latestBuildableAssistantMessage();

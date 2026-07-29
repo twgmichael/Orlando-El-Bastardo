@@ -1,0 +1,7 @@
+{
+  "behavior": "dangling relationship references stop before worker submission",
+  "creative_request": "Build a cone on a tube.",
+  "raw_response": "{\"action\":\"build_asset\",\"asset_intent\":{\"name\":\"Cone Assembly\",\"kind\":\"prop\",\"objects\":[{\"id\":\"cone\",\"type\":\"cone\",\"material\":\"blue\"}],\"relationships\":[{\"subject\":\"cone\",\"relation\":\"on_top_of\",\"target\":\"missing_tube\"}]}}",
+  "expected_outcome": "needs_repair",
+  "expected_diagnostic_code": "asset_intent_reference_invalid"
+}

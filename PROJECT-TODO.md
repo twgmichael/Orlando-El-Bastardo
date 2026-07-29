@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-27T12:00:00-04:00
+updated: 2026-07-28T20:58:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -164,36 +164,111 @@ visible shot.
    - [x] Studio Chat Milestone 16 — defer WebGL sandbox or Pascal-style
      embedding until OEB's graph, operation contract, revision model, and
      validation rules are stable enough to be the single source of truth.
-   - [ ] Studio Chat Milestone 17 — define a broad asset-intent envelope and
+   - [x] Studio Chat Milestone 17 — define a broad asset-intent envelope and
      preserve complete raw local LLM requests/responses plus unknown fields
      before parsing or normalization.
-   - [ ] Studio Chat Milestone 17 — add tolerant JSON ingestion with narrowly
+   - [x] Studio Chat Milestone 17 — add tolerant JSON ingestion with narrowly
      scoped repairs, recoverable structural defaults, and an auditable change
      log.
-   - [ ] Studio Chat Milestone 17 — add idempotent, semantic-preserving
+   - [x] Studio Chat Milestone 17 — add idempotent, semantic-preserving
      normalization for aliases, kinds, identifiers, materials, transforms,
      directions, review views, modifiers, and recoverable omissions.
-   - [ ] Studio Chat Milestone 17 — define explicit compiler outcomes:
+   - [x] Studio Chat Milestone 17 — define explicit compiler outcomes:
      `compiled`, `needs_repair`, `needs_clarification`, `unsupported`, and
      `invalid`.
-   - [ ] Studio Chat Milestone 17 — enforce the deterministic submission gate
+   - [x] Studio Chat Milestone 17 — enforce the deterministic submission gate
      so only `compiled` results can create build or render jobs.
-   - [ ] Studio Chat Milestone 17 — add one focused local LLM repair pass by
+   - [x] Studio Chat Milestone 17 — add one focused local LLM repair pass by
      default, permit a second only for explicitly recoverable validation
      classes, and stop safely after exhaustion.
-   - [ ] Studio Chat Milestone 17 — return structured stage/code/reason/trace
+   - [x] Studio Chat Milestone 17 — return structured stage/code/reason/trace
      diagnostics and useful inline clarification instead of generic HTTP 500
      errors.
-   - [ ] Studio Chat Milestone 17 — add contract, invariant, property, and
+   - [x] Studio Chat Milestone 17 — add contract, invariant, property, and
      representative failure-class tests for malformed JSON, missing and extra
      fields, unexpected kinds, rich semantic intent, modifiers,
      clarification, normalization, unsupported intent, and graceful failure.
-   - [ ] Studio Chat Milestone 17 — establish a curated real-response fixture
+   - [x] Studio Chat Milestone 17 — establish a curated real-response fixture
      corpus and add fixtures only when a response exposes a new behavior class
      or semantic-preservation regression.
-   - [ ] Studio Chat Milestone 17 — verify compiler-gate, repair-exhaustion,
+   - [x] Studio Chat Milestone 17 — verify compiler-gate, repair-exhaustion,
      structured-diagnostic, and no-submission behavior through Docker-backed
      integration tests.
+   - [ ] Studio Chat Milestone 18 — implement
+     `docs/planning/STUDIO-CHAT-HIERARCHICAL-GENERAL-OBJECT-PLANNER-PLAN.md`
+     as the canonical plan for moving from primitive assembly to validated
+     hierarchical general-object construction.
+   - [ ] Studio Chat Milestone 18 — define the versioned
+     `hierarchical_asset_intent` contract with stable semantic part ids,
+     functional roles, parent-child ownership, dimensions or ratios,
+     attachment anchors, contact relationships, semantic orientation,
+     symmetry, repetition, constraints, construction notes, and preserved
+     extension fields.
+   - [ ] Studio Chat Milestone 18 — add a versioned object-archetype registry
+     containing reusable family knowledge: required and optional roles, role
+     aliases, parent-child rules, proportion ranges, anchors, orientation,
+     repetition expectations, and supported geometry recipes.
+   - [ ] Studio Chat Milestone 18 — seed the archetype registry with tracked
+     vehicle, wheeled vehicle, aircraft, chair, table, tower, and simple robot
+     families so the architecture is evaluated beyond one named object.
+   - [ ] Studio Chat Milestone 18 — add constrained local-LLM hierarchical
+     decomposition that proposes the object family, functional parts,
+     ownership, required versus optional status, semantic relationships,
+     directions, and relative sizes without emitting Blender code or final
+     coordinates.
+   - [ ] Studio Chat Milestone 18 — implement idempotent archetype grounding
+     and role normalization that resolves aliases, matches canonical roles,
+     supplies only deterministic required structure, preserves novel optional
+     parts, and diagnoses contradictory or unsupported plans.
+   - [ ] Studio Chat Milestone 18 — implement a root-to-leaf proportion solver
+     that applies archetype ratio ranges, respects explicit user dimensions,
+     prevents child and repeated parts from inheriting root-sized defaults, and
+     reports unsatisfied constraints.
+   - [ ] Studio Chat Milestone 18 — implement semantic attachment anchors and
+     placement solving for top, bottom, front, rear, left, right, inside, and
+     around relationships after part dimensions are known.
+   - [ ] Studio Chat Milestone 18 — implement semantic orientation solving that
+     converts forward/up intent into the canonical coordinate frame and
+     verifies directional parts from every standard review view.
+   - [ ] Studio Chat Milestone 18 — add compound role-specific geometry recipes
+     so grounded parts such as hulls, turrets, cannons, tracks, and road wheels
+     compile into recognizable construction rather than generic boxes.
+   - [ ] Studio Chat Milestone 18 — add deterministic mirror, radial-array,
+     linear-array, and distribute-within-parent operations with stable instance
+     ids for symmetric and repeated parts.
+   - [ ] Studio Chat Milestone 18 — add staged validation gates for schema and
+     ids, required-role coverage, hierarchy connectedness, proportion bounds,
+     supported contact, orientation agreement, symmetry, repetition,
+     collision, containment, geometry support, and compilation completeness.
+   - [ ] Studio Chat Milestone 18 — keep responsibility boundaries explicit:
+     the local LLM proposes learned object structure and intent; deterministic
+     tools own dimensions, anchors, transforms, repetition, contact,
+     validation, and compiler-safe worker instructions.
+   - [ ] Studio Chat Milestone 18 — add bounded structural and spatial repairs
+     for missing archetype-required parts, invalid ratios, floating
+     attachments, wrong axes, and misdistributed repeated parts, with
+     before/after diagnostics and clarification for ambiguous creative choices.
+   - [ ] Studio Chat Milestone 18 — implement the plan → build → inspect →
+     repair loop using standard review views, hierarchy evidence, deterministic
+     geometry metadata, silhouette checks, bounded repair, and safe escalation
+     for visual judgment.
+   - [ ] Studio Chat Milestone 18 — enforce the Milestone 17 compiler gate so
+     underspecified, disconnected, unsupported, invalid, or repair-exhausted
+     hierarchies preserve diagnostics and never create build or render jobs.
+   - [ ] Studio Chat Milestone 18 — capture real local-model decomposition and
+     repair responses as behavior-class fixtures while accumulating successful
+     validated plans as reusable family examples rather than a fixed catalog
+     of finished objects.
+   - [ ] Studio Chat Milestone 18 — add broad-prompt acceptance cases for an
+     army tank, fire truck or wheeled vehicle, biplane or aircraft, office
+     chair, castle tower, and simple robot; verify hierarchy, required parts,
+     proportions, attachments, orientation, repetition, deterministic
+     compilation, review inspection, repair behavior, and no-submission gates.
+   - [ ] Studio Chat Milestone 18 — meet the first concrete acceptance target:
+     `Build an army tank` produces one connected, recognizable tank with a
+     wide low hull, smaller top-mounted turret, forward cannon, mirrored side
+     tracks, and road wheels distributed inside the tracks, without
+     prompt-specific hardcoded coordinates.
 2. **Asset registry lite, only as needed** — keep the registry focused on
    conversation grounding and pipeline lookup: `canonical_id`, kind, tags,
    availability, and seed data from `oeb.config.json`.

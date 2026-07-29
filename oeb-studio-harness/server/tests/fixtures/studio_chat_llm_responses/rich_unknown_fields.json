@@ -1,0 +1,6 @@
+{
+  "behavior": "rich and unknown semantic fields survive ingestion and normalization",
+  "creative_request": "Build a glass observation sphere.",
+  "raw_response": "{\"action\":\"build_asset\",\"confidence\":0.91,\"vendor_extension\":{\"keep_me\":true},\"asset_intent\":{\"name\":\"Observation Sphere\",\"kind\":\"prop\",\"purpose\":\"observation pod\",\"future_style\":{\"era\":\"retro\"},\"objects\":[{\"id\":\"observation_orb\",\"type\":\"sphere\",\"material\":\"glass\",\"description\":\"transparent observation sphere\",\"unknown_modifier\":{\"refraction_hint\":0.8}}],\"relationships\":[],\"construction_notes\":\"Preserve the transparent shell.\"}}",
+  "expected_outcome": "compiled"
+}

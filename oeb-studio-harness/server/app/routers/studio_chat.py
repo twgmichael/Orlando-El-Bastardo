@@ -88,10 +88,11 @@ from app.services.asset_review import (
 )
 from app.services.studio_chat import (
     StudioChatLLMConfig,
-    build_spec_with_primitive_resolver,
     build_studio_chat_trace,
     chat_with_ollama,
+    compile_studio_chat_build_pipeline,
     list_ollama_models,
+    pipeline_allows_job_submission,
     post_json,
     primitive_registry,
     resolve_primitive_spec,
@@ -2680,34 +2681,44 @@ async def create_studio_chat_build_job(
     effective_thread_id = thread_id or body.thread_id
     if effective_thread_id:
         await _get_thread_or_404(db, effective_thread_id)
-    try:
-        spec, parsed_response, resolver_output = build_spec_with_primitive_resolver(
-            body.creative_request,
-            body.assistant_response,
-            body.messages,
-            settings.studio_chat_ollama_url,
-            body.model or settings.studio_chat_model,
-            resolver_retries=1,
-        )
-    except ValueError as exc:
-        await record_studio_chat_trace(
-            db,
-            effective_thread_id,
-            "assistant.json.parse_failed",
-            "backend",
-            "Assistant JSON parse/build failed",
-            {
-                "creative_request": body.creative_request,
-                "assistant_response": body.assistant_response,
-                "messages": [message.model_dump(mode="json") for message in body.messages],
-                "error": str(exc),
-            },
-            message_id=body.message_id,
-            text_snapshot=body.assistant_response,
-        )
+    pipeline = await asyncio.to_thread(
+        compile_studio_chat_build_pipeline,
+        body.creative_request,
+        body.assistant_response,
+        body.messages,
+        ollama_url=settings.studio_chat_ollama_url,
+        model=body.model or settings.studio_chat_model,
+        resolver_retries=1,
+        raw_request=body.model_dump(mode="json"),
+    )
+    await record_studio_chat_trace(
+        db,
+        effective_thread_id,
+        "build.pipeline.completed",
+        "backend",
+        f"Build pipeline outcome: {pipeline.outcome}",
+        pipeline.model_dump(mode="json"),
+        message_id=body.message_id,
+        text_snapshot=body.assistant_response,
+    )
+    if not pipeline_allows_job_submission(pipeline):
         if effective_thread_id:
-            await db.commit()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            await _record_thread_event(
+                db,
+                effective_thread_id,
+                "build_rejected",
+                {"pipeline": pipeline.model_dump(mode="json")},
+                message_id=body.message_id,
+            )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=pipeline.model_dump(mode="json"),
+        )
+
+    spec = pipeline.spec
+    parsed_response = pipeline.parsed_response or {}
+    resolver_output = pipeline.resolver
 
     await record_studio_chat_trace(
         db,
@@ -2833,6 +2844,7 @@ async def create_studio_chat_build_job(
         spec=spec,
         review_views=body.review_views,
         resolver=resolver_output,
+        pipeline=pipeline,
     ).model_dump(mode="json")
     if effective_thread_id:
         await record_studio_chat_trace(
@@ -2920,6 +2932,7 @@ async def create_studio_chat_build_job(
         resolver=resolver_output,
         asset=_asset_response(asset_state) if asset_state else None,
         revision=_revision_response(asset_revision) if asset_revision else None,
+        pipeline=pipeline,
     )
 
 

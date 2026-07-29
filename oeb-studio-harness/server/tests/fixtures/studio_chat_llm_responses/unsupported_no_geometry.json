@@ -1,0 +1,7 @@
+{
+  "behavior": "preserved semantic intent without executable geometry is unsupported",
+  "creative_request": "Build a poetic dragon sculpture.",
+  "raw_response": "{\"action\":\"build_asset\",\"asset_intent\":{\"name\":\"Dragon Sculpture\",\"kind\":\"prop\",\"purpose\":\"poetic display\",\"objects\":[{\"id\":\"dragon\",\"type\":\"dragon\",\"description\":\"A poetic dragon silhouette\",\"future_geometry\":{\"preserve\":true}}]}}",
+  "expected_outcome": "unsupported",
+  "expected_diagnostic_code": "no_executable_geometry"
+}

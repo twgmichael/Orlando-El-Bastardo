@@ -4,7 +4,7 @@ import uuid
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.semantic_asset_graph import GraphOperationResult
+from app.schemas.semantic_asset_graph import CompilerOutcome, GraphOperationResult
 
 from app.schemas.conversation import PrimitiveBuildSpec
 from app.schemas.job import JobSummary
@@ -130,6 +130,33 @@ class StudioChatBuildJobResponse(BaseModel):
     asset: "StudioChatAssetResponse | None" = None
     revision: "StudioChatAssetRevisionResponse | None" = None
     review_render_requested: bool = True
+    pipeline: "StudioChatBuildPipelineResult | None" = None
+
+
+class StudioChatPipelineDiagnostic(BaseModel):
+    stage: str
+    outcome: CompilerOutcome
+    code: str
+    reason: str
+    recoverable: bool = False
+    preserved_fields: list[str] = Field(default_factory=list)
+    suggested_next_action: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class StudioChatBuildPipelineResult(BaseModel):
+    outcome: CompilerOutcome
+    trace_id: str
+    raw_request: dict[str, Any] = Field(default_factory=dict)
+    raw_response: str
+    parsed_response: dict[str, Any] | None = None
+    normalized_asset_intent: dict[str, Any] | None = None
+    ingestion_repairs: list[dict[str, Any]] = Field(default_factory=list)
+    normalization_changes: list[dict[str, Any]] = Field(default_factory=list)
+    diagnostics: list[StudioChatPipelineDiagnostic] = Field(default_factory=list)
+    repair_attempt_count: int = 0
+    resolver: dict[str, Any] | None = None
+    spec: PrimitiveBuildSpec | None = None
 
 
 class StudioChatPrimitiveResolveRequest(BaseModel):

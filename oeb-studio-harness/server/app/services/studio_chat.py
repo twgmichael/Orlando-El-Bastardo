@@ -3,12 +3,15 @@ import math
 import re
 from typing import Any
 import urllib.request
+import uuid
 
 from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
 from app.schemas.studio_chat import (
+    StudioChatBuildPipelineResult,
     StudioChatMessage,
     StudioChatOllamaRequest,
     StudioChatOllamaResponse,
+    StudioChatPipelineDiagnostic,
     StudioChatPreset,
 )
 
@@ -631,30 +634,79 @@ def _normalize_llm_json(text: str) -> str:
     return "".join(segments)
 
 
-def parse_assistant_json(text: str) -> dict[str, Any]:
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def parse_assistant_json_with_audit(text: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    repairs: list[dict[str, Any]] = []
     try:
-        parsed = extract_json(text)
+        stripped = text.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.strip("`")
+            if stripped.startswith("json"):
+                stripped = stripped[4:]
+            repairs.append({
+                "stage": "ingestion",
+                "code": "json_fence_removed",
+                "reason": "Removed a Markdown JSON fence.",
+            })
+        parsed = json.loads(stripped.strip(), object_pairs_hook=_unique_json_object)
     except json.JSONDecodeError as exc:
         balanced = _balanced_json_object(text)
         if not balanced:
             raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
+        if balanced.strip() != text.strip():
+            repairs.append({
+                "stage": "ingestion",
+                "code": "json_object_extracted",
+                "reason": "Extracted the first balanced JSON object from surrounding text.",
+            })
+        normalized = _normalize_llm_json(balanced)
+        if re.search(r"(^|[^:])//|/\*", balanced):
+            repairs.append({
+                "stage": "ingestion",
+                "code": "comments_removed",
+                "reason": "Removed JavaScript-style comments outside JSON strings.",
+            })
+        if re.search(r",\s*[}\]]", balanced):
+            repairs.append({
+                "stage": "ingestion",
+                "code": "trailing_comma_removed",
+                "reason": "Removed an unambiguous trailing comma.",
+            })
+        if normalized != balanced and re.search(
+            r"(?<![\w.])-?\d+(?:\.\d+)?\s*/\s*-?\d+(?:\.\d+)?(?![\w.])",
+            balanced,
+        ):
+            repairs.append({
+                "stage": "ingestion",
+                "code": "numeric_division_evaluated",
+                "reason": "Evaluated an unambiguous numeric division expression.",
+            })
         try:
-            def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-                result: dict[str, Any] = {}
-                for key, value in pairs:
-                    if key in result:
-                        raise ValueError(f"duplicate JSON key: {key}")
-                    result[key] = value
-                return result
-
             parsed = json.loads(
-                _normalize_llm_json(balanced),
-                object_pairs_hook=unique_object,
+                normalized,
+                object_pairs_hook=_unique_json_object,
             )
-        except (json.JSONDecodeError, ValueError):
-            raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
+        except (json.JSONDecodeError, ValueError) as repaired_exc:
+            raise ValueError(f"assistant response is not valid JSON: {repaired_exc}") from repaired_exc
+    except ValueError as exc:
+        raise ValueError(f"assistant response is not valid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
         raise ValueError("assistant response JSON must be an object")
+    if not _all_numeric_values_are_finite(parsed):
+        raise ValueError("assistant response JSON contains a non-finite numeric value")
+    return parsed, repairs
+
+
+def parse_assistant_json(text: str) -> dict[str, Any]:
+    parsed, _ = parse_assistant_json_with_audit(text)
     return parsed
 
 
@@ -679,7 +731,7 @@ def _coerce_float(value: Any, field: str, min_value: float, max_value: float) ->
         coerced = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field} must be numeric") from exc
-    if coerced < min_value or coerced > max_value:
+    if not math.isfinite(coerced) or coerced < min_value or coerced > max_value:
         raise ValueError(f"{field} must be between {min_value} and {max_value}")
     return coerced
 
@@ -1482,6 +1534,10 @@ def resolve_primitive_spec(
     previous_response: dict[str, Any] | None = None
 
     for attempt in range(retries + 1):
+        if attempt >= 2:
+            break
+        if attempt >= 1 and not _second_resolver_repair_is_allowed(validation_error):
+            break
         payload = _resolver_payload(
             creative_request,
             assistant_json,
@@ -1538,6 +1594,25 @@ def resolve_primitive_spec(
         "error": validation_error or "resolver failed",
         "registry_version": registry["version"],
     }
+
+
+def _second_resolver_repair_is_allowed(validation_error: str | None) -> bool:
+    if not validation_error:
+        return False
+    lowered = validation_error.lower()
+    if "duplicate json key" in lowered:
+        return False
+    return any(
+        recoverable_class in lowered
+        for recoverable_class in (
+            "not valid json",
+            "must include non-empty primitives",
+            "did not include message.content",
+            ".type must be one of",
+            "material must be one of",
+            "unsupported params",
+        )
+    )
 
 
 def _asset_intent_normalizer_payload(
@@ -1640,6 +1715,10 @@ def resolve_asset_intent_normalization(
     previous_response: dict[str, Any] | None = None
 
     for attempt in range(retries + 1):
+        if attempt >= 2:
+            break
+        if attempt >= 1 and not _second_resolver_repair_is_allowed(validation_error):
+            break
         payload = _asset_intent_normalizer_payload(
             creative_request,
             asset_intent,
@@ -1944,6 +2023,476 @@ def build_spec_from_assistant_response(
         raise ValueError("assistant response does not contain a build_job or spec object")
     normalized = normalize_spec(creative_request, dict(spec_source))
     return PrimitiveBuildSpec.model_validate(normalized), parsed
+
+
+def _normalization_changes(before: Any, after: Any, path: str = "$") -> list[dict[str, Any]]:
+    changes: list[dict[str, Any]] = []
+    if isinstance(before, dict) and isinstance(after, dict):
+        for key in sorted(set(before) | set(after)):
+            child_path = f"{path}.{key}"
+            if key not in before:
+                changes.append({
+                    "stage": "normalization",
+                    "code": "field_defaulted",
+                    "path": child_path,
+                    "after": after[key],
+                })
+            elif key not in after:
+                changes.append({
+                    "stage": "normalization",
+                    "code": "field_relocated",
+                    "path": child_path,
+                    "before": before[key],
+                })
+            else:
+                changes.extend(_normalization_changes(before[key], after[key], child_path))
+        return changes
+    if isinstance(before, list) and isinstance(after, list):
+        for idx in range(max(len(before), len(after))):
+            child_path = f"{path}[{idx}]"
+            if idx >= len(before):
+                changes.append({
+                    "stage": "normalization",
+                    "code": "list_item_added",
+                    "path": child_path,
+                    "after": after[idx],
+                })
+            elif idx >= len(after):
+                changes.append({
+                    "stage": "normalization",
+                    "code": "list_item_relocated",
+                    "path": child_path,
+                    "before": before[idx],
+                })
+            else:
+                changes.extend(_normalization_changes(before[idx], after[idx], child_path))
+        return changes
+    if before != after:
+        changes.append({
+            "stage": "normalization",
+            "code": "value_canonicalized",
+            "path": path,
+            "before": before,
+            "after": after,
+        })
+    return changes
+
+
+def _asset_intent_reference_errors(asset_intent: dict[str, Any]) -> list[dict[str, Any]]:
+    objects = asset_intent.get("objects") if isinstance(asset_intent.get("objects"), list) else []
+    known_ids = {
+        str(item.get("id"))
+        for item in objects
+        if isinstance(item, dict) and item.get("id")
+    }
+    errors: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for idx, item in enumerate(objects):
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        object_id = str(item["id"])
+        if object_id in seen_ids:
+            errors.append({
+                "code": "duplicate_object_id",
+                "path": f"$.asset_intent.objects[{idx}].id",
+                "id": object_id,
+            })
+        seen_ids.add(object_id)
+    relationships = (
+        asset_intent.get("relationships")
+        if isinstance(asset_intent.get("relationships"), list)
+        else []
+    )
+    for idx, relationship in enumerate(relationships):
+        if not isinstance(relationship, dict):
+            continue
+        references = [
+            ("subject", relationship.get("subject")),
+            ("target", relationship.get("target")),
+        ]
+        if not relationship.get("target") and isinstance(relationship.get("targets"), list):
+            references.extend(
+                (f"targets[{target_idx}]", target)
+                for target_idx, target in enumerate(relationship["targets"])
+            )
+        for field, reference in references:
+            if reference and str(reference) not in known_ids:
+                errors.append({
+                    "code": "unknown_relationship_reference",
+                    "path": f"$.asset_intent.relationships[{idx}].{field}",
+                    "id": str(reference),
+                })
+    return errors
+
+
+def _all_numeric_values_are_finite(value: Any) -> bool:
+    if isinstance(value, float):
+        return math.isfinite(value)
+    if isinstance(value, dict):
+        return all(_all_numeric_values_are_finite(item) for item in value.values())
+    if isinstance(value, list):
+        return all(_all_numeric_values_are_finite(item) for item in value)
+    return True
+
+
+def _pipeline_diagnostic(
+    *,
+    stage: str,
+    outcome: str,
+    code: str,
+    reason: str,
+    recoverable: bool = False,
+    preserved_fields: list[str] | None = None,
+    suggested_next_action: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> StudioChatPipelineDiagnostic:
+    return StudioChatPipelineDiagnostic(
+        stage=stage,
+        outcome=outcome,
+        code=code,
+        reason=reason,
+        recoverable=recoverable,
+        preserved_fields=preserved_fields or [],
+        suggested_next_action=suggested_next_action,
+        details=details or {},
+    )
+
+
+def compile_studio_chat_build_pipeline(
+    creative_request: str,
+    assistant_response: str,
+    messages: list[StudioChatMessage] | None = None,
+    *,
+    ollama_url: str | None = None,
+    model: str | None = None,
+    resolver_retries: int = 1,
+    raw_request: dict[str, Any] | None = None,
+    trace_id: str | None = None,
+) -> StudioChatBuildPipelineResult:
+    correlation_id = trace_id or str(uuid.uuid4())
+    request_record = json.loads(json.dumps(raw_request or {
+        "creative_request": creative_request,
+        "messages": [message.model_dump(mode="json") for message in (messages or [])],
+        "model": model,
+    }))
+    try:
+        parsed, ingestion_repairs = parse_assistant_json_with_audit(assistant_response)
+    except ValueError as exc:
+        error_text = str(exc)
+        diagnostic_code = (
+            "non_finite_numeric_value"
+            if "non-finite numeric" in error_text.lower()
+            else "assistant_json_invalid"
+        )
+        return StudioChatBuildPipelineResult(
+            outcome="invalid",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            diagnostics=[_pipeline_diagnostic(
+                stage="ingestion",
+                outcome="invalid",
+                code=diagnostic_code,
+                reason=error_text,
+                recoverable=False,
+                suggested_next_action="Retry the translation or revise the prompt; no job was submitted.",
+            )],
+        )
+
+    preserved_fields = sorted(str(key) for key in parsed)
+    action = normalize_id(parsed.get("action"), "")
+    clarification_question = parsed.get("clarification_question")
+    if action in {"clarify", "needs_clarification", "ask_clarification"} or clarification_question:
+        return StudioChatBuildPipelineResult(
+            outcome="needs_clarification",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            ingestion_repairs=ingestion_repairs,
+            diagnostics=[_pipeline_diagnostic(
+                stage="intent",
+                outcome="needs_clarification",
+                code="clarification_required",
+                reason=str(clarification_question or "The request requires a user decision."),
+                recoverable=False,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Answer the clarification question; no job was submitted.",
+            )],
+        )
+    if action in {"escalate", "unsupported"} or parsed.get("escalation_reason"):
+        return StudioChatBuildPipelineResult(
+            outcome="unsupported",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            ingestion_repairs=ingestion_repairs,
+            diagnostics=[_pipeline_diagnostic(
+                stage="intent",
+                outcome="unsupported",
+                code="intent_escalated",
+                reason=str(parsed.get("escalation_reason") or "The translator marked this intent unsupported."),
+                recoverable=False,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Revise the request or add a supported construction description.",
+            )],
+        )
+    if action == "edit_asset":
+        return StudioChatBuildPipelineResult(
+            outcome="needs_clarification",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            ingestion_repairs=ingestion_repairs,
+            diagnostics=[_pipeline_diagnostic(
+                stage="routing",
+                outcome="needs_clarification",
+                code="edit_sent_to_build_pipeline",
+                reason="An asset edit cannot be submitted as a new build.",
+                recoverable=True,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Route the request through the active asset edit endpoint.",
+            )],
+        )
+
+    original_asset_intent = _asset_intent_from_parsed(parsed)
+    normalized_asset_intent = None
+    normalization_changes: list[dict[str, Any]] = []
+    normalized_parsed = json.loads(json.dumps(parsed))
+    if original_asset_intent is not None:
+        normalized_asset_intent = _normalize_asset_intent_structure(
+            original_asset_intent,
+            creative_request,
+        )
+        normalized_again = _normalize_asset_intent_structure(
+            normalized_asset_intent,
+            creative_request,
+        )
+        if normalized_again != normalized_asset_intent:
+            return StudioChatBuildPipelineResult(
+                outcome="invalid",
+                trace_id=correlation_id,
+                raw_request=request_record,
+                raw_response=assistant_response,
+                parsed_response=parsed,
+                normalized_asset_intent=normalized_asset_intent,
+                ingestion_repairs=ingestion_repairs,
+                diagnostics=[_pipeline_diagnostic(
+                    stage="normalization",
+                    outcome="invalid",
+                    code="normalization_not_idempotent",
+                    reason="Asset-intent normalization changed an already normalized value.",
+                    preserved_fields=sorted(str(key) for key in original_asset_intent),
+                )],
+            )
+        normalization_changes = _normalization_changes(
+            original_asset_intent,
+            normalized_asset_intent,
+            "$.asset_intent",
+        )
+        normalized_parsed["asset_intent"] = normalized_asset_intent
+        reference_errors = _asset_intent_reference_errors(normalized_asset_intent)
+        if reference_errors:
+            return StudioChatBuildPipelineResult(
+                outcome="needs_repair",
+                trace_id=correlation_id,
+                raw_request=request_record,
+                raw_response=assistant_response,
+                parsed_response=parsed,
+                normalized_asset_intent=normalized_asset_intent,
+                ingestion_repairs=ingestion_repairs,
+                normalization_changes=normalization_changes,
+                diagnostics=[_pipeline_diagnostic(
+                    stage="validation",
+                    outcome="needs_repair",
+                    code="asset_intent_reference_invalid",
+                    reason="One or more relationships reference missing or duplicate object ids.",
+                    recoverable=True,
+                    preserved_fields=sorted(str(key) for key in normalized_asset_intent),
+                    suggested_next_action="Repair only the reported object ids and relationship references.",
+                    details={"errors": reference_errors},
+                )],
+            )
+
+    resolver_output: dict[str, Any] | None = None
+    try:
+        spec, _, resolver_output = build_spec_with_primitive_resolver(
+            creative_request,
+            json.dumps(normalized_parsed),
+            messages,
+            ollama_url,
+            model,
+            resolver_retries=resolver_retries,
+        )
+    except ValueError as exc:
+        error_text = str(exc)
+        invalid_numeric = any(
+            marker in error_text.lower()
+            for marker in (
+                "must be numeric",
+                "must be between",
+                "non-finite",
+                "nan",
+                "infinity",
+            )
+        )
+        attempts = (
+            len(resolver_output.get("attempts", []))
+            if isinstance(resolver_output, dict)
+            else 0
+        )
+        return StudioChatBuildPipelineResult(
+            outcome="invalid" if invalid_numeric else "needs_repair",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            normalized_asset_intent=normalized_asset_intent,
+            ingestion_repairs=ingestion_repairs,
+            normalization_changes=normalization_changes,
+            repair_attempt_count=attempts,
+            resolver=resolver_output,
+            diagnostics=[_pipeline_diagnostic(
+                stage="compiler",
+                outcome="invalid" if invalid_numeric else "needs_repair",
+                code="invalid_numeric_value" if invalid_numeric else "build_contract_not_compiled",
+                reason=error_text,
+                recoverable=not invalid_numeric,
+                preserved_fields=preserved_fields,
+                suggested_next_action=(
+                    "Correct the invalid numeric value; no job was submitted."
+                    if invalid_numeric
+                    else "Run one focused repair pass against this compiler diagnostic."
+                ),
+            )],
+        )
+
+    repair_attempt_count = (
+        len(resolver_output.get("attempts", []))
+        if isinstance(resolver_output, dict)
+        else 0
+    )
+    if (
+        isinstance(resolver_output, dict)
+        and resolver_output.get("source") in {"ollama_resolver", "asset_intent_feedback_loop"}
+        and not resolver_output.get("ok")
+    ):
+        return StudioChatBuildPipelineResult(
+            outcome="needs_repair",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            normalized_asset_intent=normalized_asset_intent,
+            ingestion_repairs=ingestion_repairs,
+            normalization_changes=normalization_changes,
+            repair_attempt_count=repair_attempt_count,
+            resolver=resolver_output,
+            diagnostics=[_pipeline_diagnostic(
+                stage="repair",
+                outcome="needs_repair",
+                code="repair_exhausted",
+                reason=str(resolver_output.get("error") or "The focused repair pass did not compile."),
+                recoverable=False,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Show the compiler diagnostic and submit no job.",
+            )],
+        )
+    if not spec.primitives:
+        return StudioChatBuildPipelineResult(
+            outcome="unsupported",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            normalized_asset_intent=normalized_asset_intent,
+            ingestion_repairs=ingestion_repairs,
+            normalization_changes=normalization_changes,
+            repair_attempt_count=repair_attempt_count,
+            resolver=resolver_output,
+            spec=spec,
+            diagnostics=[_pipeline_diagnostic(
+                stage="compiler",
+                outcome="unsupported",
+                code="no_executable_geometry",
+                reason="The preserved asset intent has no deterministic geometry operations.",
+                recoverable=False,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Provide supported semantic geometry or a compiler-friendly construction graph.",
+            )],
+        )
+    spec_dump = spec.model_dump(mode="json")
+    if not _all_numeric_values_are_finite(spec_dump):
+        return StudioChatBuildPipelineResult(
+            outcome="invalid",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            normalized_asset_intent=normalized_asset_intent,
+            ingestion_repairs=ingestion_repairs,
+            normalization_changes=normalization_changes,
+            repair_attempt_count=repair_attempt_count,
+            resolver=resolver_output,
+            diagnostics=[_pipeline_diagnostic(
+                stage="compiler",
+                outcome="invalid",
+                code="non_finite_numeric_value",
+                reason="The executable build plan contains a non-finite numeric value.",
+                preserved_fields=preserved_fields,
+                suggested_next_action="Correct the numeric transform or geometry value; no job was submitted.",
+            )],
+        )
+    required_deliverables = {"glb", "preview_render"}
+    if not required_deliverables.issubset(set(spec.deliverables)):
+        return StudioChatBuildPipelineResult(
+            outcome="needs_repair",
+            trace_id=correlation_id,
+            raw_request=request_record,
+            raw_response=assistant_response,
+            parsed_response=parsed,
+            normalized_asset_intent=normalized_asset_intent,
+            ingestion_repairs=ingestion_repairs,
+            normalization_changes=normalization_changes,
+            repair_attempt_count=repair_attempt_count,
+            resolver=resolver_output,
+            diagnostics=[_pipeline_diagnostic(
+                stage="compiler",
+                outcome="needs_repair",
+                code="required_artifacts_missing",
+                reason="The executable plan is missing required GLB or preview deliverables.",
+                recoverable=True,
+                preserved_fields=preserved_fields,
+                suggested_next_action="Restore the required deterministic artifact declarations.",
+            )],
+        )
+    return StudioChatBuildPipelineResult(
+        outcome="compiled",
+        trace_id=correlation_id,
+        raw_request=request_record,
+        raw_response=assistant_response,
+        parsed_response=parsed,
+        normalized_asset_intent=normalized_asset_intent,
+        ingestion_repairs=ingestion_repairs,
+        normalization_changes=normalization_changes,
+        diagnostics=[_pipeline_diagnostic(
+            stage="compiler",
+            outcome="compiled",
+            code="build_plan_compiled",
+            reason="A complete deterministic primitive build plan is available.",
+            preserved_fields=preserved_fields,
+            suggested_next_action="Submit the compiled build plan.",
+        )],
+        repair_attempt_count=repair_attempt_count,
+        resolver=resolver_output,
+        spec=spec,
+    )
+
+
+def pipeline_allows_job_submission(result: StudioChatBuildPipelineResult) -> bool:
+    return result.outcome == "compiled" and result.spec is not None
 
 
 def extract_json(text: str) -> dict:

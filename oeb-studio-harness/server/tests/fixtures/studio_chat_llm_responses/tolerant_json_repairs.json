@@ -1,0 +1,12 @@
+{
+  "behavior": "fenced prose, comments, trailing commas, and numeric division are repaired audibly",
+  "creative_request": "Build a blue tube pointing right.",
+  "raw_response": "Here is the build intent:\n```json\n{\n  \"action\": \"build_asset\",\n  \"asset_intent\": {\n    \"name\": \"Blue Tube\",\n    \"kind\": \"prop\",\n    \"objects\": [\n      {\n        \"id\": \"main_tube\",\n        \"type\": \"tube\",\n        \"material\": \"blue\",\n        \"orientation\": {\"position\": [0, 0, 0], \"rotation\": [0, 3.141592654/2, 0]}, // quarter turn\n        \"description\": \"main tube\",\n      }\n    ]\n  }\n}\n```",
+  "expected_outcome": "compiled",
+  "expected_repair_codes": [
+    "json_object_extracted",
+    "comments_removed",
+    "trailing_comma_removed",
+    "numeric_division_evaluated"
+  ]
+}

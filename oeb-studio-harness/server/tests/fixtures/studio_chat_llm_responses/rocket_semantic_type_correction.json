@@ -1,0 +1,6 @@
+{
+  "behavior": "semantic object identity corrects an unrelated primitive type without losing intent",
+  "creative_request": "Build a simple rocket. Blue cone for the top, red tube for the middle, triangles for fins.",
+  "raw_response": "{\"action\":\"build_asset\",\"confidence\":1,\"clarification_question\":null,\"escalation_reason\":null,\"asset_intent\":{\"name\":\"simple_rocket\",\"kind\":\"vehicle\",\"description\":\"A simple rocket with a blue cone, red tube, and triangular fins.\",\"objects\":[{\"id\":\"rocket_top_cone\",\"type\":\"sphere\",\"material\":\"blue\",\"count\":1,\"description\":\"Top cone of the rocket\"},{\"id\":\"rocket_body_tube\",\"type\":\"tube\",\"material\":\"red\",\"count\":1,\"description\":\"Main body tube\"},{\"id\":\"rocket_fins\",\"type\":\"triangle\",\"material\":\"gray\",\"count\":4,\"description\":\"Triangular fins\"}],\"relationships\":[{\"subject\":\"rocket_top_cone\",\"relation\":\"on_top_of\",\"target\":\"rocket_body_tube\"},{\"subject\":\"rocket_fins\",\"relation\":\"attached_to\",\"target\":\"rocket_body_tube\"}],\"construction_notes\":\"Keep all parts connected.\",\"real_response_extension\":{\"source\":\"local_qwen\"}}}",
+  "expected_outcome": "compiled"
+}

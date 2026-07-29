@@ -1,0 +1,7 @@
+{
+  "behavior": "creative ambiguity becomes clarification and creates no build",
+  "creative_request": "Build something cool.",
+  "raw_response": "{\"action\":\"clarify\",\"confidence\":0.2,\"clarification_question\":\"What kind of object should I build?\",\"escalation_reason\":null}",
+  "expected_outcome": "needs_clarification",
+  "expected_diagnostic_code": "clarification_required"
+}
