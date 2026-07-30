@@ -74,7 +74,7 @@ following executable slices are implemented:
   scales, unique primitive ids, and deterministic silhouette evidence for all
   seven standard review views.
 - Broad-prompt and root-only fixtures verify compiled or safely rejected
-  outcomes across every registered family. The server suite passes 264 tests.
+  outcomes across every registered family. The server suite passes 265 tests.
 
 The remaining Milestone 18 acceptance activity is operational rather than a
 missing compiler feature: run the real local model and Blender worker against

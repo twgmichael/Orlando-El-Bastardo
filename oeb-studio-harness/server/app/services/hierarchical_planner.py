@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+import urllib.error
 
 from pydantic import ValidationError
 
@@ -131,9 +132,36 @@ def hierarchy_planner_payload(
         }
         for role in archetype.roles
     ]
+    object_hints = [
+        {
+            key: item[key]
+            for key in ("id", "type", "material", "count", "description")
+            if item.get(key) is not None
+        }
+        for item in asset_intent.get("objects", [])[:24]
+        if isinstance(item, dict)
+    ]
+    relationship_hints = [
+        {
+            key: item[key]
+            for key in ("subject", "relation", "target")
+            if item.get(key) is not None
+        }
+        for item in asset_intent.get("relationships", [])[:32]
+        if isinstance(item, dict)
+    ]
+    current_asset_context = {
+        key: asset_intent[key]
+        for key in ("name", "kind", "description", "style")
+        if asset_intent.get(key) is not None
+    }
+    if object_hints:
+        current_asset_context["object_hints"] = object_hints
+    if relationship_hints:
+        current_asset_context["relationship_hints"] = relationship_hints
     user_content: dict[str, Any] = {
         "creative_request": creative_request,
-        "current_asset_intent": asset_intent,
+        "current_asset_context": current_asset_context,
         "registered_archetype": {
             "id": archetype.id,
             "family": archetype.family,
@@ -157,7 +185,7 @@ def hierarchy_planner_payload(
             {"role": "user", "content": json.dumps(user_content, indent=2)},
         ],
         "stream": False,
-        "options": {"temperature": 0.1, "num_predict": 3072},
+        "options": {"temperature": 0.1, "num_predict": 2048},
     }
 
 
@@ -209,11 +237,38 @@ def resolve_hierarchical_decomposition(
             validation_error=validation_error,
             previous_response=previous_response,
         )
-        raw = post_json(
-            f"{ollama_url.rstrip('/')}/api/chat",
-            payload,
-            timeout=120,
-        )
+        try:
+            raw = post_json(
+                f"{ollama_url.rstrip('/')}/api/chat",
+                payload,
+                timeout=120,
+            )
+        except urllib.error.HTTPError as exc:
+            try:
+                upstream_detail = exc.read().decode("utf-8", errors="replace")
+            except (AttributeError, OSError):
+                upstream_detail = ""
+            validation_error = (
+                f"hierarchy planner upstream HTTP {exc.code}"
+                + (f": {upstream_detail}" if upstream_detail else "")
+            )
+            attempts.append({
+                "attempt": attempt_index + 1,
+                "request": payload,
+                "error": validation_error,
+                "upstream_status": exc.code,
+            })
+            continue
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            validation_error = (
+                f"hierarchy planner upstream unavailable: {exc}"
+            )
+            attempts.append({
+                "attempt": attempt_index + 1,
+                "request": payload,
+                "error": validation_error,
+            })
+            continue
         message = raw.get("message") if isinstance(raw, dict) else None
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, str):

@@ -1,6 +1,8 @@
 import copy
+import io
 import json
 from pathlib import Path
+import urllib.error
 
 import pytest
 
@@ -77,6 +79,14 @@ def test_broad_flat_tank_uses_constrained_planner_and_bounded_repair(monkeypatch
             payload["messages"][0]["content"].lower()
         )
         assert payload["messages"][1]["role"] == "user"
+        planner_context = json.loads(payload["messages"][1]["content"])
+        assert "current_asset_intent" not in planner_context
+        assert "current_asset_context" in planner_context
+        assert all(
+            "orientation" not in hint
+            for hint in planner_context["current_asset_context"]["object_hints"]
+        )
+        assert payload["options"]["num_predict"] == 2048
         return {
             "message": {
                 "content": json.dumps(fixture["planner_response"])
@@ -130,6 +140,39 @@ def test_failed_hierarchy_planner_is_bounded_and_cannot_submit(monkeypatch):
     assert result.diagnostics[0].code == "hierarchical_decomposition_failed"
     assert len(calls) == 2
     assert result.repair_attempt_count == 2
+    assert pipeline_allows_job_submission(result) is False
+
+
+def test_hierarchy_planner_upstream_http_error_is_structured(monkeypatch):
+    fixture = _fixture()
+    calls = []
+
+    def fake_post_json(url, payload, timeout):
+        calls.append(payload)
+        raise urllib.error.HTTPError(
+            url,
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(b'{"error":"input exceeds context window"}'),
+        )
+
+    monkeypatch.setattr(
+        "app.services.studio_chat.post_json",
+        fake_post_json,
+    )
+    result = compile_studio_chat_build_pipeline(
+        fixture["creative_request"],
+        json.dumps(fixture["assistant_response"]),
+        ollama_url="http://ollama.test",
+        model="local-test-model",
+    )
+
+    assert result.outcome == "needs_repair"
+    assert result.diagnostics[0].code == "hierarchical_decomposition_failed"
+    assert "upstream HTTP 400" in result.diagnostics[0].reason
+    assert "input exceeds context window" in result.diagnostics[0].reason
+    assert len(calls) == 2
     assert pipeline_allows_job_submission(result) is False
 
 
