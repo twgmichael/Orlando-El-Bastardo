@@ -117,6 +117,86 @@ def test_broad_flat_tank_uses_constrained_planner_and_bounded_repair(monkeypatch
     assert pipeline_allows_job_submission(result) is True
 
 
+def test_planner_normalizes_redundant_parent_and_inserts_assembly_root(
+    monkeypatch,
+):
+    fixture = _fixture()
+    planner_response = {
+        "hierarchical_asset_intent": {
+            "schema_version": "1.0",
+            "object_family": "tracked_vehicle",
+            "root_part_id": "tracked_vehicle_v1",
+            "required_roles": ["vehicle_root"],
+            "parts": [
+                {
+                    "id": "front_id",
+                    "name": "Front Hull",
+                    "role": "hull",
+                    "requirement": "required",
+                    "parent_id": None,
+                    "children": ["tracks_id"],
+                    "shape_family": "beveled_hull",
+                    "geometry_strategy": "compound_primitives",
+                    "dimensions": {"size": [4.8, 3.2, 2.4]},
+                    "attachment": None,
+                    "orientation": {"forward": "front", "up": "up"},
+                    "repetition": {"mode": "none", "count": 1},
+                },
+                {
+                    "id": "tracks_id",
+                    "name": "Tracks",
+                    "role": "track_pair",
+                    "requirement": "required",
+                    "parent_id": "front_id",
+                    "children": [],
+                    "shape_family": "continuous_track",
+                    "geometry_strategy": "mirrored_track_assembly",
+                    "dimensions": {"size": [0.75, 1.4, 0.25]},
+                    "attachment": {"anchor": "bottom_center"},
+                    "orientation": {"forward": "front", "up": "up"},
+                    "repetition": {
+                        "mode": "mirror",
+                        "count": 2,
+                        "axis": "right",
+                    },
+                },
+            ],
+            "constraints": [],
+        },
+        "clarification_question": None,
+    }
+
+    def fake_post_json(url, payload, timeout):
+        return {"message": {"content": json.dumps(planner_response)}}
+
+    monkeypatch.setattr(
+        "app.services.studio_chat.post_json",
+        fake_post_json,
+    )
+    result = compile_studio_chat_build_pipeline(
+        fixture["creative_request"],
+        json.dumps(fixture["assistant_response"]),
+        ollama_url="http://ollama.test",
+        model="local-test-model",
+    )
+
+    assert result.outcome == "compiled"
+    normalized_parts = {
+        part["id"]: part
+        for part in result.normalized_hierarchical_asset_intent["parts"]
+    }
+    assert normalized_parts["tracks_id"]["attachment"]["parent_id"] == "front_id"
+    root = normalized_parts[
+        result.normalized_hierarchical_asset_intent["root_part_id"]
+    ]
+    assert root["role"] == "vehicle_root"
+    assert any(
+        repair["code"] == "required_root_inserted"
+        for repair in result.structural_repairs
+    )
+    assert pipeline_allows_job_submission(result) is True
+
+
 def test_failed_hierarchy_planner_is_bounded_and_cannot_submit(monkeypatch):
     fixture = _fixture()
     calls = []

@@ -51,9 +51,10 @@ Return JSON only:
 
 For non-root parts, use dimensions.relative_to plus a three-axis ratio instead
 of final coordinates. Attach every child to its declared parent with a semantic
-anchor. Use only the supplied family, role, shape, recipe, anchor, orientation,
-and repetition vocabulary. Preserve uncertainty by asking one clarification
-question rather than guessing materially different interpretations."""
+anchor; attachment.parent_id must repeat the part's parent_id. Use only the
+supplied family, role, shape, recipe, anchor, orientation, and repetition
+vocabulary. Preserve uncertainty by asking one clarification question rather
+than guessing materially different interpretations."""
 
 
 class HierarchyClarificationRequired(ValueError):
@@ -212,7 +213,21 @@ def _hierarchy_from_planner_response(content: str) -> dict[str, Any]:
         raise ValueError(
             "hierarchy planner response must include hierarchical_asset_intent"
         )
-    return hierarchy
+    normalized = json.loads(json.dumps(hierarchy))
+    parts = normalized.get("parts")
+    if isinstance(parts, list):
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            parent_id = part.get("parent_id")
+            attachment = part.get("attachment")
+            if (
+                parent_id
+                and isinstance(attachment, dict)
+                and not attachment.get("parent_id")
+            ):
+                attachment["parent_id"] = parent_id
+    return normalized
 
 
 def resolve_hierarchical_decomposition(
@@ -396,12 +411,60 @@ def repair_hierarchy_against_archetype(
         (
             part
             for part in repaired["parts"]
-            if part["id"] == repaired["root_part_id"]
+            if part["role"] == archetype.root_role
         ),
         None,
     )
     if root is None:
-        raise ValueError("deterministic repair requires an existing root part")
+        root_id = f"{archetype.family}_root"
+        existing_ids = {part["id"] for part in repaired["parts"]}
+        suffix = 2
+        while root_id in existing_ids:
+            root_id = f"{archetype.family}_root_{suffix}"
+            suffix += 1
+        root_rule = rules[archetype.root_role]
+        root = {
+            "id": root_id,
+            "name": archetype.family.replace("_", " ").title(),
+            "role": archetype.root_role,
+            "requirement": root_rule.requirement,
+            "parent_id": None,
+            "children": [],
+            "shape_family": root_rule.allowed_shape_families[0],
+            "geometry_strategy": root_rule.supported_geometry_recipes[0],
+            "dimensions": {
+                "size": archetype.metadata.get(
+                    "canonical_root_size",
+                    [4.0, 3.0, 3.0],
+                )
+            },
+            "attachment": None,
+            "orientation": root_rule.default_orientation.model_dump(mode="json"),
+            "repetition": {
+                "mode": root_rule.repetition.allowed_modes[0],
+                "count": root_rule.repetition.minimum_count,
+                "axis": root_rule.repetition.axis,
+            },
+            "material": "neutral",
+            "metadata": {"deterministically_inserted": True},
+        }
+        repaired["parts"].append(root)
+        _record_change(
+            changes,
+            "$.parts",
+            "required_root_inserted",
+            None,
+            root,
+        )
+    before_root_part_id = repaired["root_part_id"]
+    repaired["root_part_id"] = root["id"]
+    _record_change(
+        changes,
+        "$.root_part_id",
+        "root_part_id_repaired",
+        before_root_part_id,
+        root["id"],
+    )
     root_rule = rules[archetype.root_role]
     before_root_role = root["role"]
     root["role"] = archetype.root_role
