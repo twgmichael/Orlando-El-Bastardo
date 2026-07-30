@@ -1,7 +1,7 @@
 ---
 title: Studio Chat Hierarchical General-Object Planner Plan
 created: 2026-07-28T20:58:00-04:00
-updated: 2026-07-29T20:27:49-04:00
+updated: 2026-07-30T00:18:29-04:00
 doc_type: plan
 production_area: studio_chat
 department: production
@@ -20,7 +20,8 @@ Studio Chat Milestone 18
 
 ## Implementation Status
 
-In progress. The following executable slices are implemented:
+Implementation complete; live rendered acceptance remains pending. The
+following executable slices are implemented:
 
 - Versioned `hierarchical_asset_intent` schema `1.0`.
 - Stable semantic parts, roles, ownership, dimensions and ratios, attachment
@@ -35,7 +36,7 @@ In progress. The following executable slices are implemented:
   primitive fallback exists.
 - A coherent tracked-vehicle fixture and focused regression tests.
 - Versioned object-archetype registry schema `1.0` and registry version
-  `1.0.0`.
+  `1.1.0`.
 - Initial `tracked_vehicle_v1` knowledge for required and optional roles,
   aliases, parent-role rules, proportion ranges, attachment/contact anchors,
   orientation, repetition, shape families, and supported geometry recipes.
@@ -58,11 +59,28 @@ In progress. The following executable slices are implemented:
 - Invalid recipe parameters produce structured diagnostics and prevent build
   submission; a valid grounded tank hierarchy now compiles through the shared
   recipe layer.
+- Representative tracked vehicle, wheeled vehicle, aircraft, chair, table,
+  tower, and simple-robot archetypes exercise the same hierarchy and recipe
+  system.
+- A constrained local-LLM decomposition pass receives only the selected
+  archetype vocabulary, emits semantic hierarchy rather than coordinates, asks
+  one clarification when needed, and stops after at most two invalid-response
+  attempts.
+- One deterministic structural repair pass canonicalizes aliases, inserts only
+  registry-required roles, clamps ratios, repairs parentage, anchors,
+  orientation, and repetition, and records every before/after change.
+- Geometry inspection gates containment, required contact, explicit
+  no-overlap constraints, repetition expansion, finite transforms, positive
+  scales, unique primitive ids, and deterministic silhouette evidence for all
+  seven standard review views.
+- Broad-prompt and root-only fixtures verify compiled or safely rejected
+  outcomes across every registered family. The server suite passes 264 tests.
 
-Additional object families, local-LLM decomposition, deterministic insertion of
-missing required parts, full archetype-bound proportion solving, collision and
-containment validation, rendered visual inspection, and bounded repair remain
-subsequent Milestone 18 slices.
+The remaining Milestone 18 acceptance activity is operational rather than a
+missing compiler feature: run the real local model and Blender worker against
+the army-tank acceptance prompt, inspect the seven rendered views, and retain a
+rendered fixture proving recognizability. Stronger aesthetic visual judgment
+continues to escalate rather than being guessed by deterministic code.
 
 ## Related Documents
 
@@ -175,9 +193,9 @@ existing Semantic Asset Graph without losing hierarchy.
 
 ### 2. Object-Archetype Registry
 
-Status: **IN PROGRESS** — registry contract and tracked-vehicle seed are
-implemented. Wheeled vehicle, aircraft, chair, table, tower, and simple robot
-families remain.
+Status: **IMPLEMENTED FOR THE V1 REPRESENTATIVE FAMILY SET** — tracked vehicle,
+wheeled vehicle, aircraft, chair, table, tower, and simple robot families are
+registered under registry version `1.1.0`.
 
 Implement a versioned registry of reusable object-family knowledge. Each
 archetype should declare:
@@ -197,6 +215,11 @@ simple robot.
 
 ### 3. LLM Hierarchical Decomposition
 
+Status: **IMPLEMENTED** — broad prompts for registered families invoke a
+constrained semantic-only planner. Valid fenced or plain JSON is accepted,
+material ambiguity returns one clarification without retrying, and malformed
+responses stop after two attempts without submitting work.
+
 Add a constrained planner prompt and strict response contract. Given a broad
 asset intent, the local LLM should propose:
 
@@ -213,6 +236,10 @@ fixtures by behavior class.
 
 ### 4. Archetype Grounding And Role Normalization
 
+Status: **IMPLEMENTED** — canonical grounding remains idempotent; one bounded
+repair pass supplies deterministic required structure while preserving valid
+optional extensions and recording auditable changes.
+
 Ground the proposed hierarchy against the registry:
 
 - Resolve aliases such as `barrel` to `cannon` and `treads` to `tracks`.
@@ -226,6 +253,10 @@ Ground the proposed hierarchy against the registry:
 Grounding must be idempotent.
 
 ### 5. Root-To-Leaf Proportion Solver
+
+Status: **IMPLEMENTED FOR REGISTERED V1 RANGES** — canonical root sizes and
+relative child ratios resolve root-to-leaf, with invalid ratios clamped to
+archetype bounds by the bounded repair pass.
 
 Assign a canonical root bounding box, then solve child dimensions from the
 root downward. The solver must:
@@ -242,6 +273,10 @@ larger than the body.
 
 ### 6. Attachment And Placement Solver
 
+Status: **IMPLEMENTED FOR V1 SEMANTIC ANCHORS** — placements resolve after
+dimensions, contact and containment are inspected, and explicit no-overlap
+constraints fail closed.
+
 Define semantic anchors such as `top_center`, `bottom_center`,
 `front_center`, `rear_center`, `left_side`, `right_side`, `inside`, and
 `around`.
@@ -255,6 +290,10 @@ Resolve child placement only after dimensions are known. Verify that:
 - Distinct parts do not unintentionally occupy the same space.
 
 ### 7. Semantic Orientation Resolver
+
+Status: **IMPLEMENTED FOR V1 PRIMITIVE DIRECTIONS** — semantic forward/up axes
+resolve deterministically and review evidence is produced for every standard
+view.
 
 Express intent with semantic directions before converting to Euler rotations:
 
@@ -332,6 +371,10 @@ Acceptance criteria:
 
 ### 9. Symmetry And Repetition Expansion
 
+Status: **IMPLEMENTED** — mirrored, radial, and linear repetition expands to
+stable instance ids; linear arrays use the parent span when spacing is not
+explicit.
+
 Implement deterministic:
 
 - Left/right mirroring.
@@ -344,6 +387,9 @@ The hierarchy should retain one semantic repeated-group definition while the
 compiled graph receives stable instance ids.
 
 ### 10. Validation Gates
+
+Status: **IMPLEMENTED** — contract, archetype, recipe, compile, and geometry
+inspection failures return structured diagnostics and cannot submit jobs.
 
 Validate the plan in stages:
 
@@ -363,6 +409,10 @@ class, and suggested next action.
 
 ### 11. Bounded Structural And Spatial Repair
 
+Status: **IMPLEMENTED FOR DETERMINISTIC V1 REPAIRS** — one repair pass handles
+missing required roles, ratios, parentage, anchors, orientation, and
+repetition. Creative ambiguity returns clarification.
+
 Add narrowly scoped repair operations for deterministic failures:
 
 - Add a missing archetype-required part.
@@ -377,6 +427,12 @@ clarification.
 
 ### 12. Plan, Build, Inspect, Repair Loop
 
+Status: **IMPLEMENTED THROUGH DETERMINISTIC CANDIDATE INSPECTION; LIVE RENDERED
+ACCEPTANCE PENDING** — compiled geometry is checked against hierarchy metadata
+and silhouette bounds before submission, and successful jobs retain the
+existing seven-view review request. The final rendered army-tank acceptance
+run remains to be captured.
+
 After deterministic compilation:
 
 1. Build the candidate asset.
@@ -390,6 +446,11 @@ Initial inspection may use deterministic geometry metadata and silhouettes.
 Stronger visual judgment may be escalated rather than guessed.
 
 ### 13. Fixtures, Evaluations, And Incremental Rollout
+
+Status: **IMPLEMENTED FOR STRUCTURAL PIPELINE COVERAGE** — fixtures exercise
+successful decomposition, invalid bounded responses, clarification, repair,
+collision, containment, and all seven registered families. A live rendered
+army-tank fixture remains the final acceptance artifact.
 
 Create real-response fixtures and rendered acceptance cases for:
 

@@ -34,3 +34,28 @@ class GeometryRecipeCompileResult(BaseModel):
     used_recipes: list[str] = Field(default_factory=list)
     used_executors: list[str] = Field(default_factory=list)
     diagnostics: list[GeometryRecipeDiagnostic] = Field(default_factory=list)
+
+
+class GeometryInspectionFinding(BaseModel):
+    severity: Literal["error", "warning", "evidence"]
+    code: str
+    message: str
+    part_id: str | None = None
+    related_part_id: str | None = None
+    view: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class GeometryInspectionResult(BaseModel):
+    valid: bool
+    inspection_version: str = "1.0"
+    findings: list[GeometryInspectionFinding] = Field(default_factory=list)
+    checked_views: list[str] = Field(default_factory=lambda: [
+        "top",
+        "bottom",
+        "left",
+        "right",
+        "front",
+        "rear",
+        "action",
+    ])

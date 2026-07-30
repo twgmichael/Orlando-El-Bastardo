@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "registry_version": "1.0.0",
+  "registry_version": "1.1.0",
   "geometry_recipes": [
     {
       "id": "group",
@@ -342,12 +342,410 @@
       ],
       "metadata": {
         "description": "Reusable tracked armored vehicle family knowledge.",
-        "canonical_prompt_examples": ["Build an army tank."]
+        "canonical_prompt_examples": ["Build an army tank."],
+        "canonical_root_size": [4.8, 3.2, 2.4]
+      }
+    },
+    {
+      "id": "wheeled_vehicle_v1",
+      "family": "wheeled_vehicle",
+      "aliases": ["bus", "car", "double_decker_bus", "fire_truck", "truck"],
+      "root_role": "vehicle_root",
+      "roles": [
+        {
+          "role": "vehicle_root",
+          "requirement": "required",
+          "aliases": ["vehicle"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "body",
+          "requirement": "required",
+          "aliases": ["chassis", "vehicle_body"],
+          "allowed_parent_roles": ["vehicle_root"],
+          "allowed_shape_families": ["compound_body", "low_body"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.78, 0.62, 0.35], "maximum": [0.98, 0.92, 0.78], "relative_to_role": "vehicle_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["compound_body", "compound_primitives"]
+        },
+        {
+          "role": "cabin",
+          "requirement": "required",
+          "aliases": ["cab", "passenger_compartment"],
+          "allowed_parent_roles": ["body"],
+          "allowed_shape_families": ["rounded_shell", "cabin_shell"],
+          "allowed_attachment_anchors": ["top_center", "front_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.35, 0.65, 0.35], "maximum": [0.95, 0.98, 1.4], "relative_to_role": "body"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell", "compound_body"]
+        },
+        {
+          "role": "wheel_pair",
+          "requirement": "required",
+          "aliases": ["wheels", "wheel_system"],
+          "allowed_parent_roles": ["body"],
+          "allowed_shape_families": ["wheel_system"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.5, 0.9, 0.18], "maximum": [0.9, 1.2, 0.45], "relative_to_role": "body"},
+          "repetition": {"allowed_modes": ["mirror"], "minimum_count": 2, "maximum_count": 2, "axis": "right"},
+          "supported_geometry_recipes": ["mirrored_system"]
+        },
+        {
+          "role": "wheel_row",
+          "requirement": "required",
+          "aliases": ["axle_wheels", "road_wheels"],
+          "allowed_parent_roles": ["wheel_pair"],
+          "allowed_shape_families": ["wheel", "road_wheel"],
+          "allowed_attachment_anchors": ["inside"],
+          "contact_required": false,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.08, 0.35, 0.45], "maximum": [0.22, 0.85, 0.95], "relative_to_role": "wheel_pair"},
+          "repetition": {"allowed_modes": ["linear"], "minimum_count": 2, "maximum_count": 4, "axis": "front"},
+          "supported_geometry_recipes": ["repeated_array", "linear_cylinder_array"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable wheeled road-vehicle structure.",
+        "canonical_prompt_examples": ["Build a double-decker bus.", "Build a fire truck."],
+        "canonical_root_size": [8.0, 3.0, 3.5]
+      }
+    },
+    {
+      "id": "aircraft_v1",
+      "family": "aircraft",
+      "aliases": ["airplane", "aeroplane", "biplane", "jet", "plane"],
+      "root_role": "aircraft_root",
+      "roles": [
+        {
+          "role": "aircraft_root",
+          "requirement": "required",
+          "aliases": ["aircraft"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "fuselage",
+          "requirement": "required",
+          "aliases": ["airframe", "body"],
+          "allowed_parent_roles": ["aircraft_root"],
+          "allowed_shape_families": ["rounded_shell", "fuselage_shell"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.78, 0.18, 0.18], "maximum": [0.98, 0.42, 0.42], "relative_to_role": "aircraft_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell", "compound_body"]
+        },
+        {
+          "role": "wing_pair",
+          "requirement": "required",
+          "aliases": ["wings", "main_wings"],
+          "allowed_parent_roles": ["fuselage"],
+          "allowed_shape_families": ["wing_system", "thin_wing"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.25, 1.8, 0.04], "maximum": [0.65, 3.8, 0.2], "relative_to_role": "fuselage"},
+          "repetition": {"allowed_modes": ["mirror"], "minimum_count": 2, "maximum_count": 2, "axis": "right"},
+          "supported_geometry_recipes": ["mirrored_system"]
+        },
+        {
+          "role": "tail",
+          "requirement": "required",
+          "aliases": ["empennage", "tailplane"],
+          "allowed_parent_roles": ["fuselage"],
+          "allowed_shape_families": ["tail_shell", "thin_tail"],
+          "allowed_attachment_anchors": ["rear_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.12, 0.35, 0.18], "maximum": [0.32, 1.1, 0.7], "relative_to_role": "fuselage"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell", "compound_body"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable fixed-wing aircraft structure.",
+        "canonical_prompt_examples": ["Build a biplane."],
+        "canonical_root_size": [7.0, 8.0, 2.5]
+      }
+    },
+    {
+      "id": "chair_v1",
+      "family": "chair",
+      "aliases": ["office_chair", "seat", "stool"],
+      "root_role": "chair_root",
+      "roles": [
+        {
+          "role": "chair_root",
+          "requirement": "required",
+          "aliases": ["chair"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "seat",
+          "requirement": "required",
+          "aliases": ["seat_base", "cushion"],
+          "allowed_parent_roles": ["chair_root"],
+          "allowed_shape_families": ["compound_body", "seat_shell"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.55, 0.55, 0.08], "maximum": [0.9, 0.9, 0.3], "relative_to_role": "chair_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["compound_body", "shaped_shell"]
+        },
+        {
+          "role": "back",
+          "requirement": "required",
+          "aliases": ["backrest", "chair_back"],
+          "allowed_parent_roles": ["seat"],
+          "allowed_shape_families": ["back_shell", "rounded_shell"],
+          "allowed_attachment_anchors": ["rear_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.65, 0.08, 1.2], "maximum": [1.0, 0.3, 3.2], "relative_to_role": "seat"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell", "compound_body"]
+        },
+        {
+          "role": "leg_group",
+          "requirement": "required",
+          "aliases": ["legs", "supports"],
+          "allowed_parent_roles": ["seat"],
+          "allowed_shape_families": ["leg", "support"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "up", "up": "front"},
+          "proportion_range": {"minimum": [0.08, 0.08, 1.2], "maximum": [0.22, 0.22, 3.2], "relative_to_role": "seat"},
+          "repetition": {"allowed_modes": ["radial"], "minimum_count": 4, "maximum_count": 5, "axis": "up"},
+          "supported_geometry_recipes": ["repeated_array"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable chair and stool structure.",
+        "canonical_prompt_examples": ["Build an office chair."],
+        "canonical_root_size": [1.2, 1.2, 2.2]
+      }
+    },
+    {
+      "id": "table_v1",
+      "family": "table",
+      "aliases": ["desk", "dining_table", "workbench"],
+      "root_role": "table_root",
+      "roles": [
+        {
+          "role": "table_root",
+          "requirement": "required",
+          "aliases": ["table"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "top",
+          "requirement": "required",
+          "aliases": ["tabletop", "surface"],
+          "allowed_parent_roles": ["table_root"],
+          "allowed_shape_families": ["compound_body", "top_shell"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.75, 0.65, 0.04], "maximum": [0.98, 0.95, 0.18], "relative_to_role": "table_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["compound_body", "shaped_shell"]
+        },
+        {
+          "role": "leg_group",
+          "requirement": "required",
+          "aliases": ["legs", "supports"],
+          "allowed_parent_roles": ["top"],
+          "allowed_shape_families": ["leg", "support"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "up", "up": "front"},
+          "proportion_range": {"minimum": [0.04, 0.04, 3.0], "maximum": [0.14, 0.14, 12.0], "relative_to_role": "top"},
+          "repetition": {"allowed_modes": ["radial"], "minimum_count": 4, "maximum_count": 4, "axis": "up"},
+          "supported_geometry_recipes": ["repeated_array"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable table and desk structure.",
+        "canonical_prompt_examples": ["Build a dining table."],
+        "canonical_root_size": [3.0, 1.8, 1.6]
+      }
+    },
+    {
+      "id": "tower_v1",
+      "family": "tower",
+      "aliases": ["castle_tower", "observation_tower", "watchtower"],
+      "root_role": "tower_root",
+      "roles": [
+        {
+          "role": "tower_root",
+          "requirement": "required",
+          "aliases": ["tower"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "base",
+          "requirement": "required",
+          "aliases": ["foundation", "tower_base"],
+          "allowed_parent_roles": ["tower_root"],
+          "allowed_shape_families": ["compound_body", "foundation"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.65, 0.65, 0.08], "maximum": [0.95, 0.95, 0.22], "relative_to_role": "tower_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["compound_body"]
+        },
+        {
+          "role": "levels",
+          "requirement": "required",
+          "aliases": ["floors", "stacked_levels"],
+          "allowed_parent_roles": ["base"],
+          "allowed_shape_families": ["stack", "tower_levels"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.55, 0.55, 3.0], "maximum": [0.9, 0.9, 10.0], "relative_to_role": "base"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["stacked_sections"]
+        },
+        {
+          "role": "roof",
+          "requirement": "required",
+          "aliases": ["dome", "tower_roof"],
+          "allowed_parent_roles": ["levels"],
+          "allowed_shape_families": ["rounded_shell", "roof_shell"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.7, 0.7, 0.08], "maximum": [1.2, 1.2, 0.35], "relative_to_role": "levels"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable stacked tower structure.",
+        "canonical_prompt_examples": ["Build an observation tower."],
+        "canonical_root_size": [4.0, 4.0, 10.0]
+      }
+    },
+    {
+      "id": "simple_robot_v1",
+      "family": "simple_robot",
+      "aliases": ["android", "robot", "service_robot"],
+      "root_role": "robot_root",
+      "roles": [
+        {
+          "role": "robot_root",
+          "requirement": "required",
+          "aliases": ["robot"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "torso",
+          "requirement": "required",
+          "aliases": ["body", "robot_body"],
+          "allowed_parent_roles": ["robot_root"],
+          "allowed_shape_families": ["compound_body", "torso_shell"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.35, 0.28, 0.35], "maximum": [0.7, 0.65, 0.65], "relative_to_role": "robot_root"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["compound_body", "shaped_shell"]
+        },
+        {
+          "role": "head",
+          "requirement": "required",
+          "aliases": ["robot_head"],
+          "allowed_parent_roles": ["torso"],
+          "allowed_shape_families": ["rounded_shell", "head_shell"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {"minimum": [0.35, 0.35, 0.18], "maximum": [0.75, 0.75, 0.55], "relative_to_role": "torso"},
+          "repetition": {"allowed_modes": ["none"], "minimum_count": 1, "maximum_count": 1, "axis": null},
+          "supported_geometry_recipes": ["shaped_shell"]
+        },
+        {
+          "role": "arm_pair",
+          "requirement": "required",
+          "aliases": ["arms", "manipulators"],
+          "allowed_parent_roles": ["torso"],
+          "allowed_shape_families": ["limb_system", "arm"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "down", "up": "front"},
+          "proportion_range": {"minimum": [0.12, 1.1, 0.65], "maximum": [0.3, 1.8, 1.3], "relative_to_role": "torso"},
+          "repetition": {"allowed_modes": ["mirror"], "minimum_count": 2, "maximum_count": 2, "axis": "right"},
+          "supported_geometry_recipes": ["mirrored_system"]
+        },
+        {
+          "role": "leg_pair",
+          "requirement": "required",
+          "aliases": ["legs", "locomotion"],
+          "allowed_parent_roles": ["torso"],
+          "allowed_shape_families": ["limb_system", "leg"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "down", "up": "front"},
+          "proportion_range": {"minimum": [0.16, 0.55, 0.9], "maximum": [0.4, 1.1, 1.8], "relative_to_role": "torso"},
+          "repetition": {"allowed_modes": ["mirror"], "minimum_count": 2, "maximum_count": 2, "axis": "right"},
+          "supported_geometry_recipes": ["mirrored_system"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable simple humanoid robot structure.",
+        "canonical_prompt_examples": ["Build a simple robot."],
+        "canonical_root_size": [2.0, 1.5, 4.0]
       }
     }
   ],
   "metadata": {
     "coordinate_frame": "+X front, -X rear, -Y left, +Y right, +Z up, -Z down",
-    "scope": "Milestone 18 initial tracked-vehicle seed"
+    "scope": "Milestone 18 representative reusable object families"
   }
 }

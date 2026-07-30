@@ -8,7 +8,15 @@ import uuid
 from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
 from app.schemas.geometry_recipe import GeometryRecipeCompileResult
 from app.services.geometry_recipe_compiler import compile_hierarchical_geometry
+from app.services.hierarchical_geometry_inspection import (
+    inspect_hierarchical_geometry,
+)
 from app.services.hierarchical_asset_intent import validate_hierarchical_asset_intent
+from app.services.hierarchical_planner import (
+    infer_object_archetype,
+    repair_hierarchy_against_archetype,
+    resolve_hierarchical_decomposition,
+)
 from app.services.object_archetype_registry import (
     ground_hierarchy_against_archetype,
     load_object_archetype_registry,
@@ -61,6 +69,14 @@ For arrangements or multi-object requests, prefer this asset_intent shape:
   "construction_notes": "short note",
   "construction_graph": null
 }
+For a broad named object such as a tank, vehicle, aircraft, chair, table,
+tower, or robot, also include asset_intent.hierarchical_asset_intent using
+schema_version "1.0". Decompose the object into stable semantic parts with
+roles, parent_id, children, shape_family, geometry_strategy, parent-relative
+dimension ratios, semantic attachment anchors, forward/up orientation, and
+repetition. Do not invent final coordinates. The deterministic planner will
+ground roles and solve transforms. If the object family or structure is
+materially ambiguous, return one clarification question.
 The singular target is authoritative. Use targets only when a genuinely
 multi-target relation such as between requires it; never use targets to append
 unrelated parts to a single-target relation. For attached_to, subject is the
@@ -2349,6 +2365,10 @@ def compile_studio_chat_build_pipeline(
     normalized_hierarchical_asset_intent = None
     object_archetype = None
     archetype_grounding_changes: list[dict[str, Any]] = []
+    hierarchy_planner_trace: dict[str, Any] | None = None
+    structural_repairs: list[dict[str, Any]] = []
+    geometry_inspection: dict[str, Any] | None = None
+    hierarchy_repair_attempt_count = 0
     hierarchical_spec: PrimitiveBuildSpec | None = None
     hierarchical_resolver: dict[str, Any] | None = None
     normalization_changes: list[dict[str, Any]] = []
@@ -2385,7 +2405,141 @@ def compile_studio_chat_build_pipeline(
             "$.asset_intent",
         )
         normalized_parsed["asset_intent"] = normalized_asset_intent
+        archetype_registry = load_object_archetype_registry()
+        selected_archetype = infer_object_archetype(
+            creative_request,
+            normalized_asset_intent,
+            archetype_registry,
+        )
         hierarchy = _hierarchical_asset_intent_from_asset_intent(normalized_asset_intent)
+        if hierarchy is None and selected_archetype is not None:
+            if not ollama_url or not model:
+                return StudioChatBuildPipelineResult(
+                    outcome="needs_repair",
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_planner",
+                        outcome="needs_repair",
+                        code="hierarchical_decomposition_required",
+                        reason=(
+                            "This registered broad object requires hierarchical "
+                            "decomposition before geometry compilation."
+                        ),
+                        recoverable=True,
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Run the constrained hierarchical planner; no job "
+                            "was submitted."
+                        ),
+                        details={
+                            "archetype_id": selected_archetype.id,
+                            "object_family": selected_archetype.family,
+                        },
+                    )],
+                )
+            hierarchy_planner_trace = resolve_hierarchical_decomposition(
+                ollama_url,
+                model,
+                creative_request,
+                normalized_asset_intent,
+                selected_archetype,
+                post_json,
+            )
+            if not hierarchy_planner_trace.get("ok"):
+                clarification_question = hierarchy_planner_trace.get(
+                    "clarification_question"
+                )
+                if clarification_question:
+                    return StudioChatBuildPipelineResult(
+                        outcome="needs_clarification",
+                        trace_id=correlation_id,
+                        raw_request=request_record,
+                        raw_response=assistant_response,
+                        parsed_response=parsed,
+                        normalized_asset_intent=normalized_asset_intent,
+                        hierarchy_planner=hierarchy_planner_trace,
+                        ingestion_repairs=ingestion_repairs,
+                        normalization_changes=normalization_changes,
+                        repair_attempt_count=0,
+                        diagnostics=[_pipeline_diagnostic(
+                            stage="hierarchy_planner",
+                            outcome="needs_clarification",
+                            code=(
+                                "hierarchical_decomposition_"
+                                "clarification_required"
+                            ),
+                            reason=str(clarification_question),
+                            recoverable=True,
+                            preserved_fields=sorted(
+                                str(key) for key in normalized_asset_intent
+                            ),
+                            suggested_next_action=(
+                                "Ask the planner's single clarification question; "
+                                "no job was submitted."
+                            ),
+                            details={
+                                "archetype_id": selected_archetype.id,
+                                "attempt_count": len(
+                                    hierarchy_planner_trace.get("attempts", [])
+                                ),
+                            },
+                        )],
+                    )
+                return StudioChatBuildPipelineResult(
+                    outcome="needs_repair",
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    repair_attempt_count=len(
+                        hierarchy_planner_trace.get("attempts", [])
+                    ),
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_planner",
+                        outcome="needs_repair",
+                        code="hierarchical_decomposition_failed",
+                        reason=str(
+                            hierarchy_planner_trace.get("error")
+                            or "The constrained hierarchy planner did not produce "
+                            "a valid contract."
+                        ),
+                        recoverable=False,
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Show the planner diagnostic or ask one clarification "
+                            "question; no job was submitted."
+                        ),
+                        details={
+                            "archetype_id": selected_archetype.id,
+                            "attempt_count": len(
+                                hierarchy_planner_trace.get("attempts", [])
+                            ),
+                        },
+                    )],
+                )
+            hierarchy = hierarchy_planner_trace["hierarchical_asset_intent"]
+            normalized_asset_intent["hierarchical_asset_intent"] = hierarchy
+            normalized_parsed["asset_intent"] = normalized_asset_intent
+            normalization_changes.append({
+                "stage": "hierarchy_planner",
+                "code": "hierarchical_asset_intent_added",
+                "path": "$.asset_intent.hierarchical_asset_intent",
+                "after": hierarchy,
+            })
         if hierarchy is not None:
             archetype_grounding = ground_hierarchy_against_archetype(hierarchy)
             if archetype_grounding.archetype is not None:
@@ -2394,6 +2548,34 @@ def compile_studio_chat_build_pipeline(
                 change.model_dump(mode="json")
                 for change in archetype_grounding.changes
             ]
+            if (
+                not archetype_grounding.valid
+                and archetype_grounding.outcome == "needs_repair"
+                and archetype_grounding.archetype is not None
+                and archetype_grounding.intent is not None
+            ):
+                try:
+                    repaired_hierarchy, repair_changes = (
+                        repair_hierarchy_against_archetype(
+                            archetype_grounding.intent.model_dump(mode="json"),
+                            archetype_grounding.archetype,
+                        )
+                    )
+                    hierarchy_repair_attempt_count = 1
+                    structural_repairs = [
+                        change.model_dump(mode="json")
+                        for change in repair_changes
+                    ]
+                    repaired_grounding = ground_hierarchy_against_archetype(
+                        repaired_hierarchy,
+                        archetype_registry,
+                    )
+                    if repaired_grounding.valid:
+                        archetype_grounding = repaired_grounding
+                        hierarchy = repaired_hierarchy
+                        archetype_grounding_changes.extend(structural_repairs)
+                except (TypeError, ValueError):
+                    hierarchy_repair_attempt_count = 1
             if archetype_grounding.intent is not None:
                 normalized_hierarchical_asset_intent = (
                     archetype_grounding.intent.model_dump(mode="json")
@@ -2423,8 +2605,11 @@ def compile_studio_chat_build_pipeline(
                     normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
                     object_archetype=object_archetype,
                     archetype_grounding_changes=archetype_grounding_changes,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    structural_repairs=structural_repairs,
                     ingestion_repairs=ingestion_repairs,
                     normalization_changes=normalization_changes,
+                    repair_attempt_count=hierarchy_repair_attempt_count,
                     diagnostics=[_pipeline_diagnostic(
                         stage="hierarchy_validation",
                         outcome=outcome,
@@ -2476,8 +2661,11 @@ def compile_studio_chat_build_pipeline(
                     normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
                     object_archetype=object_archetype,
                     archetype_grounding_changes=archetype_grounding_changes,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    structural_repairs=structural_repairs,
                     ingestion_repairs=ingestion_repairs,
                     normalization_changes=normalization_changes,
+                    repair_attempt_count=hierarchy_repair_attempt_count,
                     diagnostics=[_pipeline_diagnostic(
                         stage="hierarchy_validation",
                         outcome=outcome,
@@ -2521,8 +2709,11 @@ def compile_studio_chat_build_pipeline(
                     normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
                     object_archetype=object_archetype,
                     archetype_grounding_changes=archetype_grounding_changes,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    structural_repairs=structural_repairs,
                     ingestion_repairs=ingestion_repairs,
                     normalization_changes=normalization_changes,
+                    repair_attempt_count=hierarchy_repair_attempt_count,
                     diagnostics=[_pipeline_diagnostic(
                         stage="hierarchy_compiler",
                         outcome="unsupported",
@@ -2559,8 +2750,11 @@ def compile_studio_chat_build_pipeline(
                     normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
                     object_archetype=object_archetype,
                     archetype_grounding_changes=archetype_grounding_changes,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    structural_repairs=structural_repairs,
                     ingestion_repairs=ingestion_repairs,
                     normalization_changes=normalization_changes,
+                    repair_attempt_count=hierarchy_repair_attempt_count,
                     diagnostics=[_pipeline_diagnostic(
                         stage="hierarchy_compiler",
                         outcome=outcome,
@@ -2586,6 +2780,54 @@ def compile_studio_chat_build_pipeline(
                         },
                     )],
                 )
+            inspection = inspect_hierarchical_geometry(
+                hierarchy_validation.intent,
+                geometry_compilation,
+            )
+            geometry_inspection = inspection.model_dump(mode="json")
+            if not inspection.valid:
+                return StudioChatBuildPipelineResult(
+                    outcome="needs_repair",
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                    object_archetype=object_archetype,
+                    archetype_grounding_changes=archetype_grounding_changes,
+                    hierarchy_planner=hierarchy_planner_trace,
+                    structural_repairs=structural_repairs,
+                    geometry_inspection=geometry_inspection,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    repair_attempt_count=hierarchy_repair_attempt_count,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_inspection",
+                        outcome="needs_repair",
+                        code="hierarchical_geometry_inspection_failed",
+                        reason=(
+                            "Compiled geometry failed deterministic structural "
+                            "or spatial inspection."
+                        ),
+                        recoverable=True,
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Apply one bounded structural repair to the reported "
+                            "part and inspect again; no job was submitted."
+                        ),
+                        details={
+                            "errors": [
+                                finding.model_dump(mode="json")
+                                for finding in inspection.findings
+                                if finding.severity == "error"
+                            ],
+                            "checked_views": inspection.checked_views,
+                        },
+                    )],
+                )
             hierarchical_spec = _spec_from_hierarchical_geometry(
                 creative_request,
                 normalized_asset_intent,
@@ -2602,6 +2844,7 @@ def compile_studio_chat_build_pipeline(
                     part.model_dump(mode="json")
                     for part in geometry_compilation.resolved_parts
                 ],
+                "inspection": geometry_inspection,
             }
         reference_errors = _asset_intent_reference_errors(normalized_asset_intent)
         if reference_errors:
@@ -2615,6 +2858,9 @@ def compile_studio_chat_build_pipeline(
                 normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
                 object_archetype=object_archetype,
                 archetype_grounding_changes=archetype_grounding_changes,
+                hierarchy_planner=hierarchy_planner_trace,
+                structural_repairs=structural_repairs,
+                geometry_inspection=geometry_inspection,
                 ingestion_repairs=ingestion_repairs,
                 normalization_changes=normalization_changes,
                 diagnostics=[_pipeline_diagnostic(
@@ -2654,7 +2900,7 @@ def compile_studio_chat_build_pipeline(
                 "infinity",
             )
         )
-        attempts = (
+        attempts = hierarchy_repair_attempt_count + (
             len(resolver_output.get("attempts", []))
             if isinstance(resolver_output, dict)
             else 0
@@ -2669,6 +2915,9 @@ def compile_studio_chat_build_pipeline(
             normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
             object_archetype=object_archetype,
             archetype_grounding_changes=archetype_grounding_changes,
+            hierarchy_planner=hierarchy_planner_trace,
+            structural_repairs=structural_repairs,
+            geometry_inspection=geometry_inspection,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=attempts,
@@ -2688,7 +2937,7 @@ def compile_studio_chat_build_pipeline(
             )],
         )
 
-    repair_attempt_count = (
+    repair_attempt_count = hierarchy_repair_attempt_count + (
         len(resolver_output.get("attempts", []))
         if isinstance(resolver_output, dict)
         else 0
@@ -2708,6 +2957,9 @@ def compile_studio_chat_build_pipeline(
             normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
             object_archetype=object_archetype,
             archetype_grounding_changes=archetype_grounding_changes,
+            hierarchy_planner=hierarchy_planner_trace,
+            structural_repairs=structural_repairs,
+            geometry_inspection=geometry_inspection,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2733,6 +2985,9 @@ def compile_studio_chat_build_pipeline(
             normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
             object_archetype=object_archetype,
             archetype_grounding_changes=archetype_grounding_changes,
+            hierarchy_planner=hierarchy_planner_trace,
+            structural_repairs=structural_repairs,
+            geometry_inspection=geometry_inspection,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2760,6 +3015,9 @@ def compile_studio_chat_build_pipeline(
             normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
             object_archetype=object_archetype,
             archetype_grounding_changes=archetype_grounding_changes,
+            hierarchy_planner=hierarchy_planner_trace,
+            structural_repairs=structural_repairs,
+            geometry_inspection=geometry_inspection,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2785,6 +3043,9 @@ def compile_studio_chat_build_pipeline(
             normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
             object_archetype=object_archetype,
             archetype_grounding_changes=archetype_grounding_changes,
+            hierarchy_planner=hierarchy_planner_trace,
+            structural_repairs=structural_repairs,
+            geometry_inspection=geometry_inspection,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2809,6 +3070,9 @@ def compile_studio_chat_build_pipeline(
         normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
         object_archetype=object_archetype,
         archetype_grounding_changes=archetype_grounding_changes,
+        hierarchy_planner=hierarchy_planner_trace,
+        structural_repairs=structural_repairs,
+        geometry_inspection=geometry_inspection,
         ingestion_repairs=ingestion_repairs,
         normalization_changes=normalization_changes,
         diagnostics=[_pipeline_diagnostic(

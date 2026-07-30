@@ -154,6 +154,9 @@ class StudioChatBuildPipelineResult(BaseModel):
     normalized_hierarchical_asset_intent: dict[str, Any] | None = None
     object_archetype: dict[str, Any] | None = None
     archetype_grounding_changes: list[dict[str, Any]] = Field(default_factory=list)
+    hierarchy_planner: dict[str, Any] | None = None
+    structural_repairs: list[dict[str, Any]] = Field(default_factory=list)
+    geometry_inspection: dict[str, Any] | None = None
     ingestion_repairs: list[dict[str, Any]] = Field(default_factory=list)
     normalization_changes: list[dict[str, Any]] = Field(default_factory=list)
     diagnostics: list[StudioChatPipelineDiagnostic] = Field(default_factory=list)

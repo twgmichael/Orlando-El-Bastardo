@@ -1,0 +1,88 @@
+{
+  "creative_request": "Build an army tank.",
+  "assistant_response": {
+    "action": "build_asset",
+    "asset_intent": {
+      "name": "Army Tank",
+      "kind": "vehicle",
+      "description": "A standard army tank with a turret and tracks.",
+      "objects": [
+        {
+          "id": "tank_body",
+          "type": "cube",
+          "material": "metal"
+        }
+      ]
+    }
+  },
+  "planner_response": {
+    "hierarchical_asset_intent": {
+      "schema_version": "1.0",
+      "object_family": "army_tank",
+      "root_part_id": "tank",
+      "required_roles": ["tank", "tank_body", "gun_platform"],
+      "parts": [
+        {
+          "id": "tank",
+          "name": "Army Tank",
+          "role": "tank",
+          "requirement": "required",
+          "parent_id": null,
+          "children": ["hull"],
+          "shape_family": "assembly",
+          "geometry_strategy": "group",
+          "dimensions": {"size": [4.8, 3.2, 2.4]},
+          "attachment": null,
+          "orientation": {"forward": "front", "up": "up"},
+          "repetition": {"mode": "none", "count": 1}
+        },
+        {
+          "id": "hull",
+          "name": "Main Hull",
+          "role": "tank_body",
+          "requirement": "required",
+          "parent_id": "tank",
+          "children": ["turret"],
+          "shape_family": "beveled_hull",
+          "geometry_strategy": "compound_primitives",
+          "dimensions": {
+            "relative_to": "tank",
+            "ratio": [0.92, 0.68, 0.42]
+          },
+          "attachment": {
+            "parent_id": "tank",
+            "anchor": "center",
+            "contact_required": true
+          },
+          "orientation": {"forward": "front", "up": "up"},
+          "repetition": {"mode": "none", "count": 1},
+          "material": "metal"
+        },
+        {
+          "id": "turret",
+          "name": "Turret",
+          "role": "gun_platform",
+          "requirement": "required",
+          "parent_id": "hull",
+          "children": [],
+          "shape_family": "low_turret",
+          "geometry_strategy": "compound_primitives",
+          "dimensions": {
+            "relative_to": "hull",
+            "ratio": [0.48, 0.58, 0.38]
+          },
+          "attachment": {
+            "parent_id": "hull",
+            "anchor": "top_center",
+            "contact_required": true
+          },
+          "orientation": {"forward": "front", "up": "up"},
+          "repetition": {"mode": "none", "count": 1},
+          "material": "metal"
+        }
+      ],
+      "constraints": []
+    },
+    "clarification_question": null
+  }
+}

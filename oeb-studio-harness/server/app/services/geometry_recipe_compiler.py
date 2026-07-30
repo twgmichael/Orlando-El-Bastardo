@@ -312,10 +312,17 @@ def _repeated_array_executor(
     if part.repetition.mode == "linear":
         vector = _DIRECTION_VECTORS[direction]
         axis = _DIRECTION_AXIS[direction]
-        spacing = (
-            part.repetition.spacing
-            or float(parameters.get("spacing", dimensions[axis] * 1.2))
-        )
+        spacing = part.repetition.spacing
+        if spacing is None and parameters.get("spacing") is not None:
+            spacing = float(parameters["spacing"])
+        if spacing is None and parameters.get("available_span") is not None:
+            available_span = float(parameters["available_span"])
+            spacing = max(
+                (available_span - dimensions[axis]) / (count - 1),
+                dimensions[axis] * 1.05,
+            )
+        if spacing is None:
+            spacing = dimensions[axis] * 1.2
         for center in centers:
             expanded_centers.extend([
                 _add(
@@ -413,7 +420,7 @@ def _stacked_sections_executor(
                 modifiers=["stacked"],
                 cylinder_axis="up",
             ))
-    return primitives, expanded_centers
+    return primitives, centers
 
 
 def _attached_directional_executor(
@@ -581,6 +588,17 @@ def compile_hierarchical_geometry(
                     for parent_center in parent_centers
                 ]
             parameters = _recipe_parameters(part, recipe.defaults)
+            if (
+                recipe.compiler == "repeated_array"
+                and part.repetition.mode == "linear"
+                and part.parent_id is not None
+                and part.repetition.axis in _DIRECTION_AXIS
+            ):
+                axis = _DIRECTION_AXIS[part.repetition.axis]
+                parameters.setdefault(
+                    "available_span",
+                    dimensions_by_part[part.parent_id][axis],
+                )
             executor = GEOMETRY_RECIPE_EXECUTORS[recipe.compiler]
             compiled, logical_centers = executor(
                 part,

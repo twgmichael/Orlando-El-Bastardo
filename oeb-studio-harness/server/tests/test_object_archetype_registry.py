@@ -52,7 +52,7 @@ def test_registry_v1_loads_tracked_vehicle_knowledge():
     archetype = find_object_archetype("tracked_vehicle", registry)
 
     assert registry.schema_version == "1.0"
-    assert registry.registry_version == "1.0.0"
+    assert registry.registry_version == "1.1.0"
     assert {recipe.status for recipe in registry.geometry_recipes} == {"available"}
     assert all(recipe.compiler for recipe in registry.geometry_recipes)
     assert archetype.id == "tracked_vehicle_v1"
@@ -65,6 +65,28 @@ def test_registry_v1_loads_tracked_vehicle_knowledge():
         "track_pair",
         "road_wheel_group",
     }.issubset({role.role for role in archetype.roles})
+
+
+def test_registry_v11_covers_representative_reusable_families():
+    registry = load_object_archetype_registry()
+
+    expected = {
+        "tracked_vehicle",
+        "wheeled_vehicle",
+        "aircraft",
+        "chair",
+        "table",
+        "tower",
+        "simple_robot",
+    }
+
+    assert expected == {archetype.family for archetype in registry.archetypes}
+    assert find_object_archetype("double_decker_bus", registry).family == (
+        "wheeled_vehicle"
+    )
+    assert find_object_archetype("biplane", registry).family == "aircraft"
+    assert find_object_archetype("office_chair", registry).family == "chair"
+    assert find_object_archetype("castle_tower", registry).family == "tower"
 
 
 def test_family_and_role_aliases_ground_to_canonical_tracked_vehicle_roles():
@@ -184,7 +206,7 @@ def test_unregistered_object_family_is_explicitly_unsupported():
     assert _codes(result) == {"object_archetype_not_found"}
 
 
-def test_pipeline_blocks_incomplete_tracked_vehicle_before_flat_fallback():
+def test_pipeline_repairs_deterministic_missing_tracked_vehicle_roles():
     source = _valid_intent()
     source["required_roles"] = ["vehicle_root", "hull", "turret"]
     source["parts"] = [
@@ -202,9 +224,18 @@ def test_pipeline_blocks_incomplete_tracked_vehicle_before_flat_fallback():
         _pipeline_response(source),
     )
 
-    assert result.outcome == "needs_repair"
-    assert result.diagnostics[0].code == "object_archetype_needs_repair"
-    assert pipeline_allows_job_submission(result) is False
+    assert result.outcome == "compiled"
+    assert result.diagnostics[0].code == "build_plan_compiled"
+    assert {
+        "cannon",
+        "track_pair",
+        "road_wheel_group",
+    }.issubset({
+        repair["after"]["role"]
+        for repair in result.structural_repairs
+        if repair["code"] == "required_role_inserted"
+    })
+    assert pipeline_allows_job_submission(result) is True
 
 
 def test_pipeline_compiles_grounded_tracked_vehicle_with_shared_recipes():

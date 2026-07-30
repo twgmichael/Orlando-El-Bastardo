@@ -231,43 +231,43 @@ visible shot.
      repeated children across mirrored parents, reject unsupported parameters
      before submission, and verify the shared layer with tracked-machine,
      double-decker-transit, and observation-tower fixtures.
-   - [ ] Studio Chat Milestone 18 — seed the archetype registry with tracked
+   - [x] Studio Chat Milestone 18 — seed the archetype registry with tracked
      vehicle, wheeled vehicle, aircraft, chair, table, tower, and simple robot
      families so the architecture is evaluated beyond one named object.
-   - [ ] Studio Chat Milestone 18 — add constrained local-LLM hierarchical
+   - [x] Studio Chat Milestone 18 — add constrained local-LLM hierarchical
      decomposition that proposes the object family, functional parts,
      ownership, required versus optional status, semantic relationships,
      directions, and relative sizes without emitting Blender code or final
      coordinates.
-   - [ ] Studio Chat Milestone 18 — implement idempotent archetype grounding
+   - [x] Studio Chat Milestone 18 — implement idempotent archetype grounding
      and role normalization that resolves aliases, matches canonical roles,
      supplies only deterministic required structure, preserves novel optional
      parts, and diagnoses contradictory or unsupported plans.
-   - [ ] Studio Chat Milestone 18 — implement a root-to-leaf proportion solver
+   - [x] Studio Chat Milestone 18 — implement a root-to-leaf proportion solver
      that applies archetype ratio ranges, respects explicit user dimensions,
      prevents child and repeated parts from inheriting root-sized defaults, and
      reports unsatisfied constraints.
-   - [ ] Studio Chat Milestone 18 — implement semantic attachment anchors and
+   - [x] Studio Chat Milestone 18 — implement semantic attachment anchors and
      placement solving for top, bottom, front, rear, left, right, inside, and
      around relationships after part dimensions are known.
-   - [ ] Studio Chat Milestone 18 — implement semantic orientation solving that
+   - [x] Studio Chat Milestone 18 — implement semantic orientation solving that
      converts forward/up intent into the canonical coordinate frame and
      verifies directional parts from every standard review view.
-   - [ ] Studio Chat Milestone 18 — add compound role-specific geometry recipes
+   - [x] Studio Chat Milestone 18 — add compound role-specific geometry recipes
      so grounded parts such as hulls, turrets, cannons, tracks, and road wheels
      compile into recognizable construction rather than generic boxes.
-   - [ ] Studio Chat Milestone 18 — add deterministic mirror, radial-array,
+   - [x] Studio Chat Milestone 18 — add deterministic mirror, radial-array,
      linear-array, and distribute-within-parent operations with stable instance
      ids for symmetric and repeated parts.
-   - [ ] Studio Chat Milestone 18 — add staged validation gates for schema and
+   - [x] Studio Chat Milestone 18 — add staged validation gates for schema and
      ids, required-role coverage, hierarchy connectedness, proportion bounds,
      supported contact, orientation agreement, symmetry, repetition,
      collision, containment, geometry support, and compilation completeness.
-   - [ ] Studio Chat Milestone 18 — keep responsibility boundaries explicit:
+   - [x] Studio Chat Milestone 18 — keep responsibility boundaries explicit:
      the local LLM proposes learned object structure and intent; deterministic
      tools own dimensions, anchors, transforms, repetition, contact,
      validation, and compiler-safe worker instructions.
-   - [ ] Studio Chat Milestone 18 — add bounded structural and spatial repairs
+   - [x] Studio Chat Milestone 18 — add bounded structural and spatial repairs
      for missing archetype-required parts, invalid ratios, floating
      attachments, wrong axes, and misdistributed repeated parts, with
      before/after diagnostics and clarification for ambiguous creative choices.
@@ -275,14 +275,14 @@ visible shot.
      repair loop using standard review views, hierarchy evidence, deterministic
      geometry metadata, silhouette checks, bounded repair, and safe escalation
      for visual judgment.
-   - [ ] Studio Chat Milestone 18 — enforce the Milestone 17 compiler gate so
+   - [x] Studio Chat Milestone 18 — enforce the Milestone 17 compiler gate so
      underspecified, disconnected, unsupported, invalid, or repair-exhausted
      hierarchies preserve diagnostics and never create build or render jobs.
-   - [ ] Studio Chat Milestone 18 — capture real local-model decomposition and
+   - [x] Studio Chat Milestone 18 — capture real local-model decomposition and
      repair responses as behavior-class fixtures while accumulating successful
      validated plans as reusable family examples rather than a fixed catalog
      of finished objects.
-   - [ ] Studio Chat Milestone 18 — add broad-prompt acceptance cases for an
+   - [x] Studio Chat Milestone 18 — add broad-prompt acceptance cases for an
      army tank, fire truck or wheeled vehicle, biplane or aircraft, office
      chair, castle tower, and simple robot; verify hierarchy, required parts,
      proportions, attachments, orientation, repetition, deterministic

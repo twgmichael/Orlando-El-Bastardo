@@ -324,6 +324,8 @@ def ground_hierarchy_against_archetype(
         path = f"$.hierarchical_asset_intent.parts[{index}]"
         rule = role_by_name.get(part.role)
         if rule is None:
+            if part.requirement in {"optional", "decorative"}:
+                continue
             diagnostics.append(_diagnostic(
                 "object_family",
                 "archetype_role_unknown",
