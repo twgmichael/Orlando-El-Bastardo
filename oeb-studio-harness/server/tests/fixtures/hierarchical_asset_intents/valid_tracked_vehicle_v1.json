@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0",
+  "object_family": "tracked_vehicle",
+  "root_part_id": "tank",
+  "required_roles": [
+    "vehicle_root",
+    "hull",
+    "turret",
+    "cannon",
+    "track_pair",
+    "road_wheel_group"
+  ],
+  "parts": [
+    {
+      "id": "tank",
+      "name": "Army Tank",
+      "role": "vehicle_root",
+      "parent_id": null,
+      "children": ["hull"],
+      "shape_family": "assembly",
+      "geometry_strategy": "group",
+      "dimensions": {"size": [4.8, 3.2, 2.4]},
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "hull",
+      "name": "Main Hull",
+      "role": "hull",
+      "parent_id": "tank",
+      "children": ["turret", "tracks"],
+      "shape_family": "beveled_hull",
+      "geometry_strategy": "compound_primitives",
+      "dimensions": {
+        "relative_to": "tank",
+        "ratio": [0.92, 0.68, 0.42]
+      },
+      "attachment": {
+        "parent_id": "tank",
+        "anchor": "center",
+        "contact_required": true
+      },
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "turret",
+      "name": "Turret",
+      "role": "turret",
+      "parent_id": "hull",
+      "children": ["cannon"],
+      "shape_family": "low_turret",
+      "geometry_strategy": "compound_primitives",
+      "dimensions": {
+        "relative_to": "hull",
+        "ratio": [0.48, 0.58, 0.38]
+      },
+      "attachment": {
+        "parent_id": "hull",
+        "anchor": "top_center",
+        "contact_required": true
+      },
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "cannon",
+      "name": "Main Cannon",
+      "role": "cannon",
+      "parent_id": "turret",
+      "children": [],
+      "shape_family": "barrel",
+      "geometry_strategy": "barrel_assembly",
+      "dimensions": {
+        "relative_to": "turret",
+        "ratio": [1.55, 0.12, 0.12]
+      },
+      "attachment": {
+        "parent_id": "turret",
+        "anchor": "front_center",
+        "contact_required": true
+      },
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "tracks",
+      "name": "Track Pair",
+      "role": "track_pair",
+      "parent_id": "hull",
+      "children": ["road_wheels"],
+      "shape_family": "track_envelope",
+      "geometry_strategy": "mirrored_track_assembly",
+      "dimensions": {
+        "relative_to": "hull",
+        "ratio": [0.95, 1.18, 0.48]
+      },
+      "attachment": {
+        "parent_id": "hull",
+        "anchor": "bottom_center",
+        "contact_required": true
+      },
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {
+        "mode": "mirror",
+        "count": 2,
+        "axis": "right",
+        "instance_role": "track"
+      }
+    },
+    {
+      "id": "road_wheels",
+      "name": "Road Wheels",
+      "role": "road_wheel_group",
+      "parent_id": "tracks",
+      "children": [],
+      "shape_family": "wheel",
+      "geometry_strategy": "linear_cylinder_array",
+      "dimensions": {
+        "relative_to": "tracks",
+        "ratio": [0.16, 0.72, 0.62]
+      },
+      "attachment": {
+        "parent_id": "tracks",
+        "anchor": "inside",
+        "contact_required": false
+      },
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {
+        "mode": "linear",
+        "count": 6,
+        "axis": "front",
+        "spacing": 0.48,
+        "instance_role": "road_wheel"
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "tank_connected",
+      "type": "connected",
+      "targets": ["tank", "hull", "turret", "cannon", "tracks", "road_wheels"],
+      "required": true
+    }
+  ],
+  "future_family_extension": {
+    "preserve": true
+  }
+}

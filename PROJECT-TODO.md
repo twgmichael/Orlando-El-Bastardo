@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-28T20:58:00-04:00
+updated: 2026-07-29T19:42:42-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -198,16 +198,32 @@ visible shot.
      `docs/planning/STUDIO-CHAT-HIERARCHICAL-GENERAL-OBJECT-PLANNER-PLAN.md`
      as the canonical plan for moving from primitive assembly to validated
      hierarchical general-object construction.
-   - [ ] Studio Chat Milestone 18 — define the versioned
+   - [x] Studio Chat Milestone 18 — define the versioned
      `hierarchical_asset_intent` contract with stable semantic part ids,
      functional roles, parent-child ownership, dimensions or ratios,
      attachment anchors, contact relationships, semantic orientation,
      symmetry, repetition, constraints, construction notes, and preserved
      extension fields.
-   - [ ] Studio Chat Milestone 18 — add a versioned object-archetype registry
+   - [x] Studio Chat Milestone 18 — add contract-level validation for schema
+     versions, stable and unique ids, declared required-role coverage, a single
+     connected acyclic root hierarchy, parent-child agreement, resolved
+     dimensions, attachment ownership, orthogonal orientation axes, repetition
+     invariants, constraint references, structured diagnostics, and
+     no-submission behavior for invalid or repairable hierarchies.
+   - [x] Studio Chat Milestone 18 — add a versioned object-archetype registry
      containing reusable family knowledge: required and optional roles, role
      aliases, parent-child rules, proportion ranges, anchors, orientation,
      repetition expectations, and supported geometry recipes.
+   - [x] Studio Chat Milestone 18 — seed and enforce tracked-vehicle knowledge
+     for tanks: canonical vehicle-root, hull, turret, cannon, track-pair, and
+     road-wheel roles; common aliases; hierarchy ownership; proportion ranges;
+     contact anchors; orientation; repetition; shape families; and supported
+     geometry recipes.
+   - [x] Studio Chat Milestone 18 — ground hierarchical intent against the
+     registered tracked-vehicle family, canonicalize family and role aliases
+     idempotently, replace self-declared required roles with registry-owned
+     requirements, emit auditable changes and structured diagnostics, and
+     prevent unsupported or incoherent archetypes from submitting jobs.
    - [ ] Studio Chat Milestone 18 — seed the archetype registry with tracked
      vehicle, wheeled vehicle, aircraft, chair, table, tower, and simple robot
      families so the architecture is evaluated beyond one named object.

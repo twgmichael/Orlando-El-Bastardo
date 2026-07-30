@@ -6,6 +6,11 @@ import urllib.request
 import uuid
 
 from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
+from app.services.hierarchical_asset_intent import validate_hierarchical_asset_intent
+from app.services.object_archetype_registry import (
+    ground_hierarchy_against_archetype,
+    unavailable_geometry_recipes,
+)
 from app.schemas.studio_chat import (
     StudioChatBuildPipelineResult,
     StudioChatMessage,
@@ -2125,6 +2130,13 @@ def _asset_intent_reference_errors(asset_intent: dict[str, Any]) -> list[dict[st
     return errors
 
 
+def _hierarchical_asset_intent_from_asset_intent(
+    asset_intent: dict[str, Any],
+) -> dict[str, Any] | None:
+    hierarchy = asset_intent.get("hierarchical_asset_intent")
+    return hierarchy if isinstance(hierarchy, dict) else None
+
+
 def _all_numeric_values_are_finite(value: Any) -> bool:
     if isinstance(value, float):
         return math.isfinite(value)
@@ -2259,6 +2271,9 @@ def compile_studio_chat_build_pipeline(
 
     original_asset_intent = _asset_intent_from_parsed(parsed)
     normalized_asset_intent = None
+    normalized_hierarchical_asset_intent = None
+    object_archetype = None
+    archetype_grounding_changes: list[dict[str, Any]] = []
     normalization_changes: list[dict[str, Any]] = []
     normalized_parsed = json.loads(json.dumps(parsed))
     if original_asset_intent is not None:
@@ -2293,6 +2308,164 @@ def compile_studio_chat_build_pipeline(
             "$.asset_intent",
         )
         normalized_parsed["asset_intent"] = normalized_asset_intent
+        hierarchy = _hierarchical_asset_intent_from_asset_intent(normalized_asset_intent)
+        if hierarchy is not None:
+            archetype_grounding = ground_hierarchy_against_archetype(hierarchy)
+            if archetype_grounding.archetype is not None:
+                object_archetype = archetype_grounding.archetype.model_dump(mode="json")
+            archetype_grounding_changes = [
+                change.model_dump(mode="json")
+                for change in archetype_grounding.changes
+            ]
+            if archetype_grounding.intent is not None:
+                normalized_hierarchical_asset_intent = (
+                    archetype_grounding.intent.model_dump(mode="json")
+                )
+                normalization_changes.extend(_normalization_changes(
+                    hierarchy,
+                    normalized_hierarchical_asset_intent,
+                    "$.asset_intent.hierarchical_asset_intent",
+                ))
+                normalized_asset_intent["hierarchical_asset_intent"] = (
+                    normalized_hierarchical_asset_intent
+                )
+                normalized_parsed["asset_intent"] = normalized_asset_intent
+            if not archetype_grounding.valid:
+                outcome = (
+                    "invalid"
+                    if archetype_grounding.outcome == "invalid"
+                    else archetype_grounding.outcome
+                )
+                return StudioChatBuildPipelineResult(
+                    outcome=outcome,
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                    object_archetype=object_archetype,
+                    archetype_grounding_changes=archetype_grounding_changes,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_validation",
+                        outcome=outcome,
+                        code=(
+                            "object_archetype_not_found"
+                            if outcome == "unsupported"
+                            else "hierarchical_asset_intent_invalid"
+                            if outcome == "invalid"
+                            else "object_archetype_needs_repair"
+                        ),
+                        reason=(
+                            "The hierarchical asset intent does not satisfy its "
+                            "registered object-family rules."
+                        ),
+                        recoverable=outcome == "needs_repair",
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Repair only the reported hierarchy fields and "
+                            "validate again; no job was submitted."
+                        ),
+                        details={
+                            "registry_version": archetype_grounding.registry_version,
+                            "archetype_id": archetype_grounding.archetype_id,
+                            "errors": [
+                                diagnostic.model_dump(mode="json")
+                                for diagnostic in archetype_grounding.diagnostics
+                            ],
+                        },
+                    )],
+                )
+            hierarchy_validation = validate_hierarchical_asset_intent(
+                normalized_hierarchical_asset_intent or hierarchy
+            )
+            if not hierarchy_validation.valid:
+                outcome = (
+                    "invalid"
+                    if hierarchy_validation.outcome == "invalid"
+                    else "needs_repair"
+                )
+                return StudioChatBuildPipelineResult(
+                    outcome=outcome,
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                    object_archetype=object_archetype,
+                    archetype_grounding_changes=archetype_grounding_changes,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_validation",
+                        outcome=outcome,
+                        code=(
+                            "hierarchical_asset_intent_invalid"
+                            if outcome == "invalid"
+                            else "hierarchical_asset_intent_needs_repair"
+                        ),
+                        reason=(
+                            "The grounded hierarchy does not satisfy its "
+                            "versioned contract or internal coherence rules."
+                        ),
+                        recoverable=outcome == "needs_repair",
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Repair only the reported hierarchy fields and "
+                            "validate again; no job was submitted."
+                        ),
+                        details={
+                            "schema_version": hierarchy_validation.schema_version,
+                            "errors": [
+                                diagnostic.model_dump(mode="json")
+                                for diagnostic in hierarchy_validation.diagnostics
+                            ],
+                        },
+                    )],
+                )
+            unavailable_recipes = unavailable_geometry_recipes(
+                hierarchy_validation.intent
+            )
+            if unavailable_recipes:
+                return StudioChatBuildPipelineResult(
+                    outcome="unsupported",
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                    object_archetype=object_archetype,
+                    archetype_grounding_changes=archetype_grounding_changes,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_compiler",
+                        outcome="unsupported",
+                        code="archetype_geometry_recipes_unavailable",
+                        reason=(
+                            "The hierarchy is valid, but one or more registered "
+                            "geometry recipes do not yet have deterministic executors."
+                        ),
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Implement and register deterministic compilers for "
+                            "the reported recipes before submitting a build."
+                        ),
+                        details={
+                            "unavailable_geometry_recipes": unavailable_recipes,
+                        },
+                    )],
+                )
         reference_errors = _asset_intent_reference_errors(normalized_asset_intent)
         if reference_errors:
             return StudioChatBuildPipelineResult(
@@ -2302,6 +2475,9 @@ def compile_studio_chat_build_pipeline(
                 raw_response=assistant_response,
                 parsed_response=parsed,
                 normalized_asset_intent=normalized_asset_intent,
+                normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                object_archetype=object_archetype,
+                archetype_grounding_changes=archetype_grounding_changes,
                 ingestion_repairs=ingestion_repairs,
                 normalization_changes=normalization_changes,
                 diagnostics=[_pipeline_diagnostic(
@@ -2350,6 +2526,9 @@ def compile_studio_chat_build_pipeline(
             raw_response=assistant_response,
             parsed_response=parsed,
             normalized_asset_intent=normalized_asset_intent,
+            normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+            object_archetype=object_archetype,
+            archetype_grounding_changes=archetype_grounding_changes,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=attempts,
@@ -2386,6 +2565,9 @@ def compile_studio_chat_build_pipeline(
             raw_response=assistant_response,
             parsed_response=parsed,
             normalized_asset_intent=normalized_asset_intent,
+            normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+            object_archetype=object_archetype,
+            archetype_grounding_changes=archetype_grounding_changes,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2408,6 +2590,9 @@ def compile_studio_chat_build_pipeline(
             raw_response=assistant_response,
             parsed_response=parsed,
             normalized_asset_intent=normalized_asset_intent,
+            normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+            object_archetype=object_archetype,
+            archetype_grounding_changes=archetype_grounding_changes,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2432,6 +2617,9 @@ def compile_studio_chat_build_pipeline(
             raw_response=assistant_response,
             parsed_response=parsed,
             normalized_asset_intent=normalized_asset_intent,
+            normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+            object_archetype=object_archetype,
+            archetype_grounding_changes=archetype_grounding_changes,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2454,6 +2642,9 @@ def compile_studio_chat_build_pipeline(
             raw_response=assistant_response,
             parsed_response=parsed,
             normalized_asset_intent=normalized_asset_intent,
+            normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+            object_archetype=object_archetype,
+            archetype_grounding_changes=archetype_grounding_changes,
             ingestion_repairs=ingestion_repairs,
             normalization_changes=normalization_changes,
             repair_attempt_count=repair_attempt_count,
@@ -2475,6 +2666,9 @@ def compile_studio_chat_build_pipeline(
         raw_response=assistant_response,
         parsed_response=parsed,
         normalized_asset_intent=normalized_asset_intent,
+        normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+        object_archetype=object_archetype,
+        archetype_grounding_changes=archetype_grounding_changes,
         ingestion_repairs=ingestion_repairs,
         normalization_changes=normalization_changes,
         diagnostics=[_pipeline_diagnostic(

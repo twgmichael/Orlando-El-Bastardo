@@ -1,11 +1,11 @@
 ---
 title: Studio Chat Hierarchical General-Object Planner Plan
 created: 2026-07-28T20:58:00-04:00
-updated: 2026-07-28T20:58:00-04:00
+updated: 2026-07-29T19:42:42-04:00
 doc_type: plan
 production_area: studio_chat
 department: production
-status: planned
+status: in_progress
 canonical: true
 canonical_for: studio_chat_hierarchical_general_object_planner
 wiki: true
@@ -17,6 +17,38 @@ wiki_page: Studio Chat Hierarchical General-Object Planner
 ## Milestone
 
 Studio Chat Milestone 18
+
+## Implementation Status
+
+In progress. The first executable slice is implemented:
+
+- Versioned `hierarchical_asset_intent` schema `1.0`.
+- Stable semantic parts, roles, ownership, dimensions and ratios, attachment
+  anchors, semantic orientation, repetition, constraints, notes, metadata, and
+  preserved extension fields.
+- Contract and internal-coherence validation for schema versions, identifiers,
+  required-role coverage, root uniqueness, connectedness, cycles,
+  parent-child agreement, dimension resolution, attachment ownership,
+  orientation axes, repetition rules, and constraint references.
+- Structured hierarchy diagnostics integrated into the Milestone 17 compiler
+  gate. Invalid and repairable hierarchies cannot submit jobs even when a flat
+  primitive fallback exists.
+- A coherent tracked-vehicle fixture and focused regression tests.
+- Versioned object-archetype registry schema `1.0` and registry version
+  `1.0.0`.
+- Initial `tracked_vehicle_v1` knowledge for required and optional roles,
+  aliases, parent-role rules, proportion ranges, attachment/contact anchors,
+  orientation, repetition, shape families, and supported geometry recipes.
+- Idempotent tracked-vehicle grounding that makes registry-required roles
+  authoritative, records alias and requirement changes, and rejects unknown
+  families or incoherent family plans before job submission.
+- Geometry recipes have explicit `planned` or `available` lifecycle status;
+  planned recipes fail closed at the hierarchy compiler gate until a
+  deterministic executor is registered.
+
+Additional object families, local-LLM decomposition, deterministic insertion of
+missing required parts, proportion solving, placement solving, geometry recipe
+execution, and visual inspection remain subsequent Milestone 18 slices.
 
 ## Related Documents
 
@@ -128,6 +160,10 @@ The contract must preserve unknown semantic fields and compile into the
 existing Semantic Asset Graph without losing hierarchy.
 
 ### 2. Object-Archetype Registry
+
+Status: **IN PROGRESS** — registry contract and tracked-vehicle seed are
+implemented. Wheeled vehicle, aircraft, chair, table, tower, and simple robot
+families remain.
 
 Implement a versioned registry of reusable object-family knowledge. Each
 archetype should declare:

@@ -1,0 +1,257 @@
+{
+  "schema_version": "1.0",
+  "registry_version": "1.0.0",
+  "geometry_recipes": [
+    {
+      "id": "group",
+      "status": "planned",
+      "compiler": null,
+      "description": "Hierarchy-only assembly group."
+    },
+    {
+      "id": "compound_primitives",
+      "status": "planned",
+      "compiler": null,
+      "description": "Role-specific compound primitive construction."
+    },
+    {
+      "id": "beveled_hull",
+      "status": "planned",
+      "compiler": null,
+      "description": "Low beveled tracked-vehicle hull."
+    },
+    {
+      "id": "faceted_turret",
+      "status": "planned",
+      "compiler": null,
+      "description": "Low faceted rotating turret."
+    },
+    {
+      "id": "barrel_assembly",
+      "status": "planned",
+      "compiler": null,
+      "description": "Forward barrel and muzzle assembly."
+    },
+    {
+      "id": "cylinder_barrel",
+      "status": "planned",
+      "compiler": null,
+      "description": "Simplified directional cylinder barrel."
+    },
+    {
+      "id": "mirrored_track_assembly",
+      "status": "planned",
+      "compiler": null,
+      "description": "Mirrored left and right continuous-track assembly."
+    },
+    {
+      "id": "simplified_track_envelope",
+      "status": "planned",
+      "compiler": null,
+      "description": "Simplified mirrored track envelopes."
+    },
+    {
+      "id": "linear_cylinder_array",
+      "status": "planned",
+      "compiler": null,
+      "description": "Evenly distributed road-wheel cylinders."
+    },
+    {
+      "id": "road_wheel_array",
+      "status": "planned",
+      "compiler": null,
+      "description": "Role-specific road-wheel distribution."
+    },
+    {
+      "id": "hatch_assembly",
+      "status": "planned",
+      "compiler": null,
+      "description": "Optional top hatch assembly."
+    },
+    {
+      "id": "low_cylinder",
+      "status": "planned",
+      "compiler": null,
+      "description": "Simplified low cylindrical hatch."
+    }
+  ],
+  "archetypes": [
+    {
+      "id": "tracked_vehicle_v1",
+      "family": "tracked_vehicle",
+      "aliases": [
+        "army_tank",
+        "battle_tank",
+        "main_battle_tank",
+        "tank",
+        "tracked_armored_vehicle"
+      ],
+      "root_role": "vehicle_root",
+      "roles": [
+        {
+          "role": "vehicle_root",
+          "requirement": "required",
+          "aliases": ["army_tank", "tank", "tracked_vehicle"],
+          "allowed_parent_roles": [],
+          "allowed_shape_families": ["assembly"],
+          "allowed_attachment_anchors": [],
+          "contact_required": null,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "repetition": {
+            "allowed_modes": ["none"],
+            "minimum_count": 1,
+            "maximum_count": 1,
+            "axis": null
+          },
+          "supported_geometry_recipes": ["group"]
+        },
+        {
+          "role": "hull",
+          "requirement": "required",
+          "aliases": ["body", "chassis", "main_body", "tank_body"],
+          "allowed_parent_roles": ["vehicle_root"],
+          "allowed_shape_families": ["beveled_hull", "faceted_hull", "low_hull"],
+          "allowed_attachment_anchors": ["center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.8, 0.55, 0.3],
+            "maximum": [1.0, 0.82, 0.58],
+            "relative_to_role": "vehicle_root"
+          },
+          "repetition": {
+            "allowed_modes": ["none"],
+            "minimum_count": 1,
+            "maximum_count": 1,
+            "axis": null
+          },
+          "supported_geometry_recipes": ["compound_primitives", "beveled_hull"]
+        },
+        {
+          "role": "turret",
+          "requirement": "required",
+          "aliases": ["gun_platform", "tank_turret", "turret_body"],
+          "allowed_parent_roles": ["hull"],
+          "allowed_shape_families": ["low_turret", "faceted_turret", "rounded_turret"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.35, 0.35, 0.2],
+            "maximum": [0.7, 0.75, 0.6],
+            "relative_to_role": "hull"
+          },
+          "repetition": {
+            "allowed_modes": ["none"],
+            "minimum_count": 1,
+            "maximum_count": 1,
+            "axis": null
+          },
+          "supported_geometry_recipes": ["compound_primitives", "faceted_turret"]
+        },
+        {
+          "role": "cannon",
+          "requirement": "required",
+          "aliases": ["barrel", "gun", "main_gun", "tank_gun"],
+          "allowed_parent_roles": ["turret"],
+          "allowed_shape_families": ["barrel", "cannon_barrel"],
+          "allowed_attachment_anchors": ["front_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.8, 0.05, 0.05],
+            "maximum": [2.0, 0.25, 0.25],
+            "relative_to_role": "turret"
+          },
+          "repetition": {
+            "allowed_modes": ["none"],
+            "minimum_count": 1,
+            "maximum_count": 1,
+            "axis": null
+          },
+          "supported_geometry_recipes": ["barrel_assembly", "cylinder_barrel"]
+        },
+        {
+          "role": "track_pair",
+          "requirement": "required",
+          "aliases": ["tank_tracks", "tracks", "treads", "track_system"],
+          "allowed_parent_roles": ["hull"],
+          "allowed_shape_families": ["track_envelope", "continuous_track"],
+          "allowed_attachment_anchors": ["bottom_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.75, 0.9, 0.25],
+            "maximum": [1.1, 1.4, 0.7],
+            "relative_to_role": "hull"
+          },
+          "repetition": {
+            "allowed_modes": ["mirror"],
+            "minimum_count": 2,
+            "maximum_count": 2,
+            "axis": "right"
+          },
+          "supported_geometry_recipes": [
+            "mirrored_track_assembly",
+            "simplified_track_envelope"
+          ]
+        },
+        {
+          "role": "road_wheel_group",
+          "requirement": "required",
+          "aliases": ["road_wheels", "tank_wheels", "wheels", "wheel_group"],
+          "allowed_parent_roles": ["track_pair"],
+          "allowed_shape_families": ["wheel", "road_wheel"],
+          "allowed_attachment_anchors": ["inside"],
+          "contact_required": false,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.08, 0.4, 0.3],
+            "maximum": [0.25, 0.9, 0.9],
+            "relative_to_role": "track_pair"
+          },
+          "repetition": {
+            "allowed_modes": ["linear"],
+            "minimum_count": 4,
+            "maximum_count": 10,
+            "axis": "front"
+          },
+          "supported_geometry_recipes": [
+            "linear_cylinder_array",
+            "road_wheel_array"
+          ]
+        },
+        {
+          "role": "commander_hatch",
+          "requirement": "optional",
+          "aliases": ["hatch", "top_hatch"],
+          "allowed_parent_roles": ["turret"],
+          "allowed_shape_families": ["hatch", "low_cylinder"],
+          "allowed_attachment_anchors": ["top_center"],
+          "contact_required": true,
+          "default_orientation": {"forward": "front", "up": "up"},
+          "proportion_range": {
+            "minimum": [0.12, 0.12, 0.04],
+            "maximum": [0.4, 0.4, 0.2],
+            "relative_to_role": "turret"
+          },
+          "repetition": {
+            "allowed_modes": ["none"],
+            "minimum_count": 1,
+            "maximum_count": 1,
+            "axis": null
+          },
+          "supported_geometry_recipes": ["hatch_assembly", "low_cylinder"]
+        }
+      ],
+      "metadata": {
+        "description": "Reusable tracked armored vehicle family knowledge.",
+        "canonical_prompt_examples": ["Build an army tank."]
+      }
+    }
+  ],
+  "metadata": {
+    "coordinate_frame": "+X front, -X rear, -Y left, +Y right, +Z up, -Z down",
+    "scope": "Milestone 18 initial tracked-vehicle seed"
+  }
+}
