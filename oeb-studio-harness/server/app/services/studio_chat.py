@@ -143,8 +143,10 @@ Ask a clarifying question when the request is vague. Escalate
 ambiguous art direction, reference interpretation, or visual judgment.
 Do not write Blender code.
 Do not submit jobs, invent unavailable assets, or add scene shells for standalone assets.
-Cone tips point +Z by default; "pointing down" is
-rotation [3.141592654, 0, 0].
+Cone tips point +Z by default. Use these canonical rotations for cone direction:
+up [0, 0, 0], down [3.141592654, 0, 0], front [0, 1.570796327, 0],
+rear [0, -1.570796327, 0], left [1.570796327, 0, 0], and right
+[-1.570796327, 0, 0].
 When review renders are requested and no custom view list is supplied, use
 review_views: ["top", "bottom", "left", "right", "front", "rear", "action"].
 Use all seven views exactly, including "action". Missing "action" is invalid.
@@ -208,8 +210,10 @@ target X, and edit_delta
 Never guess a numeric factor for a match request; the compiler derives it from
 the mathematical geometry definitions.
 For "rotate <part> N degrees on the <view> view", use operation "rotate",
-target the named part id, view the named view, and amount N. The harness owns
-camera-view-to-axis math.
+target the named part id, view the named view, and amount N. For an explicit
+axis, put axis "x"|"y"|"z" and degrees N in edit_delta. The harness owns
+camera-view-to-axis math. If neither an axis nor a view is stated, ask which
+axis or view to rotate around; do not invent one.
 For "cut the sphere in half",
 use operation "replace", target the sphere object id, and put
 {"mode":"geometry_modifier","shape_modifiers":["half","flat"],
@@ -241,8 +245,10 @@ Normalize the user's creative request and assistant draft JSON into a strict
 small build spec for deterministic workers. Preserve asset intent, named parts,
 features, materials, quantities, and orientation. Use primitive geometry only as
 internal build ops when the request is explicitly simple enough to execute that
-way. Cone tips point +Z by default; "pointing down" is rotation
-[3.141592654, 0, 0]. Do not write Blender code or invent APIs.
+way. Cone tips point +Z by default. Use canonical rotations: up [0, 0, 0],
+down [3.141592654, 0, 0], front [0, 1.570796327, 0], rear
+[0, -1.570796327, 0], left [1.570796327, 0, 0], right
+[-1.570796327, 0, 0]. Do not write Blender code or invent APIs.
 When a request is vague, set needs_clarification true with one short question.
 When art direction is ambiguous, set escalation_reason. Return only JSON with:
 version, needs_clarification, clarification_question, escalation_reason,
@@ -907,13 +913,13 @@ def _orientation_direction_near_primitive(text: str, primitive_type: str, ordina
         return "down"
     if re.search(r"\b(pointing|facing|oriented|orient|tip|apex)\s+(?:straight\s+)?up\b", nearby):
         return "up"
-    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?front\b", nearby):
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:(?:to|toward)\s+)?(?:the\s+)?front\b", nearby):
         return "front"
-    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?(?:rear|back)\b", nearby):
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:(?:to|toward)\s+)?(?:the\s+)?(?:rear|back)\b", nearby):
         return "back"
-    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?left\b", nearby):
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:(?:to|toward)\s+)?(?:the\s+)?left\b", nearby):
         return "left"
-    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:toward\s+)?(?:the\s+)?right\b", nearby):
+    if re.search(r"\b(pointing|facing|oriented|orient)\s+(?:(?:to|toward)\s+)?(?:the\s+)?right\b", nearby):
         return "right"
     return None
 
@@ -3806,6 +3812,11 @@ def _compile_typed_object_primitives(request: str, spec: dict) -> list[dict[str,
             }
             primitives.append(primitive)
             copies_by_base.setdefault(object_id, []).append(primitive)
+    # The user-facing semantic direction is authoritative. Typed-object asset
+    # intent bypasses validate_primitive_spec(), so apply the same deterministic
+    # +Z-to-direction conversion here instead of trusting model-authored Euler
+    # angles.
+    primitives = _apply_explicit_orientation_hints(primitives, request)
     primitive_by_id = {primitive["id"]: primitive for primitive in primitives}
     for relationship in _normalize_scene_relationships(spec.get("relationships")):
         subject = primitive_by_id.get(relationship["subject"])

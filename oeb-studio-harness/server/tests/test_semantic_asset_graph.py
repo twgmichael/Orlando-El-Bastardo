@@ -1,4 +1,7 @@
 import copy
+import math
+
+import pytest
 
 from app.schemas.semantic_asset_graph import GraphOperationRequest, SemanticAssetGraph
 from app.services.semantic_asset_graph import (
@@ -106,6 +109,21 @@ def test_compile_is_pure_and_returns_reviewable_diff():
     assert graph.model_dump(mode="json") == before
     assert result.diff.selected_targets == ["cone"]
     assert any(change.path.endswith(".material") for change in result.diff.changes)
+
+
+def test_rotate_accepts_semantic_axis_alias_from_edit_contract():
+    result = compile_graph_operation(
+        _graph(),
+        GraphOperationRequest(
+            operation="rotate",
+            base_revision=3,
+            target_ids=["cone"],
+            parameters={"semantic_direction": "x_axis", "amount": 90},
+        ),
+    )
+
+    assert result.outcome == "compiled"
+    assert result.graph_after.parts[0].transform.rotation[0] == pytest.approx(math.pi / 2)
 
 
 def test_intent_operation_mismatch_is_repaired_before_mutation():

@@ -507,12 +507,20 @@ def _targets(graph_data: dict[str, Any], request: GraphOperationRequest) -> list
 
 
 def _rotation_amount(parameters: dict[str, Any]) -> tuple[int | None, float | None]:
-    axis = str(parameters.get("axis") or "").lower()
+    axis = str(
+        parameters.get("axis")
+        or parameters.get("semantic_direction")
+        or parameters.get("direction")
+        or ""
+    ).lower()
     view = str(parameters.get("view") or "").lower()
     axis_index = {
-        "x": 0, "+x": 0, "-x": 0, "front": 0, "rear": 0, "back": 0,
-        "y": 1, "+y": 1, "-y": 1, "left": 1, "right": 1,
-        "z": 2, "+z": 2, "-z": 2, "top": 2, "bottom": 2,
+        "x": 0, "+x": 0, "-x": 0, "x_axis": 0, "axis_x": 0,
+        "front": 0, "rear": 0, "back": 0,
+        "y": 1, "+y": 1, "-y": 1, "y_axis": 1, "axis_y": 1,
+        "left": 1, "right": 1,
+        "z": 2, "+z": 2, "-z": 2, "z_axis": 2, "axis_z": 2,
+        "top": 2, "bottom": 2,
     }.get(axis or view)
     value = parameters.get("radians")
     if value is None:

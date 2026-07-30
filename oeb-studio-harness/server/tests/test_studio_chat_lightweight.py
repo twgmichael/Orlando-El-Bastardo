@@ -1709,6 +1709,31 @@ def test_resolver_output_cone_pointing_down_is_normalized_even_when_model_misses
     assert resolved["primitives"][0]["orientation"]["source"] == "creative_request"
 
 
+def test_typed_object_cone_direction_overrides_incorrect_model_rotation():
+    spec, _ = build_spec_from_assistant_response(
+        "Let's start with 1 cone pointing to the right.",
+        """{
+          "action": "build_asset",
+          "asset_intent": {
+            "name": "Right Cone",
+            "kind": "prop",
+            "description": "A single cone pointing to the right.",
+            "objects": [{
+              "id": "cone_id",
+              "type": "cone",
+              "orientation": {
+                "position": [0.5, 0, 0],
+                "rotation": [3.141592654, 0, 0]
+              }
+            }]
+          }
+        }""",
+    )
+
+    assert spec.primitives[0].type == "cone"
+    assert spec.primitives[0].transform.rotation == [-1.570796327, 0.0, 0.0]
+
+
 def test_resolve_primitive_spec_retries_once_after_invalid_output(monkeypatch):
     calls = []
 
