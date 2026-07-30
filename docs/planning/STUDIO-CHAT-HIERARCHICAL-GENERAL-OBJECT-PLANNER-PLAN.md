@@ -1,7 +1,7 @@
 ---
 title: Studio Chat Hierarchical General-Object Planner Plan
 created: 2026-07-28T20:58:00-04:00
-updated: 2026-07-29T19:42:42-04:00
+updated: 2026-07-29T20:27:49-04:00
 doc_type: plan
 production_area: studio_chat
 department: production
@@ -20,7 +20,7 @@ Studio Chat Milestone 18
 
 ## Implementation Status
 
-In progress. The first executable slice is implemented:
+In progress. The following executable slices are implemented:
 
 - Versioned `hierarchical_asset_intent` schema `1.0`.
 - Stable semantic parts, roles, ownership, dimensions and ratios, attachment
@@ -42,13 +42,27 @@ In progress. The first executable slice is implemented:
 - Idempotent tracked-vehicle grounding that makes registry-required roles
   authoritative, records alias and requirement changes, and rejects unknown
   families or incoherent family plans before job submission.
-- Geometry recipes have explicit `planned` or `available` lifecycle status;
-  planned recipes fail closed at the hierarchy compiler gate until a
-  deterministic executor is registered.
+- Geometry recipes have explicit `planned` or `available` lifecycle status.
+  Available recipes must name a registered deterministic executor; all others
+  fail closed at the hierarchy compiler gate.
+- Family-neutral executors for hierarchy groups, compound bodies, shaped
+  shells, mirrored systems, linear and radial arrays, stacked sections, and
+  attached directional parts.
+- Root-to-leaf dimension resolution and semantic anchor placement within the
+  recipe compiler, including repeated-child propagation across mirrored
+  parents and stable compiled primitive ids.
+- Cross-family fixtures for a tracked machine, double-decker transit body, and
+  observation tower. The same executor set compiles all three without named
+  object-family branches, with structural and orthographic
+  silhouette-proportion tests.
+- Invalid recipe parameters produce structured diagnostics and prevent build
+  submission; a valid grounded tank hierarchy now compiles through the shared
+  recipe layer.
 
 Additional object families, local-LLM decomposition, deterministic insertion of
-missing required parts, proportion solving, placement solving, geometry recipe
-execution, and visual inspection remain subsequent Milestone 18 slices.
+missing required parts, full archetype-bound proportion solving, collision and
+containment validation, rendered visual inspection, and bounded repair remain
+subsequent Milestone 18 slices.
 
 ## Related Documents
 
@@ -255,6 +269,12 @@ frame and test them from every standard review view.
 
 ### 8. Compound Geometry Recipe Compiler
 
+Status: **IMPLEMENTED FOR THE V1 SHARED EXECUTOR SET** — family-neutral
+executors compile hierarchy groups, compound bodies, shaped shells, mirrored
+systems, repeated arrays, stacked sections, and attached directional parts
+into deterministic primitive plans. Further mesh strategies and rendered
+inspection remain open.
+
 Map grounded semantic roles to supported construction recipes. Recipes may use
 multiple primitives, semantic geometry, arrays, modifiers, or future mesh
 strategies.
@@ -269,6 +289,46 @@ Examples:
 
 Concrete objects must not collapse into generic boxes when a supported
 compound recipe exists.
+
+#### Generalization-First Geometry Recipe Layer
+
+Status: **IMPLEMENTED AND STRUCTURALLY VERIFIED** — the same executor set
+passes tracked-machine, double-decker-transit, and observation-tower fixtures.
+The suite checks family-neutral source, stable expansion, inherited mirrored
+repetition, linear and radial arrays, invalid-parameter diagnostics, submission
+gating, and distinct orthographic silhouette proportions. Rendered review
+evidence remains part of Work Package 12.
+
+Before expanding the object-archetype registry, implement deterministic,
+reusable geometry-recipe executors for:
+
+- Compound bodies.
+- Beveled and rounded shells.
+- Mirrored wheel and track systems.
+- Linear and radial arrays.
+- Stacked structural sections.
+- Attached directional parts such as barrels, wings, handles, and pipes.
+
+Recipes must consume semantic roles, dimensions, proportions, attachment
+anchors, orientation, symmetry, and repetition from
+`hierarchical_asset_intent`. Recipe executors must not contain named-object
+logic such as `build_tank` or `build_bus`.
+
+Acceptance criteria:
+
+- Each recipe is exercised successfully across at least three unrelated object
+  families.
+- A tank, a double-decker bus, and at least one non-vehicle fixture exercise
+  the shared recipe layer.
+- Recipe executors contain no object-family-specific construction branches.
+- Unsupported recipe parameters fail with structured diagnostics and do not
+  submit a build.
+- The compiler returns `compiled` only when every required role resolves to an
+  available deterministic executor.
+- Structural and visual tests verify hierarchy, contact, orientation,
+  proportions, repetition, and recognizable silhouettes.
+- Additional object archetypes are deferred until this generalization suite
+  passes.
 
 ### 9. Symmetry And Repetition Expansion
 

@@ -1,0 +1,102 @@
+{
+  "schema_version": "1.0",
+  "object_family": "wheeled_transit",
+  "root_part_id": "transit",
+  "required_roles": ["root", "body", "cab_shell", "wheel_sides", "windows", "decks", "mirror_arm"],
+  "parts": [
+    {
+      "id": "transit",
+      "name": "Double Deck Transit",
+      "role": "root",
+      "parent_id": null,
+      "children": ["body"],
+      "shape_family": "assembly",
+      "geometry_strategy": "group",
+      "dimensions": {"size": [10.5, 3.0, 4.5]},
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "body",
+      "name": "Transit Body",
+      "role": "body",
+      "parent_id": "transit",
+      "children": ["cab_shell", "wheel_sides", "decks"],
+      "shape_family": "compound_body",
+      "geometry_strategy": "compound_body",
+      "dimensions": {"relative_to": "transit", "ratio": [0.94, 0.88, 0.78]},
+      "attachment": {"parent_id": "transit", "anchor": "center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "red"
+    },
+    {
+      "id": "cab_shell",
+      "name": "Rounded Cab",
+      "role": "cab_shell",
+      "parent_id": "body",
+      "children": ["mirror_arm"],
+      "shape_family": "rounded_shell",
+      "geometry_strategy": "shaped_shell",
+      "dimensions": {"relative_to": "body", "ratio": [0.18, 0.92, 0.72]},
+      "attachment": {"parent_id": "body", "anchor": "front_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "glass"
+    },
+    {
+      "id": "wheel_sides",
+      "name": "Mirrored Wheel Sides",
+      "role": "wheel_sides",
+      "parent_id": "body",
+      "children": ["windows"],
+      "shape_family": "wheel_system",
+      "geometry_strategy": "mirrored_system",
+      "dimensions": {"relative_to": "body", "ratio": [0.72, 1.06, 0.28]},
+      "attachment": {"parent_id": "body", "anchor": "bottom_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "mirror", "count": 2, "axis": "right"},
+      "metadata": {"recipe_parameters": {"primitive_type": "cylinder", "thickness_fraction": 0.12}},
+      "material": "black"
+    },
+    {
+      "id": "windows",
+      "name": "Side Window Array",
+      "role": "windows",
+      "parent_id": "wheel_sides",
+      "children": [],
+      "shape_family": "window",
+      "geometry_strategy": "repeated_array",
+      "dimensions": {"relative_to": "wheel_sides", "ratio": [0.08, 0.42, 0.48]},
+      "attachment": {"parent_id": "wheel_sides", "anchor": "top_center", "contact_required": false},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "linear", "count": 5, "axis": "front", "spacing": 1.5},
+      "metadata": {"recipe_parameters": {"primitive_type": "box"}},
+      "material": "glass"
+    },
+    {
+      "id": "decks",
+      "name": "Passenger Decks",
+      "role": "decks",
+      "parent_id": "body",
+      "children": [],
+      "shape_family": "stack",
+      "geometry_strategy": "stacked_sections",
+      "dimensions": {"relative_to": "body", "ratio": [0.82, 0.86, 0.92]},
+      "attachment": {"parent_id": "body", "anchor": "center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "metadata": {"recipe_parameters": {"sections": 2, "gap_fraction": 0.06}},
+      "material": "red"
+    },
+    {
+      "id": "mirror_arm",
+      "name": "Forward Mirror Arm",
+      "role": "mirror_arm",
+      "parent_id": "cab_shell",
+      "children": [],
+      "shape_family": "arm",
+      "geometry_strategy": "attached_directional",
+      "dimensions": {"relative_to": "cab_shell", "ratio": [0.42, 0.08, 0.08]},
+      "attachment": {"parent_id": "cab_shell", "anchor": "front_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "black"
+    }
+  ]
+}

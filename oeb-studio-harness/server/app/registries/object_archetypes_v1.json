@@ -4,75 +4,171 @@
   "geometry_recipes": [
     {
       "id": "group",
-      "status": "planned",
-      "compiler": null,
+      "status": "available",
+      "compiler": "group",
       "description": "Hierarchy-only assembly group."
     },
     {
       "id": "compound_primitives",
-      "status": "planned",
-      "compiler": null,
-      "description": "Role-specific compound primitive construction."
+      "status": "available",
+      "compiler": "compound_body",
+      "description": "Family-neutral layered compound-body construction.",
+      "defaults": {
+        "primitive_type": "box",
+        "lower_height_fraction": 0.58,
+        "upper_taper": 0.82
+      }
     },
     {
       "id": "beveled_hull",
-      "status": "planned",
-      "compiler": null,
-      "description": "Low beveled tracked-vehicle hull."
+      "status": "available",
+      "compiler": "compound_body",
+      "description": "Low beveled compound-body construction.",
+      "defaults": {
+        "primitive_type": "box",
+        "lower_height_fraction": 0.62,
+        "upper_taper": 0.78
+      }
     },
     {
       "id": "faceted_turret",
-      "status": "planned",
-      "compiler": null,
-      "description": "Low faceted rotating turret."
+      "status": "available",
+      "compiler": "shaped_shell",
+      "description": "Low faceted shell construction.",
+      "defaults": {
+        "primitive_type": "sphere",
+        "shape_modifiers": ["faceted", "squished"]
+      }
     },
     {
       "id": "barrel_assembly",
-      "status": "planned",
-      "compiler": null,
-      "description": "Forward barrel and muzzle assembly."
+      "status": "available",
+      "compiler": "attached_directional",
+      "description": "Attached directional cylinder construction.",
+      "defaults": {"primitive_type": "cylinder"}
     },
     {
       "id": "cylinder_barrel",
-      "status": "planned",
-      "compiler": null,
-      "description": "Simplified directional cylinder barrel."
+      "status": "available",
+      "compiler": "attached_directional",
+      "description": "Simplified attached directional cylinder.",
+      "defaults": {"primitive_type": "cylinder"}
     },
     {
       "id": "mirrored_track_assembly",
-      "status": "planned",
-      "compiler": null,
-      "description": "Mirrored left and right continuous-track assembly."
+      "status": "available",
+      "compiler": "mirrored_system",
+      "description": "Mirrored paired-system construction.",
+      "defaults": {
+        "primitive_type": "box",
+        "thickness_fraction": 0.18
+      }
     },
     {
       "id": "simplified_track_envelope",
-      "status": "planned",
-      "compiler": null,
-      "description": "Simplified mirrored track envelopes."
+      "status": "available",
+      "compiler": "mirrored_system",
+      "description": "Simplified mirrored envelope construction.",
+      "defaults": {
+        "primitive_type": "box",
+        "thickness_fraction": 0.18
+      }
     },
     {
       "id": "linear_cylinder_array",
-      "status": "planned",
-      "compiler": null,
-      "description": "Evenly distributed road-wheel cylinders."
+      "status": "available",
+      "compiler": "repeated_array",
+      "description": "Evenly distributed linear cylinder array.",
+      "defaults": {
+        "primitive_type": "cylinder",
+        "item_axis": "right"
+      }
     },
     {
       "id": "road_wheel_array",
-      "status": "planned",
-      "compiler": null,
-      "description": "Role-specific road-wheel distribution."
+      "status": "available",
+      "compiler": "repeated_array",
+      "description": "Linear repeated-cylinder distribution.",
+      "defaults": {
+        "primitive_type": "cylinder",
+        "item_axis": "right"
+      }
     },
     {
       "id": "hatch_assembly",
-      "status": "planned",
-      "compiler": null,
-      "description": "Optional top hatch assembly."
+      "status": "available",
+      "compiler": "shaped_shell",
+      "description": "Optional low shell assembly.",
+      "defaults": {
+        "primitive_type": "cylinder",
+        "shape_modifiers": ["low"]
+      }
     },
     {
       "id": "low_cylinder",
-      "status": "planned",
-      "compiler": null,
-      "description": "Simplified low cylindrical hatch."
+      "status": "available",
+      "compiler": "shaped_shell",
+      "description": "Simplified low cylindrical shell.",
+      "defaults": {
+        "primitive_type": "cylinder",
+        "shape_modifiers": ["low"]
+      }
+    },
+    {
+      "id": "compound_body",
+      "status": "available",
+      "compiler": "compound_body",
+      "description": "Reusable layered compound body.",
+      "defaults": {
+        "primitive_type": "box",
+        "lower_height_fraction": 0.58,
+        "upper_taper": 0.82
+      }
+    },
+    {
+      "id": "shaped_shell",
+      "status": "available",
+      "compiler": "shaped_shell",
+      "description": "Reusable rounded, faceted, or cylindrical shell.",
+      "defaults": {
+        "primitive_type": "sphere",
+        "shape_modifiers": ["rounded"]
+      }
+    },
+    {
+      "id": "mirrored_system",
+      "status": "available",
+      "compiler": "mirrored_system",
+      "description": "Reusable two-sided mirrored component system.",
+      "defaults": {
+        "primitive_type": "box",
+        "thickness_fraction": 0.18
+      }
+    },
+    {
+      "id": "repeated_array",
+      "status": "available",
+      "compiler": "repeated_array",
+      "description": "Reusable linear or radial component array.",
+      "defaults": {"primitive_type": "cylinder"}
+    },
+    {
+      "id": "stacked_sections",
+      "status": "available",
+      "compiler": "stacked_sections",
+      "description": "Reusable vertically stacked structural sections.",
+      "defaults": {
+        "primitive_type": "box",
+        "sections": 2,
+        "gap_fraction": 0.04
+      }
+    },
+    {
+      "id": "attached_directional",
+      "status": "available",
+      "compiler": "attached_directional",
+      "description": "Reusable attached part aligned to a semantic direction.",
+      "defaults": {"primitive_type": "cylinder"}
     }
   ],
   "archetypes": [

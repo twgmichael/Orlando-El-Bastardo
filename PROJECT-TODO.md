@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-29T19:42:42-04:00
+updated: 2026-07-29T20:27:49-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -224,6 +224,13 @@ visible shot.
      idempotently, replace self-declared required roles with registry-owned
      requirements, emit auditable changes and structured diagnostics, and
      prevent unsupported or incoherent archetypes from submitting jobs.
+   - [x] Studio Chat Milestone 18 — implement the generalization-first
+     geometry recipe layer for compound bodies, shaped shells, mirrored
+     systems, linear and radial arrays, stacked sections, and attached
+     directional parts. Compile through family-neutral executors, propagate
+     repeated children across mirrored parents, reject unsupported parameters
+     before submission, and verify the shared layer with tracked-machine,
+     double-decker-transit, and observation-tower fixtures.
    - [ ] Studio Chat Milestone 18 — seed the archetype registry with tracked
      vehicle, wheeled vehicle, aircraft, chair, table, tower, and simple robot
      families so the architecture is evaluated beyond one named object.

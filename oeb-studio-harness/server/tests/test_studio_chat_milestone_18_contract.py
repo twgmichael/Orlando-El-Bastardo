@@ -163,7 +163,7 @@ def test_pipeline_blocks_invalid_hierarchy_even_when_flat_primitives_are_executa
     assert pipeline_allows_job_submission(result) is False
 
 
-def test_pipeline_preserves_valid_hierarchy_but_requires_recipe_executors():
+def test_pipeline_preserves_and_compiles_valid_hierarchy_with_recipe_executors():
     source = _valid_intent()
     assistant_response = json.dumps({
         "action": "build_asset",
@@ -186,10 +186,10 @@ def test_pipeline_preserves_valid_hierarchy_but_requires_recipe_executors():
         assistant_response,
     )
 
-    assert result.outcome == "unsupported"
-    assert result.diagnostics[0].code == "archetype_geometry_recipes_unavailable"
+    assert result.outcome == "compiled"
+    assert result.diagnostics[0].code == "build_plan_compiled"
     assert result.normalized_hierarchical_asset_intent["schema_version"] == "1.0"
     assert result.normalized_hierarchical_asset_intent["future_family_extension"] == {
         "preserve": True
     }
-    assert pipeline_allows_job_submission(result) is False
+    assert pipeline_allows_job_submission(result) is True

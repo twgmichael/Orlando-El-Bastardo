@@ -6,9 +6,12 @@ import urllib.request
 import uuid
 
 from app.schemas.conversation import PrimitiveBuildSpec, ScenePlan
+from app.schemas.geometry_recipe import GeometryRecipeCompileResult
+from app.services.geometry_recipe_compiler import compile_hierarchical_geometry
 from app.services.hierarchical_asset_intent import validate_hierarchical_asset_intent
 from app.services.object_archetype_registry import (
     ground_hierarchy_against_archetype,
+    load_object_archetype_registry,
     unavailable_geometry_recipes,
 )
 from app.schemas.studio_chat import (
@@ -1824,6 +1827,78 @@ def _spec_from_resolved_primitive(
     })
 
 
+def _spec_from_hierarchical_geometry(
+    creative_request: str,
+    asset_intent: dict[str, Any],
+    compiled: GeometryRecipeCompileResult,
+) -> PrimitiveBuildSpec:
+    name = _first_text_value(
+        asset_intent.get("name"),
+        fallback="Hierarchical Asset",
+    )
+    kind = _first_text_value(
+        asset_intent.get("kind"),
+        asset_intent.get("asset_kind"),
+        fallback=infer_kind(creative_request, asset_intent),
+    )
+    style = _first_text_value(
+        asset_intent.get("style"),
+        asset_intent.get("description"),
+        fallback=creative_request,
+    )
+    primitives = [
+        primitive.model_dump(mode="json")
+        for primitive in compiled.primitives
+    ]
+    scene_plan = {
+        "scene_type": kind,
+        "style": style,
+        "objects": [
+            {
+                "id": primitive["id"],
+                "label": primitive.get("label") or primitive["id"],
+                "category": primitive["type"],
+                "count": 1,
+                "placement": "hierarchical",
+                "shape": {
+                    "primary_form": primitive["type"],
+                    "geometry_recipe": primitive["params"].get("geometry_recipe"),
+                },
+                "materials": {"primary": primitive.get("material", "neutral")},
+                "source_phrases": [creative_request],
+                "orientation": {
+                    "rotation": primitive["transform"]["rotation"],
+                },
+            }
+            for primitive in primitives
+        ],
+        "relationships": [],
+    }
+    return PrimitiveBuildSpec.model_validate({
+        "canonical_id": (
+            asset_intent.get("canonical_id")
+            or slugify_asset_id(creative_request)
+        ),
+        "name": name,
+        "kind": kind,
+        "style": style,
+        "creative_request": creative_request,
+        "build_method": "hierarchical_geometry_recipes",
+        "scene_shell": False,
+        "asset_intent": asset_intent,
+        "primitives": primitives,
+        "components": [primitive["id"] for primitive in primitives],
+        "scene_plan": scene_plan,
+        "repaired_scene_plan": scene_plan,
+        "deliverables": [
+            "glb",
+            "preview_render",
+            "asset_review_renders",
+            "review_page",
+        ],
+    })
+
+
 def build_spec_with_primitive_resolver(
     creative_request: str,
     assistant_response: str,
@@ -2274,6 +2349,8 @@ def compile_studio_chat_build_pipeline(
     normalized_hierarchical_asset_intent = None
     object_archetype = None
     archetype_grounding_changes: list[dict[str, Any]] = []
+    hierarchical_spec: PrimitiveBuildSpec | None = None
+    hierarchical_resolver: dict[str, Any] | None = None
     normalization_changes: list[dict[str, Any]] = []
     normalized_parsed = json.loads(json.dumps(parsed))
     if original_asset_intent is not None:
@@ -2466,6 +2543,66 @@ def compile_studio_chat_build_pipeline(
                         },
                     )],
                 )
+            geometry_compilation = compile_hierarchical_geometry(
+                hierarchy_validation.intent,
+                load_object_archetype_registry(),
+            )
+            if not geometry_compilation.valid:
+                outcome = geometry_compilation.outcome
+                return StudioChatBuildPipelineResult(
+                    outcome=outcome,
+                    trace_id=correlation_id,
+                    raw_request=request_record,
+                    raw_response=assistant_response,
+                    parsed_response=parsed,
+                    normalized_asset_intent=normalized_asset_intent,
+                    normalized_hierarchical_asset_intent=normalized_hierarchical_asset_intent,
+                    object_archetype=object_archetype,
+                    archetype_grounding_changes=archetype_grounding_changes,
+                    ingestion_repairs=ingestion_repairs,
+                    normalization_changes=normalization_changes,
+                    diagnostics=[_pipeline_diagnostic(
+                        stage="hierarchy_compiler",
+                        outcome=outcome,
+                        code="hierarchical_geometry_recipe_compile_failed",
+                        reason=(
+                            "One or more reusable geometry recipes could not be "
+                            "compiled from the grounded hierarchy."
+                        ),
+                        recoverable=outcome == "needs_repair",
+                        preserved_fields=sorted(
+                            str(key) for key in normalized_asset_intent
+                        ),
+                        suggested_next_action=(
+                            "Repair the reported recipe parameters or register "
+                            "the missing deterministic executor."
+                        ),
+                        details={
+                            "compiler_version": geometry_compilation.compiler_version,
+                            "errors": [
+                                diagnostic.model_dump(mode="json")
+                                for diagnostic in geometry_compilation.diagnostics
+                            ],
+                        },
+                    )],
+                )
+            hierarchical_spec = _spec_from_hierarchical_geometry(
+                creative_request,
+                normalized_asset_intent,
+                geometry_compilation,
+            )
+            hierarchical_resolver = {
+                "ok": True,
+                "source": "hierarchical_geometry_recipe_compiler",
+                "compiler_version": geometry_compilation.compiler_version,
+                "registry_version": archetype_grounding.registry_version,
+                "used_recipes": geometry_compilation.used_recipes,
+                "used_executors": geometry_compilation.used_executors,
+                "resolved_parts": [
+                    part.model_dump(mode="json")
+                    for part in geometry_compilation.resolved_parts
+                ],
+            }
         reference_errors = _asset_intent_reference_errors(normalized_asset_intent)
         if reference_errors:
             return StudioChatBuildPipelineResult(
@@ -2492,16 +2629,19 @@ def compile_studio_chat_build_pipeline(
                 )],
             )
 
-    resolver_output: dict[str, Any] | None = None
+    resolver_output: dict[str, Any] | None = hierarchical_resolver
     try:
-        spec, _, resolver_output = build_spec_with_primitive_resolver(
-            creative_request,
-            json.dumps(normalized_parsed),
-            messages,
-            ollama_url,
-            model,
-            resolver_retries=resolver_retries,
-        )
+        if hierarchical_spec is not None:
+            spec = hierarchical_spec
+        else:
+            spec, _, resolver_output = build_spec_with_primitive_resolver(
+                creative_request,
+                json.dumps(normalized_parsed),
+                messages,
+                ollama_url,
+                model,
+                resolver_retries=resolver_retries,
+            )
     except ValueError as exc:
         error_text = str(exc)
         invalid_numeric = any(

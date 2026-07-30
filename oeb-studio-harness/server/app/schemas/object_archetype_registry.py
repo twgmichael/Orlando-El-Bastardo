@@ -92,6 +92,7 @@ class ArchetypeGeometryRecipe(BaseModel):
     status: Literal["planned", "available"]
     compiler: str | None = None
     description: str
+    defaults: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"extra": "allow"}
 

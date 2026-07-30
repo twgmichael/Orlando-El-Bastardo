@@ -53,7 +53,8 @@ def test_registry_v1_loads_tracked_vehicle_knowledge():
 
     assert registry.schema_version == "1.0"
     assert registry.registry_version == "1.0.0"
-    assert {recipe.status for recipe in registry.geometry_recipes} == {"planned"}
+    assert {recipe.status for recipe in registry.geometry_recipes} == {"available"}
+    assert all(recipe.compiler for recipe in registry.geometry_recipes)
     assert archetype.id == "tracked_vehicle_v1"
     assert archetype.root_role == "vehicle_root"
     assert {
@@ -206,18 +207,46 @@ def test_pipeline_blocks_incomplete_tracked_vehicle_before_flat_fallback():
     assert pipeline_allows_job_submission(result) is False
 
 
-def test_pipeline_preserves_grounding_but_blocks_unimplemented_recipes():
+def test_pipeline_compiles_grounded_tracked_vehicle_with_shared_recipes():
     result = compile_studio_chat_build_pipeline(
         "Build an army tank.",
         _pipeline_response(_valid_intent()),
     )
 
-    assert result.outcome == "unsupported"
-    assert result.diagnostics[0].code == "archetype_geometry_recipes_unavailable"
+    assert result.outcome == "compiled"
+    assert result.diagnostics[0].code == "build_plan_compiled"
     assert result.object_archetype["id"] == "tracked_vehicle_v1"
     assert result.object_archetype["family"] == "tracked_vehicle"
-    unavailable = result.diagnostics[0].details["unavailable_geometry_recipes"]
-    assert "barrel_assembly" in unavailable
+    assert result.resolver["source"] == "hierarchical_geometry_recipe_compiler"
+    assert {
+        "compound_body",
+        "attached_directional",
+        "mirrored_system",
+        "repeated_array",
+    }.issubset(set(result.resolver["used_executors"]))
+    assert pipeline_allows_job_submission(result) is True
+
+
+def test_pipeline_blocks_invalid_recipe_parameters_before_job_submission():
+    source = _valid_intent()
+    hull = next(part for part in source["parts"] if part["id"] == "hull")
+    hull["metadata"] = {
+        "recipe_parameters": {"primitive_type": "named_object_mesh"}
+    }
+
+    result = compile_studio_chat_build_pipeline(
+        "Build an army tank.",
+        _pipeline_response(source),
+    )
+
+    assert result.outcome == "needs_repair"
+    assert (
+        result.diagnostics[0].code
+        == "hierarchical_geometry_recipe_compile_failed"
+    )
+    errors = result.diagnostics[0].details["errors"]
+    assert errors[0]["code"] == "geometry_recipe_parameters_invalid"
+    assert errors[0]["part_id"] == "hull"
     assert pipeline_allows_job_submission(result) is False
 
 

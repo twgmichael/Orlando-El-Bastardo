@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "object_family": "observation_structure",
+  "root_part_id": "structure",
+  "required_roles": ["root", "base", "dome", "braces", "lights", "levels", "antenna"],
+  "parts": [
+    {
+      "id": "structure",
+      "name": "Observation Structure",
+      "role": "root",
+      "parent_id": null,
+      "children": ["base"],
+      "shape_family": "assembly",
+      "geometry_strategy": "group",
+      "dimensions": {"size": [5.0, 5.0, 12.0]},
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "base",
+      "name": "Compound Foundation",
+      "role": "base",
+      "parent_id": "structure",
+      "children": ["dome", "braces", "levels"],
+      "shape_family": "compound_body",
+      "geometry_strategy": "compound_body",
+      "dimensions": {"relative_to": "structure", "ratio": [0.72, 0.72, 0.18]},
+      "attachment": {"parent_id": "structure", "anchor": "bottom_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "stone"
+    },
+    {
+      "id": "dome",
+      "name": "Observation Dome",
+      "role": "dome",
+      "parent_id": "base",
+      "children": ["antenna"],
+      "shape_family": "rounded_shell",
+      "geometry_strategy": "shaped_shell",
+      "dimensions": {"relative_to": "base", "ratio": [0.72, 0.72, 0.62]},
+      "attachment": {"parent_id": "base", "anchor": "top_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "glass"
+    },
+    {
+      "id": "braces",
+      "name": "Mirrored Braces",
+      "role": "braces",
+      "parent_id": "base",
+      "children": ["lights"],
+      "shape_family": "brace_system",
+      "geometry_strategy": "mirrored_system",
+      "dimensions": {"relative_to": "base", "ratio": [0.42, 1.2, 1.8]},
+      "attachment": {"parent_id": "base", "anchor": "center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "mirror", "count": 2, "axis": "right"},
+      "material": "metal"
+    },
+    {
+      "id": "lights",
+      "name": "Radial Safety Lights",
+      "role": "lights",
+      "parent_id": "braces",
+      "children": [],
+      "shape_family": "light",
+      "geometry_strategy": "repeated_array",
+      "dimensions": {"relative_to": "braces", "ratio": [0.08, 0.08, 0.08]},
+      "attachment": {"parent_id": "braces", "anchor": "top_center", "contact_required": false},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "radial", "count": 6, "axis": "up"},
+      "metadata": {"recipe_parameters": {"primitive_type": "sphere", "radius": 0.7}},
+      "material": "yellow"
+    },
+    {
+      "id": "levels",
+      "name": "Observation Levels",
+      "role": "levels",
+      "parent_id": "base",
+      "children": [],
+      "shape_family": "stack",
+      "geometry_strategy": "stacked_sections",
+      "dimensions": {"relative_to": "base", "ratio": [0.52, 0.52, 3.6]},
+      "attachment": {"parent_id": "base", "anchor": "top_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "metadata": {"recipe_parameters": {"sections": 4, "primitive_type": "cylinder"}},
+      "material": "metal"
+    },
+    {
+      "id": "antenna",
+      "name": "Directional Antenna",
+      "role": "antenna",
+      "parent_id": "dome",
+      "children": [],
+      "shape_family": "mast",
+      "geometry_strategy": "attached_directional",
+      "dimensions": {"relative_to": "dome", "ratio": [0.16, 0.16, 1.4]},
+      "attachment": {"parent_id": "dome", "anchor": "top_center", "contact_required": true},
+      "orientation": {"forward": "up", "up": "front"},
+      "material": "metal"
+    }
+  ]
+}

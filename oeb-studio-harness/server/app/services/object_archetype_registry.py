@@ -15,6 +15,9 @@ from app.schemas.object_archetype_registry import (
     ObjectArchetype,
     ObjectArchetypeRegistry,
 )
+from app.services.geometry_recipe_compiler import (
+    SUPPORTED_GEOMETRY_RECIPE_EXECUTORS,
+)
 
 
 DEFAULT_OBJECT_ARCHETYPE_REGISTRY_PATH = (
@@ -42,6 +45,14 @@ def _validate_registry_integrity(registry: ObjectArchetypeRegistry) -> None:
         if recipe.status == "available" and not recipe.compiler:
             raise ValueError(
                 f"available geometry recipe '{recipe.id}' requires a compiler"
+            )
+        if (
+            recipe.status == "available"
+            and recipe.compiler not in SUPPORTED_GEOMETRY_RECIPE_EXECUTORS
+        ):
+            raise ValueError(
+                f"geometry recipe '{recipe.id}' references unknown compiler "
+                f"'{recipe.compiler}'"
             )
 
     archetype_ids: set[str] = set()
@@ -152,6 +163,8 @@ def unavailable_geometry_recipes(
                 part.geometry_strategy not in recipe_by_id
                 or recipe_by_id[part.geometry_strategy].status != "available"
                 or not recipe_by_id[part.geometry_strategy].compiler
+                or recipe_by_id[part.geometry_strategy].compiler
+                not in SUPPORTED_GEOMETRY_RECIPE_EXECUTORS
             )
         )
     }

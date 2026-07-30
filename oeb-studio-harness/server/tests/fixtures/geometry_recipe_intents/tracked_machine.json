@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0",
+  "object_family": "tracked_machine",
+  "root_part_id": "machine",
+  "required_roles": ["root", "body", "shell", "side_system", "rollers", "sections", "tool"],
+  "parts": [
+    {
+      "id": "machine",
+      "name": "Tracked Machine",
+      "role": "root",
+      "parent_id": null,
+      "children": ["body"],
+      "shape_family": "assembly",
+      "geometry_strategy": "group",
+      "dimensions": {"size": [6.0, 3.4, 3.2]},
+      "orientation": {"forward": "front", "up": "up"}
+    },
+    {
+      "id": "body",
+      "name": "Compound Body",
+      "role": "body",
+      "parent_id": "machine",
+      "children": ["shell", "side_system", "sections"],
+      "shape_family": "compound_body",
+      "geometry_strategy": "compound_body",
+      "dimensions": {"relative_to": "machine", "ratio": [0.84, 0.68, 0.38]},
+      "attachment": {"parent_id": "machine", "anchor": "center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "metal"
+    },
+    {
+      "id": "shell",
+      "name": "Upper Shell",
+      "role": "shell",
+      "parent_id": "body",
+      "children": ["tool"],
+      "shape_family": "rounded_shell",
+      "geometry_strategy": "shaped_shell",
+      "dimensions": {"relative_to": "body", "ratio": [0.48, 0.56, 0.42]},
+      "attachment": {"parent_id": "body", "anchor": "top_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "metal"
+    },
+    {
+      "id": "side_system",
+      "name": "Mirrored Side System",
+      "role": "side_system",
+      "parent_id": "body",
+      "children": ["rollers"],
+      "shape_family": "side_envelope",
+      "geometry_strategy": "mirrored_system",
+      "dimensions": {"relative_to": "body", "ratio": [0.94, 1.22, 0.42]},
+      "attachment": {"parent_id": "body", "anchor": "bottom_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "mirror", "count": 2, "axis": "right"},
+      "material": "black"
+    },
+    {
+      "id": "rollers",
+      "name": "Linear Rollers",
+      "role": "rollers",
+      "parent_id": "side_system",
+      "children": [],
+      "shape_family": "roller",
+      "geometry_strategy": "repeated_array",
+      "dimensions": {"relative_to": "side_system", "ratio": [0.12, 0.52, 0.54]},
+      "attachment": {"parent_id": "side_system", "anchor": "inside", "contact_required": false},
+      "orientation": {"forward": "front", "up": "up"},
+      "repetition": {"mode": "linear", "count": 6, "axis": "front", "spacing": 0.62},
+      "metadata": {"recipe_parameters": {"item_axis": "right"}},
+      "material": "gray"
+    },
+    {
+      "id": "sections",
+      "name": "Stacked Rear Sections",
+      "role": "sections",
+      "parent_id": "body",
+      "children": [],
+      "shape_family": "stack",
+      "geometry_strategy": "stacked_sections",
+      "dimensions": {"relative_to": "body", "ratio": [0.28, 0.34, 0.9]},
+      "attachment": {"parent_id": "body", "anchor": "rear_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "metadata": {"recipe_parameters": {"sections": 3}},
+      "material": "metal"
+    },
+    {
+      "id": "tool",
+      "name": "Directional Tool",
+      "role": "tool",
+      "parent_id": "shell",
+      "children": [],
+      "shape_family": "shaft",
+      "geometry_strategy": "attached_directional",
+      "dimensions": {"relative_to": "shell", "ratio": [1.35, 0.12, 0.12]},
+      "attachment": {"parent_id": "shell", "anchor": "front_center", "contact_required": true},
+      "orientation": {"forward": "front", "up": "up"},
+      "material": "metal"
+    }
+  ]
+}
