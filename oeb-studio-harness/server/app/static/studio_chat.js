@@ -1542,15 +1542,56 @@
     setStatus("Waiting for local model...");
     renderTranscript();
     try {
-      const response = await fetchJson("/api/v1/studio-chat/chat", {
+      let response = await fetchJson("/api/v1/studio-chat/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      let assistantResponse = parseAssistantResponse(response.message.content);
+      let assistantJson = assistantResponse.parsed;
+      if (
+        !activeAsset()
+        && assistantJson
+        && typeof assistantJson === "object"
+        && (
+          String(assistantJson.action || "").toLowerCase() === "edit_asset"
+          || (assistantJson.asset_edit_request && typeof assistantJson.asset_edit_request === "object")
+        )
+      ) {
+        const routeRepairPayload = {
+          ...payload,
+          system_prompt: [
+            els.systemPrompt.value,
+            "ROUTING REPAIR OVERRIDE:",
+            "No active asset exists in this thread.",
+            "The previous edit_asset response is invalid in this context.",
+            "Return build_asset with asset_intent for the newest user request.",
+            "Do not return edit_asset, asset_edit_request, or refer to an earlier asset.",
+            "Preserve the requested shape, count, material, orientation, and relationships.",
+            "Return JSON only.",
+          ].join("\n"),
+          messages: [
+            { role: "user", content },
+            { role: "assistant", content: response.message.content },
+            {
+              role: "user",
+              content: "Repair the routing error as a fresh asset build. Return build_asset JSON only.",
+            },
+          ],
+          temperature: Math.min(Number(els.temperature.value), 0.1),
+        };
+        state.raw.route_repair_request = routeRepairPayload;
+        response = await fetchJson("/api/v1/studio-chat/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(routeRepairPayload),
+        });
+        state.raw.route_repair_response = response.raw;
+        assistantResponse = parseAssistantResponse(response.message.content);
+        assistantJson = assistantResponse.parsed;
+      }
       state.raw.response = response.raw;
       state.awaitingAssistant = false;
-      const assistantResponse = parseAssistantResponse(response.message.content);
-      const assistantJson = assistantResponse.parsed;
       const control = assistantControl({
         role: "assistant",
         content: response.message.content,
@@ -1588,6 +1629,16 @@
         if (!edited) {
           if (activeAsset()) {
             await repairActiveAssetEdit(assistantMessage, assistantJson);
+          } else if (
+            assistantJson
+            && typeof assistantJson === "object"
+            && (
+              String(assistantJson.action || "").toLowerCase() === "edit_asset"
+              || (assistantJson.asset_edit_request && typeof assistantJson.asset_edit_request === "object")
+            )
+          ) {
+            showError("The local model returned an asset edit after the bounded build-route repair; no job was submitted.");
+            setStatus("Build routing needs clarification");
           } else {
             await createBuildJob({ auto: true });
           }

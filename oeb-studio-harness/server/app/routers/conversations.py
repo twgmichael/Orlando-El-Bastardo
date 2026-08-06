@@ -20,158 +20,22 @@ from app.schemas.conversation import (
     PrimitiveBuildSpec,
 )
 from app.schemas.job import JobSummary
+from app.services.studio_chat import (
+    default_components_for as _default_components_for,
+    infer_kind as _infer_kind,
+    is_aircraft_request as _is_aircraft_request,
+    preserved_shape_phrase as _preserved_shape_phrase,
+    slug_kind_prefix as _slug_kind_prefix,
+    slugify_asset_id as _slugify_asset_id,
+    text_has_any as _text_has_any,
+)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
-FIGHTER_COMPONENTS = [
-    "wedge nose",
-    "compact dark cockpit",
-    "low main hull",
-    "two swept wings",
-    "two large rear engines",
-    "crooked tail fin",
-    "asymmetric greebles",
-]
-AIRCRAFT_COMPONENTS = [
-    "long aircraft fuselage",
-    "front nose cone",
-    "left wing",
-    "right wing",
-    "tail fin",
-    "rear engine",
-]
-TWO_WHEELED_VEHICLE_COMPONENTS = [
-    "front wheel",
-    "rear wheel",
-    "low vehicle frame",
-    "engine block",
-    "single saddle seat",
-    "handlebars",
-]
-
-STATION_COMPONENTS = [
-    "central habitat hub",
-    "large observation window",
-    "outer ring modules",
-    "four docking arms",
-    "antenna mast",
-    "solar panel arrays",
-]
-
-OFFICE_COMPONENTS = [
-    "office floor",
-    "back wall",
-    "desk",
-    "large window",
-    "lamp",
-    "two chairs",
-]
-
-PARK_COMPONENTS = [
-    "grass ground",
-    "walking path",
-    "four trees",
-    "park bench",
-]
-
-
-SLUG_SKIP_WORDS = {
-    "a", "an", "the", "me", "make", "build", "create", "from", "with", "of",
-    "and", "that", "looks", "look", "like", "as", "one",
-}
-
-
-def _preserved_shape_phrase(text: str) -> str:
-    lowered = text.lower()
-    if match := re.search(r"\bcapital\s+letter\s+([a-z0-9])\b", lowered):
-        return f"capital_letter_{match.group(1)}"
-    if match := re.search(r"\bletter\s+([a-z0-9])\b", lowered):
-        return f"letter_{match.group(1)}"
-    if match := re.search(r"\bshaped\s+like\s+(?:a|an|the)?\s*([a-z0-9]+)\b", lowered):
-        shape = match.group(1)
-        return f"{shape}_shaped"
-    if match := re.search(r"\blooks?\s+like\s+(?:a|an|the)?\s*([a-z0-9]+)\b", lowered):
-        shape = match.group(1)
-        if shape not in SLUG_SKIP_WORDS:
-            return f"{shape}_shaped" if len(shape) == 1 else shape
-    return ""
-
-
-def _slug_kind_prefix(text: str) -> str:
-    if _text_has_any(text, ("ship", "spaceship", "fighter", "craft")):
-        return "ship"
-    return {
-        "vehicle": "vehicle",
-        "location": "location",
-        "prop": "prop",
-        "character": "character",
-        "set": "location",
-    }.get(_infer_kind(text), "asset")
-
-
-def _slugify_asset_id(text: str) -> str:
-    prefix = _slug_kind_prefix(text)
-    shape = _preserved_shape_phrase(text)
-    if shape:
-        return f"{prefix}_{shape}_A"
-
-    words = re.findall(r"[a-z0-9]+", text.lower())
-    prefix_object_words = {
-        "ship": {"ship", "spaceship", "fighter", "craft"},
-        "vehicle": {"vehicle"},
-        "location": {"location", "scene", "set"},
-        "prop": {"prop"},
-        "character": {"character", "char"},
-        "asset": {"asset"},
-    }.get(prefix, set())
-    useful = [
-        w for w in words
-        if w not in SLUG_SKIP_WORDS and w not in prefix_object_words
-    ]
-    stem = "_".join(useful[:4]) or "primitive_asset"
-    return f"{prefix}_{stem}_A"
-
-
-def _text_has_any(text: str, words: tuple[str, ...]) -> bool:
-    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
-    return any(word in tokens for word in words)
-
-
-def _is_aircraft_request(text: str) -> bool:
-    tokens = set(re.findall(r"[a-z0-9]+", text.lower()))
-    if tokens & {"aircraft", "airplane", "aeroplane", "jet", "biplane"}:
-        return True
-    surface_qualifiers = {"floor", "ground", "geometric", "geometry", "flat", "math", "mathematical"}
-    return "plane" in tokens and not (tokens & surface_qualifiers)
-
-
-def _infer_kind(creative_request: str) -> str:
-    text = creative_request.lower()
-    if _text_has_any(text, ("office", "park", "room", "street", "alley", "forest", "set", "location", "bay", "clinic", "medical", "lab", "garage", "hangar")):
-        return "location"
-    if _text_has_any(text, ("chair", "desk", "lamp", "table", "prop", "rack", "shelf")) and not _text_has_any(text, ("room", "office")):
-        return "prop"
-    if _is_aircraft_request(text) or _text_has_any(text, ("ship", "spaceship", "fighter", "vehicle", "craft", "car", "truck", "rover", "motorcycle", "motorbike", "bike")):
-        return "vehicle"
-    return "asset"
-
-
-def _default_components_for(creative_request: str) -> list[str]:
-    text = creative_request.lower()
-    if _text_has_any(text, ("office", "desk", "chair", "lamp", "workspace")):
-        return OFFICE_COMPONENTS
-    if _text_has_any(text, ("park", "tree", "path", "trail", "bench", "grass", "garden")):
-        return PARK_COMPONENTS
-    station_words = ("station", "orbital", "habitat", "window", "ring", "dock", "solar")
-    if any(word in text for word in station_words):
-        return STATION_COMPONENTS
-    if _is_aircraft_request(text):
-        return AIRCRAFT_COMPONENTS
-    if _text_has_any(text, ("motorcycle", "motorbike", "bike")) and not _text_has_any(text, ("rack", "stand")):
-        return TWO_WHEELED_VEHICLE_COMPONENTS
-    if _infer_kind(creative_request) == "vehicle":
-        return FIGHTER_COMPONENTS
-    return ["primary structure", "secondary feature", "detail element"]
+# Component lists, SLUG_SKIP_WORDS, and the heuristic functions used to be
+# duplicated here byte-for-byte from app.services.studio_chat. Consolidated
+# to the single canonical implementation imported above so the two callers
+# can't drift again; see docs/planning/REVIEW-AUDIT.md section 9.
 
 
 def _normalize_spec_for_request(creative_request: str, spec: PrimitiveBuildSpec) -> PrimitiveBuildSpec:

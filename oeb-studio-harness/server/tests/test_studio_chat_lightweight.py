@@ -50,6 +50,7 @@ def test_lightweight_presets_include_oeb_translator_boundaries():
     assert "Treat the newest user prompt as controlling" in asset_builder.system_prompt
     assert "For semantic forms such as letters" in asset_builder.system_prompt
     assert "asset_edit_request instead of a fresh asset" in asset_builder.system_prompt
+    assert "When no active_asset context is supplied, NEVER return edit_asset" in asset_builder.system_prompt
     assert '"relationships"' in asset_builder.system_prompt
     assert "small buildable primitive jobs" not in asset_builder.system_prompt
     assert "asset_intent may be rich and descriptive" in asset_builder.system_prompt

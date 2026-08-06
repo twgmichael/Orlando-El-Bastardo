@@ -411,6 +411,62 @@ GPU-accelerated review-render jobs completed end-to-end.
   render devices fail, remove or mark degraded capabilities before the worker
   can claim GPU-required jobs.
 - [x] Add `pyproject.toml` to worker for clean `pip install -e .` installs
+- [ ] Document the local Docker test stack — the "Docker-backed server test
+  suite" referenced throughout the Studio Chat milestones above runs via the
+  `oeb-studio-harness-local` compose project in the sibling
+  `Orlando-El-Bastardo.docker/` directory (kept out of this repo
+  intentionally; see its README for start/stop/reset and local tokens). That
+  directory was never linked from here, so the practice was easy to
+  rediscover but not to find cold. This entry is that link:
+  `../Orlando-El-Bastardo.docker/README.md`. Includes Postgres 17 + the
+  FastAPI harness with `--reload` against a live bind mount of
+  `oeb-studio-harness/server`, so `docker exec oeb_studio_harness_local_api
+  python -m pytest` runs the full suite against the real DB.
+- [ ] Build a real auth story for the local Studio Chat browser UI —
+  `routers/studio_chat.py` has 34 of 35 endpoints with no auth dependency
+  (only the legacy bare `POST /studio-chat` uses `Depends(require_admin)`),
+  which is a real outlier versus every other data-mutating router in this
+  app (jobs/assets/artifacts/projects/workers/conversations all gate ~100%
+  of endpoints). Root cause: `studio_chat.js` sends no `Authorization`
+  header, and no client-side token pattern exists anywhere in this app yet
+  — the unauthenticated routers today are consistently the browser-facing
+  ones. Needs: a token issuance path, client-side storage (e.g. prompt once
+  and keep in `localStorage`), and `studio_chat.js` changes to attach it on
+  every request, then gate the 34 endpoints the same way the rest of the
+  app already does. Left undone intentionally for now — do not add auth to
+  these endpoints without also shipping the client-side token flow, or the
+  working local chat UI breaks.
+- [ ] Have Blueprint execution write dual artifacts, not just glTF — a
+  `.blend` (the editable Canonical Asset) alongside the `.glb` (the
+  Production Variant the main pipeline's exporters consume). `StudioChatAsset`
+  already has `source_blend_path` and `glb_path` columns
+  (`app/models/studio_chat.py:119-120`) anticipating exactly this pattern,
+  but nothing general-purpose populates them today. Open item 2 from
+  `docs/planning/REVIEW-AUDIT.md` section 13's "Concrete scope" list —
+  needed before the registration step in section 14 has a `.blend` to
+  preserve as the editable master, not just a rendered `.glb`.
+- [ ] Confirm how `oeb.config.json` asset entries' `kind` field
+  (`prop`/`character`/`set`) is actually consumed downstream by
+  `export_blender.py`/`export_godot.py` before finalizing the kind mapping
+  needed to register Studio Chat–built assets there. Studio Chat's own
+  kind inference produces a wider set (`asset`/`location`/`prop`/
+  `vehicle`/`character`/`set`, plus a `ship_` canonical-ID prefix) than the
+  registry's three values. Working assumption is `location` → `set` and
+  `vehicle`/`ship`/generic `asset` → `prop`, but whether `vehicle`/`ship`
+  need their own registry `kind` (if the exporters place/animate vehicles
+  differently from static props) is unconfirmed. Open item 3 from
+  `docs/planning/REVIEW-AUDIT.md` section 14 — blocks making the
+  Studio-Chat-to-main-pipeline asset registration step in that section
+  fully automatic.
+- [ ] USD-native Blueprint construction — parked, not a build task yet.
+  Decision: build Blueprint geometry once via the Blender path only; let
+  `export_usd.py`'s existing glb→usdc conversion carry USD output, same as
+  every other asset today. Do not build a second Blueprint interpreter
+  targeting USD directly. Revisit only if a real need surfaces that
+  Blender's operator set can't express (a procedural USD-specific
+  feature). Open item 4 from `docs/planning/REVIEW-AUDIT.md` section 13's
+  "Concrete scope" list — recorded here so the deferral and its trigger
+  condition aren't lost, not because there's near-term work to do.
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
   - [ ] `tools/agent_bus.py` (file/claim/report/block/query verbs + payload schema)

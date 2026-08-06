@@ -500,6 +500,19 @@ def scene_object_category(obj):
         return "wall_panel" if has_any(tokens, ("panel", "plate")) else "table"
     if category == "machine" and has_any(tokens, ("engine", "motor", "thruster", "exhaust", "nozzle")):
         return "vehicle_engine"
+    # The scene_plan_prompt schema (services/studio_chat.py) asks the LLM for
+    # an explicit category from a fixed enum that includes "seating" and
+    # "storage" alongside "surface"/"screen"/"lighting" above. Route those
+    # the same way -- to the existing make_chair/make_cabinet recipes --
+    # instead of falling through to the label-text guess below, which
+    # previously discarded this part of the LLM's structured output for
+    # every seating/storage object regardless of what it was named.
+    if category == "seating":
+        return "chair"
+    if category == "storage":
+        return "cabinet"
+    if category == "bed":
+        return "bed"
     return category_for_name(label, None)
 
 
@@ -951,6 +964,12 @@ def primitive_for_scene_object(obj, idx, mat):
                 rounded=object_has_detail(obj, ("rounded", "rounded_corners")),
                 thin_legs=object_has_detail(obj, ("thin_legs", "thin")),
             ))
+        elif category == "chair":
+            objects.extend(make_chair(obj_name, x, y, mat))
+        elif category == "cabinet":
+            objects.extend(make_cabinet(obj_name, x, y, mat))
+        elif category == "bed":
+            objects.extend(make_bed(obj_name, x, y, mat))
         else:
             objects.extend(primitive_for_component(" ".join(tokens) or name, idx, mat))
 

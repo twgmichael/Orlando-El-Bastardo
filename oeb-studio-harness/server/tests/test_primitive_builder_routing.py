@@ -1,4 +1,5 @@
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
@@ -6,12 +7,39 @@ from pathlib import Path
 import pytest
 
 
+def _find_primitive_builder_path() -> Path:
+    """Locate tools/primitive_asset_builder.py across run environments.
+
+    Checked in order: an explicit env override, the Docker container's
+    read-only /tools mount (see Orlando-El-Bastardo.docker/compose.yml),
+    then walking up from this file to find a sibling `tools/` directory
+    (bare host checkout, any nesting depth).
+    """
+    env_override = os.environ.get("OEB_TOOLS_DIR")
+    candidates = []
+    if env_override:
+        candidates.append(Path(env_override) / "primitive_asset_builder.py")
+    candidates.append(Path("/tools/primitive_asset_builder.py"))
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent / "tools" / "primitive_asset_builder.py")
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not locate tools/primitive_asset_builder.py. Set OEB_TOOLS_DIR "
+        "to its containing directory if running outside the repo checkout or "
+        "the oeb-studio-harness-local Docker stack."
+    )
+
+
 def load_builder_module():
     sys.modules.setdefault("bpy", types.SimpleNamespace())
     sys.modules.setdefault("mathutils", types.SimpleNamespace(Vector=lambda value: value))
     spec = importlib.util.spec_from_file_location(
         "primitive_asset_builder_for_test",
-        Path("/tools/primitive_asset_builder.py"),
+        _find_primitive_builder_path(),
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -520,3 +548,38 @@ def test_canonical_camera_views_match_oeb_axes():
     assert views["right"]["location"] == (0, 6.4, 0.45)
     assert views["top"]["location"] == (0, 0, 6.4)
     assert views["bottom"]["location"] == (0, 0, -6.4)
+
+
+def test_scene_object_category_maps_llm_schema_enum_to_recipes():
+    # scene_plan_prompt's schema (services/studio_chat.py) asks the LLM for
+    # category from a fixed enum including "seating"/"storage"/"bed". These
+    # must route to the matching make_chair/make_cabinet/make_bed recipes,
+    # not fall through to guessing a category from the object's label text.
+    builder = load_builder_module()
+
+    assert builder.scene_object_category({"category": "seating", "label": "anything"}) == "chair"
+    assert builder.scene_object_category({"category": "storage", "label": "anything"}) == "cabinet"
+    assert builder.scene_object_category({"category": "bed", "label": "anything"}) == "bed"
+
+
+def test_seating_storage_bed_scene_objects_dispatch_to_matching_recipes(monkeypatch):
+    builder = load_builder_module()
+    calls = []
+
+    monkeypatch.setattr(builder, "make_chair", lambda name, x, y, mat: calls.append(("chair", name)) or [])
+    monkeypatch.setattr(builder, "make_cabinet", lambda name, x, y, mat: calls.append(("cabinet", name)) or [])
+    monkeypatch.setattr(builder, "make_bed", lambda name, x, y, mat: calls.append(("bed", name)) or [])
+
+    mats = {"wood": object(), "metal": object(), "neutral": object(), "dark": object(), "soft": object()}
+
+    builder.primitive_for_scene_object(
+        {"id": "office_chair", "label": "office chair", "category": "seating", "count": 1}, 0, mats,
+    )
+    builder.primitive_for_scene_object(
+        {"id": "storage_locker", "label": "storage locker", "category": "storage", "count": 1}, 1, mats,
+    )
+    builder.primitive_for_scene_object(
+        {"id": "guest_bed", "label": "guest bed", "category": "bed", "count": 1}, 2, mats,
+    )
+
+    assert [entry[0] for entry in calls] == ["chair", "cabinet", "bed"]

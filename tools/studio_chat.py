@@ -4,6 +4,14 @@ Proving client for the conversation-to-build loop.
 
 The durable interface is the harness API. This CLI is the first thin client:
 creative sentence -> local Ollama JSON spec -> /api/v1/conversations/jobs.
+
+This file intentionally does not import app.services.studio_chat (the
+canonical heuristic implementation): it's a stdlib-only script meant to run
+without the FastAPI server's dependencies installed, for offline/no-server
+use via --legacy-local-intake. Its request-classification helpers below are
+therefore a deliberate, tracked exception to consolidation, not oversight
+duplication -- see docs/planning/REVIEW-AUDIT.md section 9. Keep changes to
+the canonical copy and this one in sync by hand.
 """
 
 import argparse
@@ -100,6 +108,10 @@ def request_wants_park(request: str, spec: dict | None = None) -> bool:
     return text_has_any(request_text(request, spec), ("park", "tree", "path", "trail", "bench", "grass", "garden"))
 
 
+def request_wants_motorcycle(request: str, spec: dict | None = None) -> bool:
+    return text_has_any(request_text(request, spec), ("motorcycle", "motorbike", "bike"))
+
+
 def default_components_for(request: str, spec: dict | None = None) -> list[str]:
     if request_wants_office(request, spec):
         return OFFICE_COMPONENTS
@@ -107,7 +119,7 @@ def default_components_for(request: str, spec: dict | None = None) -> list[str]:
         return PARK_COMPONENTS
     if request_wants_station(request, spec):
         return STATION_COMPONENTS
-    if text_has_any(text, ("motorcycle", "motorbike", "bike")):
+    if request_wants_motorcycle(request, spec):
         return MOTORCYCLE_COMPONENTS
     if infer_kind(request, spec) == "vehicle":
         return FIGHTER_COMPONENTS

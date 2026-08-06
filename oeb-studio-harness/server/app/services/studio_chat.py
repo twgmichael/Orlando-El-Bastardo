@@ -93,8 +93,10 @@ Use asset_intent.semantic_geometry and/or asset_intent.construction_graph.
 When using construction_graph, return generic stroke elements with from/to
 coordinates, thickness, material, and role. The harness compiles those strokes;
 you are not writing Blender code.
-When an active_asset context is supplied and the user asks for a follow-up edit
-to that existing asset, ALWAYS return asset_edit_request instead of a fresh asset
+When no active_asset context is supplied, NEVER return edit_asset or
+asset_edit_request; return a fresh build for the newest user request. Only when
+an active_asset context is supplied and the user asks for a follow-up edit to
+that existing asset, ALWAYS return asset_edit_request instead of a fresh asset
 build. This includes short follow-ups such as "center the two objects",
 "cut the sphere in half", "move it right", and "make the dome face down".
 Preserve the active asset_id and use base_revision from the active asset. Do
