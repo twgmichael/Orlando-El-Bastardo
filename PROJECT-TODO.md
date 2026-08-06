@@ -445,19 +445,20 @@ GPU-accelerated review-render jobs completed end-to-end.
   `docs/planning/REVIEW-AUDIT.md` section 13's "Concrete scope" list —
   needed before the registration step in section 14 has a `.blend` to
   preserve as the editable master, not just a rendered `.glb`.
-- [ ] Confirm how `oeb.config.json` asset entries' `kind` field
-  (`prop`/`character`/`set`) is actually consumed downstream by
-  `export_blender.py`/`export_godot.py` before finalizing the kind mapping
-  needed to register Studio Chat–built assets there. Studio Chat's own
-  kind inference produces a wider set (`asset`/`location`/`prop`/
-  `vehicle`/`character`/`set`, plus a `ship_` canonical-ID prefix) than the
-  registry's three values. Working assumption is `location` → `set` and
-  `vehicle`/`ship`/generic `asset` → `prop`, but whether `vehicle`/`ship`
-  need their own registry `kind` (if the exporters place/animate vehicles
-  differently from static props) is unconfirmed. Open item 3 from
-  `docs/planning/REVIEW-AUDIT.md` section 14 — blocks making the
-  Studio-Chat-to-main-pipeline asset registration step in that section
-  fully automatic.
+- [x] RESOLVED — how `oeb.config.json` asset entries' `kind` field
+  (`prop`/`character`/`set`) is consumed downstream. Confirmed by direct
+  code search: `kind` is not read by `export_blender.py`, `export_godot.py`,
+  or `export_usd.py` at all. The only downstream consumer was
+  `tools/validate_spec.py`'s `unknown_audio` check (`kind == 'audio'`),
+  which has since been removed (audio isn't part of the studio yet — see
+  the "Remove unused audio validator" commit). With that gone, `kind` is
+  purely descriptive registry metadata with no exporter behavior riding on
+  it. The kind mapping for registering Studio Chat–built assets is now
+  final: `location` → `set`, `vehicle`/`ship`/generic `asset` → `prop`,
+  `character` → `character`. Was open item 3 from
+  `docs/planning/REVIEW-AUDIT.md` section 14; no longer blocks the
+  Studio-Chat-to-main-pipeline asset registration step in that section from
+  being fully automatic.
 - [ ] USD-native Blueprint construction — parked, not a build task yet.
   Decision: build Blueprint geometry once via the Blender path only; let
   `export_usd.py`'s existing glb→usdc conversion carry USD output, same as
