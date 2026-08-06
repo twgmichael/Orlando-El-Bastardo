@@ -9,6 +9,7 @@ renders
 out
 scene_versions/
 review-stills/
+oeb-studio-harness/worker/artifacts/
 .DS_Store
 .claude/settings.local.json
 docs/local/
