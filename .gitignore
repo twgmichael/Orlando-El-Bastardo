@@ -7,6 +7,8 @@ assets/
 __pycache__/
 renders
 out
+scene_versions/
+review-stills/
 .DS_Store
 .claude/settings.local.json
 docs/local/
