@@ -32,7 +32,6 @@
             "unknown_camera",
             "unknown_mark",
             "unknown_asset",
-            "unknown_audio",
             "duplicate_id",
             "cue_out_of_bounds",
             "shot_overlap",

@@ -366,22 +366,6 @@ def _run_checks(spec, config, grammar, scenespec_schema, asset_root):
                         "path": f"/shots/{i}/cues/{j}",
                     })
 
-    # ── V8: unknown_audio ───────────────────────────────────────────────────
-    for i, shot in enumerate(spec.get('shots', [])):
-        for j, cue in enumerate(shot.get('cues', [])):
-            if cue.get('type') == 'audio':
-                aid = cue.get('asset_id')
-                if isinstance(aid, str):
-                    if aid not in assets or assets[aid].get('kind') != 'audio':
-                        errors.append({
-                            "code": "unknown_audio",
-                            "message": (
-                                f"audio asset_id '{aid}' not found in "
-                                f"oeb.config.json with kind='audio'"
-                            ),
-                            "path": f"/shots/{i}/cues/{j}",
-                        })
-
     # ── V9: cue_out_of_bounds ───────────────────────────────────────────────
     for i, shot in enumerate(spec.get('shots', [])):
         shot_len = shot.get('end_time', 0.0) - shot.get('start_time', 0.0)

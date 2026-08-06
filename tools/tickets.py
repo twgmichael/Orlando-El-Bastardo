@@ -20,7 +20,7 @@ Only missing-library error classes become tickets:
             E_MISSING_SUBJECT → framing
   validator unknown_clip → clip   unknown_mark → mark
             unknown_camera → camera             unknown_asset → asset
-            unknown_audio → audio               missing_prop_asset → prop
+            missing_prop_asset → prop
 Everything else (schema errors, duplicates, timing, tool crashes) is a
 FAILED scene, not a NEEDED one — improvising the difference is exactly what
 ticketing exists to prevent.
@@ -44,7 +44,6 @@ VALIDATOR_KINDS = {
     "unknown_mark": "mark",
     "unknown_camera": "camera",
     "unknown_asset": "asset",
-    "unknown_audio": "audio",
     "missing_prop_asset": "prop",
 }
 _DETAIL = re.compile(r"'([^']+)'")
