@@ -34,6 +34,7 @@ Blueprint JSON shape (v0.1):
   "canonical_id": "prop_example_A",
   "name": "Example",
   "kind": "prop",
+  "units_per_meter": 1.0,
   "primitives": [
     {
       "id": "body",
@@ -53,6 +54,16 @@ For cylinder/cone, `transform.scale` is read as [radius, radius, depth].
 For torus, [major_radius, minor_radius, unused]. For everything else,
 scale is a literal per-axis scale factor, matching
 tools/oeb_blender/primitives.py's existing conventions.
+
+`units_per_meter` (optional, default 1.0) declares this Blueprint's scale
+reference: how many Blender units equal one real-world meter, i.e. it
+follows Blender's own native 1 unit = 1 meter convention unless a
+Blueprint states otherwise. This does not affect anything primitives
+build here -- it exists so a future relative-edit operation (e.g.
+"move the engine pods 10 centimeters forward") has something to convert
+real-world units against instead of guessing. See
+docs/planning/REVIEW-AUDIT.md section 17's reference-frame addendum.
+Recorded in the build manifest; not yet consumed by any operation.
 
 Run by headless Blender:
   blender --background --python tools/blueprint_interpreter.py -- \\
@@ -259,6 +270,7 @@ def main():
         "canonical_id": blueprint["canonical_id"],
         "name": blueprint.get("name"),
         "kind": blueprint.get("kind"),
+        "units_per_meter": blueprint.get("units_per_meter", 1.0),
         "primitives": [p["id"] for p in blueprint.get("primitives", [])],
         "operations_applied": applied_ops,
         "outputs": {"glb": str(glb_output), "blend": str(blend_output)},

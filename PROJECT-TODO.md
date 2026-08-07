@@ -468,6 +468,27 @@ GPU-accelerated review-render jobs completed end-to-end.
   feature). Open item 4 from `docs/planning/REVIEW-AUDIT.md` section 13's
   "Concrete scope" list — recorded here so the deferral and its trigger
   condition aren't lost, not because there's near-term work to do.
+- [ ] Resolver symmetry fix for `tools/register_studio_chat_asset.py` —
+  small, already fully scoped. `--asset-id` (resolves via a Studio Chat
+  asset's current revision) and `--job-id` (resolves via a directly
+  submitted job's own payload, e.g. from `tools/submit_blueprint_job.py`)
+  should be two independent, first-class, mutually exclusive resolvers
+  that both produce the same `(job_id, canonical_id, kind_hint)` tuple and
+  feed the same shared downstream pipeline (find artifact, download,
+  register) — not `--asset-id` as the "real" path with `--job-id` bolted
+  on as a bypass, which was the initial (corrected) framing. See
+  `docs/planning/REVIEW-AUDIT.md` section 16. Not yet implemented.
+- [ ] Camera/timeline operations for the Blueprint/Operation vocabulary —
+  add `set_camera_keyframe`, `orbit_around`, `dolly_to` as real, validated
+  Operations (position, aim, roll, frame/time; bounded ranges; no
+  discontinuous jumps or inconsistent frame rates), the scene-level
+  siblings to section 16's `adjust_camera`/`add_shot`. Root cause of the
+  "chaotic" hand-written camera moves in the separate OEB title-scene
+  reconstruction session, and the prerequisite for everything else in that
+  discussion (asset-import, the typed reconstruction-plan schema, the
+  automated render-vs-reference comparison loop) — agreed as the top
+  priority of that group. See `docs/planning/REVIEW-AUDIT.md` section 17.
+  Not yet implemented.
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
   - [ ] `tools/agent_bus.py` (file/claim/report/block/query verbs + payload schema)
