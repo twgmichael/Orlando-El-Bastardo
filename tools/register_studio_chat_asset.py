@@ -25,15 +25,31 @@ a payload built by app.routers.conversations._build_job_payload, which
 uses a literal "{job_id}" path template -- it is never substituted back
 into the DB after the job completes. It is not a usable filesystem path
 today. The real, resolved artifact location lives in the Job's Artifact
-records instead, so this script walks: asset -> current revision -> job_id
--> job trace -> the .glb artifact's download URL.
+records instead, so this script always ends up walking: job_id -> job
+trace -> the .glb artifact's download URL.
+
+Two independent, first-class, mutually exclusive resolvers produce that
+job_id (plus a canonical_id and kind hint) before the shared pipeline
+(find artifact, download, register) runs -- see
+docs/planning/REVIEW-AUDIT.md section 16, "Resolver design correction:
+symmetric inputs, not a bypass". Neither is a fallback for the other:
+
+  --asset-id  resolves via a Studio Chat asset's current revision
+              (StudioChatAssetRevision.job_id).
+  --job-id    resolves via a directly-submitted job's own payload
+              (payload.blueprint.canonical_id), e.g. a job submitted by
+              tools/submit_blueprint_job.py that has no Studio Chat
+              asset/revision row at all.
 
 Usage:
-    python3 tools/register_studio_chat_asset.py prop_round_dining_table_rounded_A \\
+    python3 tools/register_studio_chat_asset.py --asset-id prop_round_dining_table_rounded_A \\
+        --harness-url http://localhost:8088 --admin-token local-admin-token
+
+    python3 tools/register_studio_chat_asset.py --job-id 2a0f3cb1-... \\
         --harness-url http://localhost:8088 --admin-token local-admin-token
 
     # Preview without writing anything:
-    python3 tools/register_studio_chat_asset.py <asset_id> --admin-token ... --dry-run
+    python3 tools/register_studio_chat_asset.py --asset-id <id> --admin-token ... --dry-run
 """
 
 from __future__ import annotations
@@ -45,6 +61,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -77,6 +94,53 @@ def kind_for_canonical_id(asset_id: str, override: str | None) -> str:
     # branches on kind for placement/animation, only the now-removed audio
     # validator check ever consumed it.
     return "prop"
+
+
+class BuildResolution(NamedTuple):
+    """What either resolver must produce before the shared pipeline runs."""
+    job_id: str
+    canonical_id: str
+    source_revision: int | None  # informational only; None when resolved via --job-id
+
+
+def resolve_via_asset_id(harness_url: str, admin_token: str, asset_id: str) -> BuildResolution:
+    try:
+        asset_state = _get_json(
+            f"{harness_url}/api/v1/studio-chat/assets/{asset_id}/state", admin_token
+        )
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"Could not fetch asset {asset_id!r}: HTTP {exc.code}") from exc
+
+    current_revision = asset_state["current_revision"]
+    revisions = _get_json(
+        f"{harness_url}/api/v1/studio-chat/assets/{asset_id}/revisions", admin_token
+    )
+    revision = next(
+        (r for r in revisions.get("revisions", []) if r.get("revision") == current_revision),
+        None,
+    )
+    if revision is None or not revision.get("job_id"):
+        raise SystemExit(
+            f"Asset {asset_id!r} revision {current_revision} has no linked job_id "
+            "-- cannot locate its built .glb"
+        )
+    return BuildResolution(job_id=revision["job_id"], canonical_id=asset_id, source_revision=current_revision)
+
+
+def resolve_via_job_id(harness_url: str, admin_token: str, job_id: str) -> BuildResolution:
+    try:
+        job = _get_json(f"{harness_url}/api/v1/jobs/{job_id}", admin_token)
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"Could not fetch job {job_id!r}: HTTP {exc.code}") from exc
+
+    blueprint = (job.get("payload") or {}).get("blueprint") or {}
+    canonical_id = blueprint.get("canonical_id")
+    if not canonical_id:
+        raise SystemExit(
+            f"Job {job_id!r} has no payload.blueprint.canonical_id -- cannot register "
+            "(not a job submitted by tools/submit_blueprint_job.py?)"
+        )
+    return BuildResolution(job_id=job_id, canonical_id=canonical_id, source_revision=None)
 
 
 def find_glb_artifact(harness_url: str, admin_token: str, job_id: str) -> dict:
@@ -112,7 +176,9 @@ def register_in_config(config_path: Path, asset_id: str, rel_file: str, kind: st
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("asset_id", help="Studio Chat canonical_id to register")
+    resolver_group = parser.add_mutually_exclusive_group(required=True)
+    resolver_group.add_argument("--asset-id", help="Resolve via a Studio Chat asset's current revision")
+    resolver_group.add_argument("--job-id", help="Resolve via a directly-submitted job's own payload")
     parser.add_argument("--harness-url", default=os.environ.get("OEB_HARNESS_URL", "http://localhost:8088"))
     parser.add_argument("--admin-token", default=os.environ.get("API_ADMIN_TOKEN", ""), required=False)
     parser.add_argument("--config", default=str(PROJECT_ROOT / "oeb.config.json"))
@@ -130,39 +196,24 @@ def main() -> int:
     if not asset_root.is_absolute():
         asset_root = PROJECT_ROOT / asset_root
 
-    try:
-        asset_state = _get_json(
-            f"{args.harness_url}/api/v1/studio-chat/assets/{args.asset_id}/state", args.admin_token
-        )
-    except urllib.error.HTTPError as exc:
-        raise SystemExit(f"Could not fetch asset '{args.asset_id}': HTTP {exc.code}") from exc
+    if args.asset_id:
+        resolution = resolve_via_asset_id(args.harness_url, args.admin_token, args.asset_id)
+    else:
+        resolution = resolve_via_job_id(args.harness_url, args.admin_token, args.job_id)
 
-    current_revision = asset_state["current_revision"]
-    revisions = _get_json(
-        f"{args.harness_url}/api/v1/studio-chat/assets/{args.asset_id}/revisions", args.admin_token
-    )
-    revision = next(
-        (r for r in revisions.get("revisions", []) if r.get("revision") == current_revision),
-        None,
-    )
-    if revision is None or not revision.get("job_id"):
-        raise SystemExit(
-            f"Asset '{args.asset_id}' revision {current_revision} has no linked job_id "
-            "-- cannot locate its built .glb"
-        )
-
-    artifact = find_glb_artifact(args.harness_url, args.admin_token, revision["job_id"])
-    kind = kind_for_canonical_id(args.asset_id, args.kind)
-    rel_file = f"{KIND_FOLDERS[kind]}/{args.asset_id}.glb"
+    artifact = find_glb_artifact(args.harness_url, args.admin_token, resolution.job_id)
+    kind = kind_for_canonical_id(resolution.canonical_id, args.kind)
+    rel_file = f"{KIND_FOLDERS[kind]}/{resolution.canonical_id}.glb"
     dest = asset_root / rel_file
 
-    print(f"asset_id:  {args.asset_id}")
-    print(f"revision:  {current_revision}  (job {revision['job_id']})")
-    print(f"kind:      {kind}")
-    print(f"artifact:  {artifact['filename']} ({artifact.get('size_bytes', '?')} bytes)")
-    print(f"dest:      {dest}")
-    print(f"registry:  {config_path} -> assets.{args.asset_id} = "
-          f"{{file: {rel_file!r}, node: {args.asset_id!r}, kind: {kind!r}}}")
+    print(f"canonical_id: {resolution.canonical_id}")
+    revision_note = f"revision {resolution.source_revision}" if resolution.source_revision is not None else "direct job"
+    print(f"resolved via: {'--asset-id' if args.asset_id else '--job-id'}  ({revision_note}, job {resolution.job_id})")
+    print(f"kind:         {kind}")
+    print(f"artifact:     {artifact['filename']} ({artifact.get('size_bytes', '?')} bytes)")
+    print(f"dest:         {dest}")
+    print(f"registry:     {config_path} -> assets.{resolution.canonical_id} = "
+          f"{{file: {rel_file!r}, node: {resolution.canonical_id!r}, kind: {kind!r}}}")
 
     if args.dry_run:
         print("(dry run -- nothing written)")
@@ -170,7 +221,7 @@ def main() -> int:
 
     size = download_artifact(args.harness_url, args.admin_token, artifact, dest)
     print(f"Wrote {size} bytes to {dest}")
-    register_in_config(config_path, args.asset_id, rel_file, kind)
+    register_in_config(config_path, resolution.canonical_id, rel_file, kind)
     print(f"Updated {config_path}. Review and commit it yourself -- this script does not touch git.")
     return 0
 
