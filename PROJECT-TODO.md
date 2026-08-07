@@ -468,16 +468,17 @@ GPU-accelerated review-render jobs completed end-to-end.
   feature). Open item 4 from `docs/planning/REVIEW-AUDIT.md` section 13's
   "Concrete scope" list — recorded here so the deferral and its trigger
   condition aren't lost, not because there's near-term work to do.
-- [ ] Resolver symmetry fix for `tools/register_studio_chat_asset.py` —
-  small, already fully scoped. `--asset-id` (resolves via a Studio Chat
-  asset's current revision) and `--job-id` (resolves via a directly
-  submitted job's own payload, e.g. from `tools/submit_blueprint_job.py`)
-  should be two independent, first-class, mutually exclusive resolvers
-  that both produce the same `(job_id, canonical_id, kind_hint)` tuple and
-  feed the same shared downstream pipeline (find artifact, download,
-  register) — not `--asset-id` as the "real" path with `--job-id` bolted
-  on as a bypass, which was the initial (corrected) framing. See
-  `docs/planning/REVIEW-AUDIT.md` section 16. Not yet implemented.
+- [x] DONE — Resolver symmetry fix for `tools/register_studio_chat_asset.py`.
+  `--asset-id` (resolves via a Studio Chat asset's current revision) and
+  `--job-id` (resolves via a directly submitted job's own payload, e.g.
+  from `tools/submit_blueprint_job.py`) are now two independent,
+  first-class, mutually exclusive resolvers (argparse enforces exactly
+  one) that both produce the same `BuildResolution(job_id, canonical_id,
+  source_revision)` tuple and feed the same shared downstream pipeline
+  (find artifact, download, register) — not `--asset-id` as the "real"
+  path with `--job-id` bolted on as a bypass, which was the initial
+  (corrected) framing. Verified live against real data for both paths.
+  See `docs/planning/REVIEW-AUDIT.md` section 16.
 - [ ] Camera/timeline operations for the Blueprint/Operation vocabulary —
   add `set_camera_keyframe`, `orbit_around`, `dolly_to` as real, validated
   Operations (position, aim, roll, frame/time; bounded ranges; no
