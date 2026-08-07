@@ -10,6 +10,7 @@ from app.config import get_settings
 from app.models.artifact import Artifact
 from app.models.asset import Asset
 from app.models.job import Job, JobAttempt, JobLease
+from app.models.studio_chat import StudioChatAsset, StudioChatAssetRevision
 from app.models.worker import Worker, WorkerCapability
 from app.models.audit import AuditEvent
 from app.models.user import ApiToken
@@ -38,6 +39,52 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 def _build_review_asset_path(raw_path: str, build_job_id: uuid.UUID) -> str:
     return raw_path.replace("{job_id}", str(build_job_id))
+
+
+async def _sync_studio_chat_asset_paths_from_artifacts(db: AsyncSession, job: Job) -> None:
+    """Resolve a completed Studio Chat build job's real .glb/.blend paths.
+
+    StudioChatAssetRevision.glb_path/source_blend_path are written at job
+    *creation* time from a payload containing a literal, unsubstituted
+    "{job_id}" path template (see app.routers.conversations._build_job_payload)
+    -- never usable as stored. This runs once the job has actually finished
+    and real Artifact rows exist, and overwrites those columns with the
+    artifacts' real, resolved storage_path. See docs/planning/REVIEW-AUDIT.md
+    section 15.
+
+    Note: Artifact.storage_path is a path inside the `artifacts` Docker
+    named volume, correct from inside the container but not readable from
+    the host -- host-side tools should use Artifact.review_url over HTTP
+    instead (see tools/register_studio_chat_asset.py), not this column.
+    """
+    revision_result = await db.execute(
+        select(StudioChatAssetRevision).where(StudioChatAssetRevision.job_id == job.id)
+    )
+    revision = revision_result.scalars().first()
+    if revision is None:
+        return
+
+    artifacts_result = await db.execute(select(Artifact).where(Artifact.job_id == job.id))
+    artifacts = artifacts_result.scalars().all()
+    glb_artifact = next((a for a in artifacts if a.filename.lower().endswith(".glb")), None)
+    blend_artifact = next((a for a in artifacts if a.filename.lower().endswith(".blend")), None)
+    if glb_artifact is None and blend_artifact is None:
+        return
+
+    if glb_artifact is not None:
+        revision.glb_path = glb_artifact.storage_path
+    if blend_artifact is not None:
+        revision.source_blend_path = blend_artifact.storage_path
+
+    asset_result = await db.execute(
+        select(StudioChatAsset).where(StudioChatAsset.id == revision.chat_asset_id)
+    )
+    asset = asset_result.scalar_one_or_none()
+    if asset is not None and asset.current_revision == revision.revision:
+        if glb_artifact is not None:
+            asset.glb_path = glb_artifact.storage_path
+        if blend_artifact is not None:
+            asset.source_blend_path = blend_artifact.storage_path
 
 
 async def _create_post_build_review_job(
@@ -514,6 +561,7 @@ async def complete_job(
 
     job.status = "completed"
     job.updated_at = now
+    await _sync_studio_chat_asset_paths_from_artifacts(db, job)
     post_build_review_job = await _create_post_build_review_job(db, build_job=job, now=now)
     if post_build_review_job:
         summary = dict(body.output_summary or {})
