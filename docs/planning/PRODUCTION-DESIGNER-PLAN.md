@@ -19,6 +19,9 @@ Recorded 2026-07-11 (designed with the project owner). Status: **PLANNED,
 not built.** Extends the crew with an agent that can be assigned set and
 asset tickets, survey the library, and compose sets by kitbashing
 approved pieces — formalizing the process that built the sci-fi bar.
+Updated 2026-08-08 per docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+section 5 — this is the plan that plan's "set designer" role means;
+see the "Non-goals" section below for what changed.
 
 ## Why this works: the proven template
 
@@ -121,6 +124,22 @@ human acceptance.
 
 ## Non-goals
 
-- No generative geometry/textures; composition of approved assets only.
 - No autonomous acquisition of new packs.
 - No self-approval: the designer never closes its own ticket.
+
+**Superseded 2026-08-08** (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+section 5): this list used to also say "No generative geometry/textures;
+composition of approved assets only." That constraint existed because
+generative construction wasn't trustworthy when this plan was written
+(2026-07-11), well before the Blueprint propose -> validate -> repair
+loop (REVIEW-AUDIT.md sections 13-19) exist and its full audit trail
+(every Studio Chat thread already traced via `studio_chat_trace_events`)
+made generative construction safe to allow. The designer may now use
+Studio Chat for real generative work -- "first level access," per the
+same plan section, real/direct tool access paired with full audit of
+every use, not a sandboxed subset. Composing from the approved library
+via `tools/build_set.py` remains the preferred, still-supported path
+where it already covers what's needed; Studio Chat access is additive,
+subject to the same guardrails Producer has (UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+section 4): no story invention, no freehanding a finished-looking hero
+or production asset.

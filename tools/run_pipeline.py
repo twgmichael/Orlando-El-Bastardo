@@ -223,6 +223,22 @@ def main():
 
     resolve_or_block(intent_path, spec, args.episode, scene_id, script_ref)
 
+    # docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 2/12 phase 3:
+    # every scene also gets a derived Blueprint alongside its SceneSpec, via
+    # tools/scenespec_to_blueprint.py -- additive and non-fatal (a derivation
+    # failure logs and continues; it doesn't gate the proven validate/export
+    # pipeline below, which is unchanged).
+    blueprint_path = f"out/{scene_id}.blueprint.json"
+    derive = subprocess.run(
+        [VENV_PY, "tools/scenespec_to_blueprint.py", "--scenespec", spec, "--output", blueprint_path],
+        capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL,
+    )
+    if derive.returncode == 0:
+        print(f"[run_pipeline] ── derive-blueprint: {blueprint_path}")
+    else:
+        print(f"[run_pipeline] derive-blueprint: non-fatal failure, continuing\n{derive.stderr[-500:]}",
+              file=sys.stderr)
+
     # Verbatim fidelity gate (brief path): one retry at seed+1, then FAILED.
     if expected_lines is not None and spec_dialogue(spec) != expected_lines:
         print("[run_pipeline] fidelity gate: dialogue mismatch — retrying "

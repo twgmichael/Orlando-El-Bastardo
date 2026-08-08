@@ -31,6 +31,8 @@ from app.models.studio_chat import (
     StudioChatTraceEvent,
 )
 from app.routers.review import _artifact_file_path
+from app.services.missing_asset_fallback import resolve_missing_asset
+from app.services.registry_resolution import detect_load_command, is_ambiguous, resolve_reference
 from app.routers.conversations import _build_job_payload, create_conversation_job
 from app.schemas.conversation import ConversationJobRequest, ConversationJobResponse
 from app.schemas.conversation import PrimitiveBuildSpec
@@ -1433,6 +1435,8 @@ async def create_studio_chat_thread(
         default_preset_id=body.default_preset_id,
         system_prompt=body.system_prompt,
         review_views=body.review_views,
+        actor_type=body.actor_type,
+        actor_id=body.actor_id,
         created_at=now,
         updated_at=now,
     )
@@ -1547,6 +1551,61 @@ async def create_studio_chat_thread_message(
         message_id=message.id,
         text_snapshot=body.content,
     )
+
+    # "load X" chat commands: docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+    # section 6. Detected here, at the one place every message sent through
+    # the actual chat box already passes through -- not a second message
+    # pipeline. Resolution never blocks saving the message itself; it's
+    # recorded as a StudioChatBuildEvent the client can pick up the same way
+    # it already polls other thread events/trace.
+    if body.role == "user":
+        load_query = detect_load_command(body.content)
+        if load_query:
+            matches = await resolve_reference(db, load_query)
+            if not matches:
+                # Never blocks: section 6/7's two-tier fallback. A "load X"
+                # for something that doesn't exist yet registers a draft-tier
+                # placeholder (ticketed) rather than just failing.
+                outcome = await resolve_missing_asset(db, load_query, "prop", requested_by="studio-chat-load-command")
+                await _record_thread_event(
+                    db,
+                    thread_id,
+                    "load_resolved_via_fallback",
+                    {
+                        "query": load_query,
+                        "canonical_id": outcome.asset.canonical_id,
+                        "fallback_tier": outcome.tier,
+                        "ticket_path": outcome.ticket_path,
+                    },
+                    message_id=message.id,
+                    asset_id=outcome.asset.canonical_id,
+                )
+            elif is_ambiguous(matches):
+                await _record_thread_event(
+                    db,
+                    thread_id,
+                    "load_needs_clarification",
+                    {
+                        "query": load_query,
+                        "clarification_question": f"Multiple matches for {load_query!r} — which one?",
+                        "candidates": [
+                            {"canonical_id": m.asset.canonical_id, "name": m.asset.name, "score": m.score}
+                            for m in matches[:8]
+                        ],
+                    },
+                    message_id=message.id,
+                )
+            else:
+                resolved = matches[0].asset
+                await _record_thread_event(
+                    db,
+                    thread_id,
+                    "load_resolved",
+                    {"query": load_query, "canonical_id": resolved.canonical_id, "score": matches[0].score},
+                    message_id=message.id,
+                    asset_id=resolved.canonical_id,
+                )
+
     await db.commit()
     await db.refresh(message)
     return StudioChatThreadMessageResponse.model_validate(message)

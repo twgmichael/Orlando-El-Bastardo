@@ -409,3 +409,105 @@ def test_build_blueprint_routes_import_type_to_build_import_primitive(monkeypatc
     interpreter.build_blueprint(blueprint, config_path="/fake/oeb.config.json")
 
     assert import_calls == [("logo", {"loaded_from": "/fake/oeb.config.json"})]
+
+
+def _fake_bsdf_material():
+    class FakeInput:
+        def __init__(self, value):
+            self.default_value = value
+
+    inputs = {
+        "Roughness": FakeInput(0.5),
+        "Metallic": FakeInput(0.0),
+        "Base Color": FakeInput((0.6, 0.6, 0.6, 1.0)),
+    }
+    bsdf = types.SimpleNamespace(inputs=inputs)
+    node_tree = types.SimpleNamespace(nodes={"Principled BSDF": bsdf})
+    return types.SimpleNamespace(use_nodes=True, node_tree=node_tree), inputs
+
+
+def test_apply_set_material_updates_existing_bsdf_inputs():
+    interpreter = load_interpreter_module()
+    mat, inputs = _fake_bsdf_material()
+    obj = FakeObj(material_slots=[types.SimpleNamespace(material=mat)])
+
+    interpreter._apply_set_material(obj, {"roughness": 0.1, "metallic": 0.9, "color": [0.8, 0.1, 0.1, 1.0]}, {})
+
+    assert inputs["Roughness"].default_value == 0.1
+    assert inputs["Metallic"].default_value == 0.9
+    assert inputs["Base Color"].default_value == (0.8, 0.1, 0.1, 1.0)
+
+
+def test_apply_set_material_skips_slots_with_no_material():
+    interpreter = load_interpreter_module()
+    obj = FakeObj(material_slots=[types.SimpleNamespace(material=None)])
+
+    # Must not raise even though the slot has nothing to update.
+    interpreter._apply_set_material(obj, {"roughness": 0.2}, {})
+
+
+def test_apply_set_shape_detail_routes_rounded_to_bevel(monkeypatch):
+    interpreter = load_interpreter_module()
+    calls = []
+    monkeypatch.setattr(
+        interpreter, "_apply_bevel", lambda obj, params, ctx: calls.append((obj, params))
+    )
+    fake_obj = FakeObj()
+
+    interpreter._apply_set_shape_detail(fake_obj, {"corner_style": "rounded"}, {})
+
+    assert calls == [(fake_obj, {"width": 0.04, "segments": 4})]
+
+
+def test_apply_set_shape_detail_prefers_edge_profile_over_corner_style(monkeypatch):
+    interpreter = load_interpreter_module()
+    calls = []
+    monkeypatch.setattr(
+        interpreter, "_apply_bevel", lambda obj, params, ctx: calls.append(params)
+    )
+
+    interpreter._apply_set_shape_detail(
+        FakeObj(), {"corner_style": "rounded", "edge_profile": "beveled"}, {}
+    )
+
+    assert calls == [{"width": 0.02, "segments": 1}]
+
+
+def test_apply_set_shape_detail_unrecognized_style_applies_nothing(monkeypatch):
+    interpreter = load_interpreter_module()
+    calls = []
+    monkeypatch.setattr(interpreter, "_apply_bevel", lambda obj, params, ctx: calls.append(1))
+
+    interpreter._apply_set_shape_detail(FakeObj(), {"corner_style": "spiky"}, {})
+
+    assert calls == []
+
+
+def test_set_environment_is_a_scene_level_operation_not_target_resolved():
+    interpreter = load_interpreter_module()
+    assert "set_environment" in interpreter.SCENE_LEVEL_OPERATIONS
+    assert "set_environment" in interpreter.OPERATIONS
+
+
+def test_apply_operation_dispatches_scene_level_op_without_target_lookup(monkeypatch):
+    interpreter = load_interpreter_module()
+    calls = []
+    monkeypatch.setitem(
+        interpreter.OPERATIONS, "set_environment", lambda params, ctx: calls.append(params)
+    )
+
+    # objects_by_id is empty and target "camera" is never looked up --
+    # scene-level ops must not require a resolvable target object.
+    interpreter.apply_operation(
+        {"op": "set_environment", "target": "camera", "params": {"preset": "deep_space"}},
+        {},
+        {},
+    )
+
+    assert calls == [{"preset": "deep_space"}]
+
+
+def test_apply_operation_unknown_environment_preset_raises():
+    interpreter = load_interpreter_module()
+    with pytest.raises(ValueError, match="Unknown set_environment preset"):
+        interpreter._apply_set_environment({"preset": "sunset_beach"}, {})

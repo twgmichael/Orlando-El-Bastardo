@@ -37,9 +37,15 @@ Scope, deliberately narrow where it's still narrow:
     ontology vocabulary (bisect, loft, sweep, boolean, extrude) is
     deliberately deferred; add an `_apply_<op>` function and register it
     in OPERATIONS as each is actually needed.
-  - Camera/timeline operations: set_camera_keyframe, orbit_around,
-    dolly_to -- real bpy keyframe_insert calls on a reserved "camera"
-    object, not metadata. See docs/planning/REVIEW-AUDIT.md section 17 /
+  - Keyframe/camera/timeline operations: set_keyframe, set_camera_keyframe,
+    orbit_around, dolly_to -- real bpy keyframe_insert calls, not metadata.
+    set_keyframe/set_camera_keyframe are the same operation under two
+    names: set_keyframe may target any primitive id built via the native
+    primitives/import path (e.g. animating an imported ship in a scene),
+    set_camera_keyframe is the same call conventionally aimed at the
+    reserved "camera" object. orbit_around/dolly_to remain camera-specific
+    choreography. See docs/planning/REVIEW-AUDIT.md section 17 /
+    docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 8 /
     PROJECT-TODO.md. Deliberately separate from
     data/camera_grammar.json's discrete establishing/two_shot/close_on
     setup vocabulary used by the teleplay production pipeline
@@ -288,6 +294,19 @@ def build_import_primitive(spec, import_ctx):
     building geometry -- same registry (oeb.config.json) and resolution
     (bpy.ops.import_scene.gltf + bpy.data.objects.get(node_name)) that
     tools/export_blender.py already uses for actor/prop/set references.
+
+    Optional `mark` field: place this import at a named mark object
+    instead of (or overriding) `transform.location` -- the same
+    mark-object convention tools/export_blender.py already uses for
+    actor spawn_mark / prop at_mark placement (R6/R12). The mark object
+    must already exist in the scene, i.e. the set's own import primitive
+    (whose glTF carries the mark objects) must appear earlier in this
+    Blueprint's `primitives` list than anything placed by mark.
+    `mark_mode: "prop"` keeps the imported object's own z (R6's
+    take-x/y-keep-z convention); any other/absent mode copies the mark's
+    full location (R12's actor convention). See
+    docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 2 and
+    tools/scenespec_to_blueprint.py, the first real caller of this.
     """
     prim_id = spec["id"]
     canonical_id = spec.get("canonical_id")
@@ -324,6 +343,25 @@ def build_import_primitive(spec, import_ctx):
     obj.rotation_mode = "XYZ"
     obj.rotation_euler = _vec3(transform.get("rotation"), (0.0, 0.0, 0.0))
     obj.scale = _vec3(transform.get("scale"), (1.0, 1.0, 1.0))
+
+    mark_name = spec.get("mark")
+    if mark_name:
+        mark_obj = bpy.data.objects.get(mark_name)
+        if mark_obj is None:
+            raise ValueError(
+                f"Import primitive {prim_id!r} references mark {mark_name!r}, not found in the "
+                f"scene -- the set's own import primitive must appear earlier in `primitives` "
+                f"so its mark objects exist before this one resolves"
+            )
+        # World translation, not .location: a mark's own .location is
+        # local-space only and wrong if the mark is parented.
+        mark_world_location = mark_obj.matrix_world.translation
+        if spec.get("mark_mode") == "prop":
+            obj.location.x = mark_world_location.x
+            obj.location.y = mark_world_location.y
+        else:
+            obj.location = mark_world_location.copy()
+
     return obj
 
 
@@ -412,8 +450,47 @@ def _apply_array(obj, params, ctx):
     bpy.ops.object.modifier_apply(modifier=modifier.name)
 
 
-def _apply_set_camera_keyframe(obj, params, ctx):
+def _apply_set_keyframe(obj, params, ctx):
+    """Generic single-keyframe insert on any object's location (and,
+    if `aim` is given, look-at rotation) -- not camera-specific. Per
+    docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 8/2: scene
+    composition needs the same keyframe machinery applied to arbitrary
+    imported-asset ids (e.g. a chase scene's flyers/cruiser), not just
+    the reserved "camera" id. Registered under both "set_keyframe" (the
+    general name) and "set_camera_keyframe" (kept for the camera's own
+    semantic framing vocabulary, section 17/18) -- identical behavior,
+    not two implementations.
+
+    Optional `camera_mark`: instead of `position`/`aim`, copy location
+    AND rotation directly from a named scene camera object -- the same
+    data/camera_grammar.json `scene_object` convention
+    tools/export_blender.py already resolves for shot cameras (already
+    correctly aimed in the set's own glTF, not an empty needing a
+    look-at target). See tools/scenespec_to_blueprint.py.
+    """
     frame = _validate_frame(params["frame"], ctx)
+
+    camera_mark = params.get("camera_mark")
+    if camera_mark:
+        mark_obj = bpy.data.objects.get(camera_mark)
+        if mark_obj is None:
+            raise ValueError(
+                f"set_keyframe references camera_mark {camera_mark!r}, not found in the scene "
+                f"-- the set's own import primitive must appear earlier in `primitives`"
+            )
+        # World matrix, not .location/.rotation_euler directly: mark objects
+        # in real set glTFs are frequently QUATERNION rotation_mode (confirmed
+        # live against fixtures/bar_scene.scenespec.json's camera marks) or
+        # parented, either of which makes .rotation_euler/.location alone
+        # stale or local-space-only. to_euler() on the world matrix is
+        # correct regardless of the mark's own rotation_mode or parenting.
+        obj.location = mark_obj.matrix_world.translation.copy()
+        obj.keyframe_insert("location", frame=frame)
+        obj.rotation_mode = "XYZ"
+        obj.rotation_euler = mark_obj.matrix_world.to_euler("XYZ")
+        obj.keyframe_insert("rotation_euler", frame=frame)
+        return
+
     position = _vec3(params.get("position"), tuple(obj.location))
     obj.location = position
     obj.keyframe_insert("location", frame=frame)
@@ -496,14 +573,154 @@ def _apply_dolly_to(obj, params, ctx):
         obj.keyframe_insert("rotation_euler", frame=frame)
 
 
+def _apply_set_material(obj, params, ctx):
+    """Extend a primitive's material past the flat RGBA `material.color`
+    a Blueprint's primitive-level material already supports -- finish
+    (roughness) and metallic, applied to the object's existing material
+    slot(s) via the Principled BSDF the shared `material()` helper
+    (tools/oeb_blender/primitives.py) already sets up. Per
+    docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 8: proposed
+    in REVIEW-AUDIT.md section 11, previously undelivered.
+    """
+    roughness = params.get("roughness")
+    metallic = params.get("metallic")
+    color = params.get("color")
+    for slot in obj.material_slots:
+        mat = slot.material
+        if mat is None or not mat.use_nodes:
+            continue
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        if bsdf is None:
+            continue
+        if roughness is not None and "Roughness" in bsdf.inputs:
+            bsdf.inputs["Roughness"].default_value = float(roughness)
+        if metallic is not None and "Metallic" in bsdf.inputs:
+            bsdf.inputs["Metallic"].default_value = float(metallic)
+        if color is not None and "Base Color" in bsdf.inputs:
+            rgba = _vec3(color[:3] if isinstance(color, list) else None, (0.6, 0.6, 0.6)) + (
+                float(color[3]) if isinstance(color, list) and len(color) == 4 else 1.0,
+            )
+            bsdf.inputs["Base Color"].default_value = rgba
+
+
+_SHAPE_DETAIL_BEVEL_DEFAULTS = {
+    "rounded": {"width": 0.04, "segments": 4},
+    "beveled": {"width": 0.02, "segments": 1},
+    "soft_beveled": {"width": 0.03, "segments": 3},
+}
+
+
+def _apply_set_shape_detail(obj, params, ctx):
+    """Turn the LLM-captured, previously-discarded `corner_style`/
+    `edge_profile` fields (REVIEW-AUDIT.md section 8's original finding:
+    `_compile_typed_object_primitives` captured these but never turned
+    them into geometry) into a real BEVEL modifier -- reusing
+    `_apply_bevel` rather than a second modifier code path. `edge_profile`
+    is checked first, falling back to `corner_style`; an unrecognized
+    value applies no modifier rather than guessing.
+    """
+    style = params.get("edge_profile") or params.get("corner_style")
+    defaults = _SHAPE_DETAIL_BEVEL_DEFAULTS.get(str(style).strip().lower()) if style else None
+    if defaults is None:
+        return
+    _apply_bevel(obj, {**defaults, **{k: v for k, v in params.items() if k in ("width", "segments")}}, ctx)
+
+
+def _apply_set_environment(params, ctx):
+    """Scene-level lighting/environment preset. v0.1 has exactly one
+    preset, "deep_space" -- the star-sphere + emissive-sun-sphere + EEVEE
+    bloom setup already proven working in two real render scripts
+    (tools/tmp_jb100_space_action.py; docs/world-building/SPACESCAPE.md),
+    adapted here rather than redesigned. Additional presets get added the
+    same way OPERATIONS entries are: one at a time, when an actual scene
+    needs them -- not built speculatively ahead of that need.
+    """
+    preset = str(params.get("preset", "deep_space")).strip().lower()
+    if preset != "deep_space":
+        raise ValueError(f"Unknown set_environment preset: {preset!r} (supported: ['deep_space'])")
+
+    scene = bpy.context.scene
+    world = bpy.data.worlds.new("blueprint_space_env")
+    world.use_nodes = True
+    world.node_tree.nodes["Background"].inputs[0].default_value = (0.0, 0.0, 0.0, 1.0)
+    scene.world = world
+
+    star_radius = float(params.get("star_radius", 800.0))
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=star_radius, segments=64, ring_count=32)
+    star_sphere = bpy.context.active_object
+    star_sphere.name = "env_star_sphere"
+    star_sphere.visible_shadow = False
+
+    star_mat = bpy.data.materials.new("mat_env_stars")
+    star_mat.use_nodes = True
+    star_mat.use_backface_culling = False
+    snt = star_mat.node_tree
+    for node in list(snt.nodes):
+        snt.nodes.remove(node)
+    s_out = snt.nodes.new("ShaderNodeOutputMaterial")
+    s_emit = snt.nodes.new("ShaderNodeEmission")
+    s_ramp = snt.nodes.new("ShaderNodeValToRGB")
+    s_noise = snt.nodes.new("ShaderNodeTexNoise")
+    s_coord = snt.nodes.new("ShaderNodeTexCoord")
+    s_noise.inputs["Scale"].default_value = 300.0
+    s_noise.inputs["Detail"].default_value = 8.0
+    s_noise.inputs["Roughness"].default_value = 0.6
+    s_ramp.color_ramp.interpolation = "CONSTANT"
+    s_ramp.color_ramp.elements[0].position = 0.0
+    s_ramp.color_ramp.elements[0].color = (0.003, 0.003, 0.006, 1)
+    s_ramp.color_ramp.elements[1].position = float(params.get("star_threshold", 0.75))
+    s_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1)
+    s_emit.inputs["Strength"].default_value = float(params.get("star_strength", 8.0))
+    snt.links.new(s_coord.outputs["Generated"], s_noise.inputs["Vector"])
+    snt.links.new(s_noise.outputs["Fac"], s_ramp.inputs["Fac"])
+    snt.links.new(s_ramp.outputs["Color"], s_emit.inputs["Color"])
+    snt.links.new(s_emit.outputs["Emission"], s_out.inputs["Surface"])
+    star_sphere.data.materials.append(star_mat)
+
+    sun_location = _vec3(params.get("sun_location"), (300.0, 500.0, 250.0))
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=float(params.get("sun_radius", 18.0)),
+                                          location=sun_location, segments=32, ring_count=16)
+    sun_obj = bpy.context.active_object
+    sun_obj.name = "env_sun"
+    sun_mat = bpy.data.materials.new("mat_env_sun")
+    sun_mat.use_nodes = True
+    for node in list(sun_mat.node_tree.nodes):
+        sun_mat.node_tree.nodes.remove(node)
+    sun_emit = sun_mat.node_tree.nodes.new("ShaderNodeEmission")
+    sun_out = sun_mat.node_tree.nodes.new("ShaderNodeOutputMaterial")
+    sun_color = _vec3(params.get("sun_color"), (1.0, 0.78, 0.30))
+    sun_emit.inputs["Color"].default_value = sun_color + (1.0,)
+    sun_emit.inputs["Strength"].default_value = float(params.get("sun_strength", 120.0))
+    sun_mat.node_tree.links.new(sun_emit.outputs["Emission"], sun_out.inputs["Surface"])
+    sun_obj.data.materials.append(sun_mat)
+
+    if hasattr(scene, "eevee") and hasattr(scene.eevee, "use_bloom"):
+        scene.eevee.use_bloom = True
+        scene.eevee.bloom_threshold = float(params.get("bloom_threshold", 0.6))
+        scene.eevee.bloom_intensity = float(params.get("bloom_intensity", 0.8))
+        scene.eevee.bloom_radius = float(params.get("bloom_radius", 6.0))
+
+
 OPERATIONS = {
     "bevel": _apply_bevel,
     "mirror": _apply_mirror,
     "array": _apply_array,
-    "set_camera_keyframe": _apply_set_camera_keyframe,
+    "set_keyframe": _apply_set_keyframe,
+    "set_camera_keyframe": _apply_set_keyframe,
     "orbit_around": _apply_orbit_around,
     "dolly_to": _apply_dolly_to,
+    "set_material": _apply_set_material,
+    "set_shape_detail": _apply_set_shape_detail,
+    "set_environment": _apply_set_environment,
 }
+
+
+SCENE_LEVEL_OPERATIONS = frozenset({"set_environment"})
+"""Operations that act on the scene as a whole, not one target object --
+`target` is still required in the Blueprint JSON for a uniform operation
+shape, but is not resolved against objects_by_id or passed to the apply
+function.
+"""
 
 
 def apply_operation(op_spec, objects_by_id, ctx):
@@ -511,6 +728,9 @@ def apply_operation(op_spec, objects_by_id, ctx):
     apply_fn = OPERATIONS.get(op_name)
     if apply_fn is None:
         raise ValueError(f"Unknown operation: {op_name!r} (supported: {sorted(OPERATIONS)})")
+    if op_name in SCENE_LEVEL_OPERATIONS:
+        apply_fn(op_spec.get("params") or {}, ctx)
+        return
     target_id = op_spec["target"]
     obj = objects_by_id.get(target_id)
     if obj is None:

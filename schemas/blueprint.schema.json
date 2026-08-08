@@ -97,6 +97,14 @@
         "canonical_id": {
           "type": "string",
           "description": "Required when type=import: references an existing Canonical Asset by canonical_id, resolved against oeb.config.json's assets map."
+        },
+        "mark": {
+          "type": "string",
+          "description": "type=import only. Place this import at a named mark object already present in the scene (the same spawn_mark/at_mark convention tools/export_blender.py uses), overriding transform.location. The set's own import primitive must appear earlier in `primitives` so the mark object exists first."
+        },
+        "mark_mode": {
+          "enum": ["actor", "prop"],
+          "description": "type=import with `mark` only. \"prop\" keeps the import's own z and takes only the mark's x/y (R6 convention); \"actor\" (default) copies the mark's full location (R12 convention)."
         }
       },
       "allOf": [
@@ -113,12 +121,12 @@
       "additionalProperties": false,
       "properties": {
         "op": {
-          "enum": ["bevel", "mirror", "array", "set_camera_keyframe", "orbit_around", "dolly_to"],
-          "description": "The full ontology vocabulary (bisect, loft, sweep, boolean, extrude) is deliberately deferred; added one operation at a time as an actual need surfaces -- see tools/blueprint_interpreter.py's module docstring."
+          "enum": ["bevel", "mirror", "array", "set_keyframe", "set_camera_keyframe", "orbit_around", "dolly_to", "set_material", "set_shape_detail", "set_environment"],
+          "description": "\"set_keyframe\" and \"set_camera_keyframe\" are the identical operation under two names -- the general form (any target id) and the camera-framing-specific name (conventionally \"camera\"). \"set_environment\" is scene-level, not target-object-specific -- `target` is still required for a uniform shape but is not resolved against a primitive id. The full ontology vocabulary (bisect, loft, sweep, boolean, extrude) is deliberately deferred; added one operation at a time as an actual need surfaces -- see tools/blueprint_interpreter.py's module docstring."
         },
         "target": {
           "type": "string",
-          "description": "A primitive id, or \"camera\" for the three camera/timeline operations."
+          "description": "A primitive id, or \"camera\" for the camera/timeline operations. set_keyframe/orbit_around/dolly_to may target any primitive id built via the native primitives/import path; per-part targeting inside a compiled_spec-built hierarchy is not yet supported (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 2)."
         },
         "params": {
           "type": "object",

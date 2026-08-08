@@ -24,6 +24,25 @@ durable, queryable substrate so agents can be assigned tasks, work
 independently across sessions and days, and report done through the
 middle — with the producer and orchestrator tracking progress from it.
 
+Updated 2026-08-08 per docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+section 5: this plan's Producer role, and the "production designer"
+worker role (PRODUCTION-DESIGNER-PLAN.md, now joined by a "prop builder"
+sibling profile, PROP-BUILDER-PLAN.md), are the same production-role
+agent family that plan describes — this document stays their
+coordination substrate, not replaced by anything new. What's added:
+every agent in this family gets "first level access" to the toolchain
+(including Studio Chat, per PRODUCTION-DESIGNER-PLAN.md's updated
+non-goals) paired with full audit of every use. Concretely, this extends
+the "structured result comment" discipline already below: a dispatched
+agent's Studio Chat thread (tagged `actor_type="agent"`, fully traced
+via `studio_chat_trace_events`, the append-only ledger Studio Chat
+Milestone 1 already built) gets cross-referenced and cited, with a
+timely summary, directly in that task's completion comment — the same
+evidentiary role build artifacts and commit references already play
+below. "Nothing reaches `done` without verifier evidence" now includes
+Studio Chat threads as a first-class kind of evidence, not a separate
+audit story bolted on beside this one.
+
 ## Audience (decided 2026-07-11)
 
 The Issues and the Project board are FOR THE AGENTS — Claude-tier
@@ -91,8 +110,9 @@ the protocol is the contract, not the agent's species.
   `blocked`/`escalated`, requests verification, closes on `verified` —
   ESCALATION-PROTOCOL on a durable substrate.
 - **Workers** (Claude-tier agents — e.g. the planned production
-  designer — and local-LLM workers behind thin deterministic wrappers;
-  the local model never touches `gh` itself): poll for their
+  designer and prop builder, PRODUCTION-DESIGNER-PLAN.md /
+  PROP-BUILDER-PLAN.md — and local-LLM workers behind thin deterministic
+  wrappers; the local model never touches `gh` itself): poll for their
   assignments on wake, work independently, report through the bus. The
   issue IS the context — no session handoffs.
 - **Verifier**: consumes `needs-verify`, posts pass/fail evidence.

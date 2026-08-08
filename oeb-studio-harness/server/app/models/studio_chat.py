@@ -13,6 +13,8 @@ class StudioChatThread(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     environment: Mapped[str] = mapped_column(String(32), default="local", nullable=False, index=True)
+    actor_type: Mapped[str] = mapped_column(String(32), default="human", nullable=False, index=True)
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     default_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     default_preset_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)

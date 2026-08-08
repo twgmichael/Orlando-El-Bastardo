@@ -207,6 +207,8 @@ class StudioChatThreadCreateRequest(BaseModel):
     default_preset_id: str | None = None
     system_prompt: str | None = None
     review_views: list[str] = Field(default_factory=lambda: STANDARD_REVIEW_VIEWS.copy())
+    actor_type: str = "human"
+    actor_id: str | None = None
 
     @field_validator("review_views")
     @classmethod
@@ -237,6 +239,8 @@ class StudioChatThreadSummary(BaseModel):
     default_model: str | None
     default_preset_id: str | None
     review_views: list[str]
+    actor_type: str
+    actor_id: str | None
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None

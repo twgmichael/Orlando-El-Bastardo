@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import screenplay  # noqa: E402
 import tickets     # noqa: E402
 from script_desk import find_ffmpeg, find_slate_font, slate_drawtext  # noqa: E402
+from producer_studio_chat_client import build_scene_via_studio_chat  # noqa: E402
 
 VENV_PY = ".venv/bin/python"
 LLAMA = "llama-completion"
@@ -74,6 +75,13 @@ def parse_args():
     p.add_argument("--scenes", default=None,
                    help="Comma list of scene numbers to run (testing aid); "
                         "others are skipped entirely.")
+    p.add_argument("--studio-chat-fallback", action="store_true",
+                   help="docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md "
+                        "section 4/7: when the deterministic pipeline blocks "
+                        "a scene, fall through to Producer-as-Studio-Chat-"
+                        "client for a rough draft instead of leaving it as a "
+                        "bare NEEDS_ASSETS ticket. Off by default -- opt in "
+                        "explicitly; requires OEB_HARNESS_URL/API_ADMIN_TOKEN.")
     return p.parse_args()
 
 
@@ -220,6 +228,54 @@ def episode_cut(episode, delivered, edir):
                     "-i", lst, "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-crf", "23", cut], check=True, capture_output=True)
     return cut
+
+
+def scene_creative_request(scene_id, scene):
+    """Render a scene's own screenplay text (slugline + action + dialogue)
+    as a single creative_request string for the Studio Chat fallback --
+    the teleplay's own language, not a paraphrase or an invented summary.
+    See docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 4's
+    "no story invention" guardrail: Producer works within what the
+    teleplay actually says.
+    """
+    lines = [scene["slugline"]]
+    for sec in scene["sections"]:
+        if sec["heading"]:
+            lines.append(f"({sec['heading']})")
+        lines.extend(sec["action"])
+        for name, text in sec["dialogue"]:
+            lines.append(f'{name}: "{text}"')
+    return "\n".join(line for line in lines if line)
+
+
+def studio_chat_rough_draft(scene_id, scene, episode, args):
+    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 4/7:
+    Producer as a literal Studio Chat client, used here as the fallback
+    when the deterministic pipeline blocks a scene. Never fatal to the
+    run -- any failure (harness unreachable, unresolved even after the
+    bounded auto-clarification retry) is caught and reported as still
+    NEEDS_ASSETS, same as today's behavior without this flag.
+    """
+    harness_url = os.environ.get("OEB_HARNESS_URL")
+    admin_token = os.environ.get("API_ADMIN_TOKEN")
+    if not harness_url or not admin_token:
+        print("[producer]    studio-chat-fallback: OEB_HARNESS_URL/API_ADMIN_TOKEN "
+              "not set; skipping, scene stays NEEDS_ASSETS")
+        return None
+    try:
+        result = build_scene_via_studio_chat(
+            harness_url, admin_token, scene_creative_request(scene_id, scene),
+            thread_title=f"{episode}/{scene_id} (Producer rough draft)",
+        )
+    except Exception as exc:  # noqa: BLE001 -- any failure here must not crash the run
+        print(f"[producer]    studio-chat-fallback: FAILED ({exc}); "
+              f"scene stays NEEDS_ASSETS")
+        return None
+    if result.get("unresolved"):
+        print("[producer]    studio-chat-fallback: still unresolved after "
+              "auto-clarification; scene stays NEEDS_ASSETS")
+        return None
+    return result
 
 
 def main():
@@ -410,6 +466,13 @@ def main():
             outcomes[scene_id] = ("NEEDS_ASSETS", None)
             print("[producer]    BLOCKED — pipeline ticket written; "
                   "continuing")
+            if args.studio_chat_fallback:
+                rough_draft = studio_chat_rough_draft(scene_id, scene, episode, args)
+                if rough_draft is not None:
+                    outcomes[scene_id] = ("ROUGH_DRAFT", rough_draft.get("review_url"))
+                    print(f"[producer]    ROUGH_DRAFT via Studio Chat — "
+                          f"{rough_draft.get('review_url')} (still ticketed; "
+                          f"the deterministic asset is still wanted)")
         else:
             outcomes[scene_id] = ("FAILED", None)
             tail = (run.stdout + run.stderr).strip().splitlines()[-6:]
@@ -424,7 +487,7 @@ def main():
         if cut:
             print(f"[producer] episode cut → {cut}")
 
-    n = {"DELIVERED": 0, "NEEDS_ASSETS": 0, "FAILED": 0}
+    n = {"DELIVERED": 0, "NEEDS_ASSETS": 0, "FAILED": 0, "ROUGH_DRAFT": 0}
     for st, _ in outcomes.values():
         n[st] += 1
     report = {
@@ -433,7 +496,8 @@ def main():
                    for sid, (st, r) in outcomes.items()},
         "vocabulary": vocab_findings,
         "delivered": n["DELIVERED"], "blocked": n["NEEDS_ASSETS"],
-        "failed": n["FAILED"], "episode_cut": cut,
+        "failed": n["FAILED"], "rough_draft": n["ROUGH_DRAFT"],
+        "episode_cut": cut,
     }
     rpath = os.path.join(edir, "production_report.json")
     with open(rpath, "w") as f:
@@ -473,7 +537,8 @@ def main():
         print("[producer] publish skipped — no episode cut this run")
 
     print(f"[producer] SUMMARY: {n['DELIVERED']} delivered, "
-          f"{n['NEEDS_ASSETS']} blocked, {n['FAILED']} failed — {rpath}")
+          f"{n['NEEDS_ASSETS']} blocked, {n['ROUGH_DRAFT']} rough draft, "
+          f"{n['FAILED']} failed — {rpath}")
     sys.exit(0 if n["FAILED"] == 0 else 1)
 
 
