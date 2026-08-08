@@ -436,15 +436,17 @@ GPU-accelerated review-render jobs completed end-to-end.
   app already does. Left undone intentionally for now — do not add auth to
   these endpoints without also shipping the client-side token flow, or the
   working local chat UI breaks.
-- [ ] Have Blueprint execution write dual artifacts, not just glTF — a
+- [x] DONE — Blueprint execution writes dual artifacts, not just glTF — a
   `.blend` (the editable Canonical Asset) alongside the `.glb` (the
-  Production Variant the main pipeline's exporters consume). `StudioChatAsset`
-  already has `source_blend_path` and `glb_path` columns
-  (`app/models/studio_chat.py:119-120`) anticipating exactly this pattern,
-  but nothing general-purpose populates them today. Open item 2 from
-  `docs/planning/REVIEW-AUDIT.md` section 13's "Concrete scope" list —
-  needed before the registration step in section 14 has a `.blend` to
-  preserve as the editable master, not just a rendered `.glb`.
+  Production Variant the main pipeline's exporters consume). Resolved as
+  a side effect of section 19's build-path unification: Studio Chat's
+  build jobs now run through `tools/blueprint_interpreter.py` (which
+  always wrote both halves) instead of the old `.glb`-only
+  `tools/primitive_asset_builder.py`, so `StudioChatAsset`'s
+  `source_blend_path`/`glb_path` columns
+  (`app/models/studio_chat.py:119-120`) get populated for every build,
+  not just interpreter-only ones. Was open item 2 from
+  `docs/planning/REVIEW-AUDIT.md` section 13's "Concrete scope" list.
 - [x] RESOLVED — how `oeb.config.json` asset entries' `kind` field
   (`prop`/`character`/`set`) is consumed downstream. Confirmed by direct
   code search: `kind` is not read by `export_blender.py`, `export_godot.py`,
@@ -489,7 +491,19 @@ GPU-accelerated review-render jobs completed end-to-end.
   discussion (asset-import, the typed reconstruction-plan schema, the
   automated render-vs-reference comparison loop) — agreed as the top
   priority of that group. See `docs/planning/REVIEW-AUDIT.md` section 17.
-  Not yet implemented.
+  **Status as of 2026-08-07: implemented, live-verified against real
+  headless Blender 5.1.2, and now Studio Chat's build path runs through
+  it** (`tools/blueprint_interpreter.py`) — camera keyframes/orbit/dolly
+  math confirmed correct via direct fcurve inspection, all three
+  frame-range/degenerate-input guards confirmed to raise correctly, and
+  `tools/primitive_asset_builder.py` (Studio Chat's old, camera-less
+  build script) has been deleted and unified into this file — see
+  `docs/planning/REVIEW-AUDIT.md` section 19. Left unchecked because
+  Studio Chat itself still never emits a camera operation (no
+  camera-choreography prompts exist yet) and none of this is committed
+  yet — still separate from the teleplay pipeline's existing camera
+  grammar (`data/camera_grammar.json`/`export_blender.py`) per the
+  interpreter's own docstring.
 - [ ] Agent bus (AGENT-BUS-PLAN.md build checklist):
   - [ ] Human: create GitHub Project + add `project` scope to `gh` auth
   - [ ] `tools/agent_bus.py` (file/claim/report/block/query verbs + payload schema)

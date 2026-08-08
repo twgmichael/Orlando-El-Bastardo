@@ -1,55 +1,21 @@
-#!/usr/bin/env python3
-"""
-Build a simple GLB asset from Blender primitives and render a preview.
+"""Hierarchical/recipe object-construction system for OEB headless Blender
+builders -- the part of the old tools/primitive_asset_builder.py that
+turns a compiled Studio Chat spec (scene_plan/components/registry
+primitives) into recognizable objects: category dispatch from free text
+or the LLM's structured `category` field, per-category recipes
+(make_chair, make_table_like, make_vehicle_*, ...), and flat registry
+primitive dispatch (box/sphere/cylinder/...).
 
-Run by the harness worker through Blender:
-  blender --background --python tools/primitive_asset_builder.py -- \
-    --spec-json '{"canonical_id":"asset_demo_A",...}' \
-    --output assets/asset_demo_A.glb \
-    --preview-output renders/asset_previews/asset_demo_A.png \
-    --manifest-output out/asset_builds/asset_demo_A.json
+Moved here, unified into tools/blueprint_interpreter.py as its only build
+path, rather than kept as a second, separately-run script -- see
+docs/planning/REVIEW-AUDIT.md section 18. This module only builds
+geometry; camera, lighting, and preview/export are the caller's
+responsibility (tools/blueprint_interpreter.py).
 """
 
-import argparse
-import json
-import math
-import os
 import re
-import sys
-from pathlib import Path
 
-import bpy
-from mathutils import Vector
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from oeb_blender.primitives import (  # noqa: E402
-    clear_scene,
-    cone,
-    cube,
-    cylinder,
-    hemisphere,
-    material,
-    plane,
-    sphere,
-    torus,
-    wedge,
-)
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(prog="primitive_asset_builder")
-    parser.add_argument("--spec-json", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--preview-output", required=True)
-    parser.add_argument("--manifest-output", required=True)
-
-    argv = sys.argv
-    if "--" in argv:
-        argv = argv[argv.index("--") + 1:]
-    else:
-        argv = []
-    return parser.parse_args(argv)
-
+from oeb_blender.primitives import cone, cube, cylinder, hemisphere, material, parent_to_root, plane, sphere, torus, wedge
 
 ASSET_LOCAL_AXES = {
     "front_axis": "+X",
@@ -105,34 +71,6 @@ def canonical_camera_views(target=(0, 0, 0.45), distance=6.4, ortho_scale=6.8):
         "top": {"location": (0, 0, distance), "target": target, "ortho_scale": ortho_scale},
         "bottom": {"location": (0, 0, -distance), "target": target, "ortho_scale": ortho_scale},
     }
-
-
-def add_preview_setup(camera_location=(5.2, -6.0, 4.0), target=(0, 0, 0.4), ortho_scale=6.0):
-    bpy.ops.object.light_add(type="AREA", location=(0, -4, 5))
-    light = bpy.context.object
-    light.name = "preview_key_light"
-    light.data.energy = 450
-    light.data.size = 5
-
-    bpy.ops.object.camera_add(location=camera_location)
-    camera = bpy.context.object
-    direction = Vector(target) - Vector(camera_location)
-    camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
-    camera.data.type = "ORTHO"
-    camera.data.ortho_scale = ortho_scale
-    bpy.context.scene.camera = camera
-    bpy.context.scene.render.resolution_x = 1280
-    bpy.context.scene.render.resolution_y = 720
-    if hasattr(bpy.context.scene, "eevee"):
-        bpy.context.scene.eevee.taa_render_samples = 32
-
-
-def parent_to_root(spec, objects):
-    root = bpy.data.objects.new(spec["canonical_id"], None)
-    bpy.context.collection.objects.link(root)
-    for obj in objects:
-        obj.parent = root
-    return root
 
 
 def safe_object_name(text, fallback):
@@ -859,7 +797,12 @@ def layout_shell_descriptors(spec):
     ]
 
 
-def make_component_layout_scene(spec):
+def build_object_graph(spec):
+    """Build every object for spec's scene_plan/components/registry
+    primitives and parent them under a root named spec['canonical_id'].
+    Returns (root, variant). Camera, lighting, and preview/export are the
+    caller's responsibility (tools/blueprint_interpreter.py).
+    """
     mats = {
         "neutral": material("component_neutral_clay", (0.64, 0.62, 0.57, 1)),
         "dark": material("component_dark", (0.09, 0.1, 0.1, 1)),
@@ -897,60 +840,4 @@ def make_component_layout_scene(spec):
             else:
                 objects.extend(primitive_for_component(item["value"], idx, mats))
 
-    action_view = canonical_camera_views()["action"]
-    add_preview_setup(
-        camera_location=action_view["location"],
-        target=action_view["target"],
-        ortho_scale=action_view["ortho_scale"],
-    )
-    return parent_to_root(spec, objects), "component_layout"
-
-
-def make_scene(spec):
-    clear_scene()
-    return make_component_layout_scene(spec)
-
-
-def main():
-    args = parse_args()
-    spec = json.loads(args.spec_json)
-
-    output = Path(args.output)
-    preview = Path(args.preview_output)
-    manifest = Path(args.manifest_output)
-    for path in (output, preview, manifest):
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-    root, variant = make_scene(spec)
-
-    bpy.ops.object.select_all(action="DESELECT")
-    for obj in bpy.context.scene.objects:
-        if obj == root or obj.parent == root:
-            obj.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=str(output), export_format="GLB", use_selection=True)
-
-    bpy.context.scene.render.filepath = str(preview)
-    bpy.ops.render.render(write_still=True)
-
-    manifest.write_text(json.dumps({
-        "canonical_id": spec["canonical_id"],
-        "name": spec.get("name"),
-        "kind": spec.get("kind"),
-        "style": spec.get("style"),
-        "creative_request": spec.get("creative_request"),
-        "primitives": spec.get("primitives", []),
-        "components": spec.get("components", []),
-        "scene_plan": spec.get("scene_plan"),
-        "repaired_scene_plan": spec.get("repaired_scene_plan"),
-        "orientation_standard": orientation_standard(spec),
-        "canonical_camera_views": canonical_camera_views(),
-        "variant": variant,
-        "outputs": {
-            "glb": str(output),
-            "preview": str(preview),
-        },
-    }, indent=2) + "\n")
-
-
-if __name__ == "__main__":
-    main()
+    return parent_to_root(spec["canonical_id"], objects), "component_layout"

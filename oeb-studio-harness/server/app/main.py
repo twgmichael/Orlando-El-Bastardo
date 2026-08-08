@@ -122,11 +122,15 @@ def create_app() -> FastAPI:
     from app.routers.studio_chat import router as studio_chat_router
     from app.routers.studio_chat_ui import router as studio_chat_ui_router
     from app.routers.review import router as review_router
+    from app.routers.placeholders_ui import router as placeholders_ui_router
+    from app.routers.scenes_ui import router as scenes_ui_router
 
     app.include_router(health_router)
     app.include_router(dashboard_router)
     app.include_router(studio_chat_ui_router)
     app.include_router(review_router)
+    app.include_router(placeholders_ui_router)
+    app.include_router(scenes_ui_router)
     app.include_router(projects_router, prefix="/api/v1")
     app.include_router(workers_router, prefix="/api/v1")
     app.include_router(jobs_router, prefix="/api/v1")

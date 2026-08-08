@@ -1,4 +1,3 @@
-import importlib.util
 import os
 import sys
 import types
@@ -7,8 +6,9 @@ from pathlib import Path
 import pytest
 
 
-def _find_primitive_builder_path() -> Path:
-    """Locate tools/primitive_asset_builder.py across run environments.
+def _find_tools_dir() -> Path:
+    """Locate the tools/ directory (parent of oeb_blender/) across run
+    environments.
 
     Checked in order: an explicit env override, the Docker container's
     read-only /tools mount (see Orlando-El-Bastardo.docker/compose.yml),
@@ -18,36 +18,36 @@ def _find_primitive_builder_path() -> Path:
     env_override = os.environ.get("OEB_TOOLS_DIR")
     candidates = []
     if env_override:
-        candidates.append(Path(env_override) / "primitive_asset_builder.py")
-    candidates.append(Path("/tools/primitive_asset_builder.py"))
+        candidates.append(Path(env_override))
+    candidates.append(Path("/tools"))
     for parent in Path(__file__).resolve().parents:
-        candidates.append(parent / "tools" / "primitive_asset_builder.py")
+        candidates.append(parent / "tools")
 
     for candidate in candidates:
-        if candidate.is_file():
+        if (candidate / "oeb_blender" / "recipes.py").is_file():
             return candidate
 
     raise FileNotFoundError(
-        "Could not locate tools/primitive_asset_builder.py. Set OEB_TOOLS_DIR "
+        "Could not locate tools/oeb_blender/recipes.py. Set OEB_TOOLS_DIR "
         "to its containing directory if running outside the repo checkout or "
         "the oeb-studio-harness-local Docker stack."
     )
 
 
-def load_builder_module():
+def load_recipes_module():
     sys.modules.setdefault("bpy", types.SimpleNamespace())
     sys.modules.setdefault("mathutils", types.SimpleNamespace(Vector=lambda value: value))
-    spec = importlib.util.spec_from_file_location(
-        "primitive_asset_builder_for_test",
-        _find_primitive_builder_path(),
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    tools_dir = str(_find_tools_dir())
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    sys.modules.pop("oeb_blender.recipes", None)
+    sys.modules.pop("oeb_blender.primitives", None)
+    import oeb_blender.recipes as recipes
+    return recipes
 
 
 def test_scene_objects_are_the_preferred_builder_contract():
-    builder = load_builder_module()
+    builder = load_recipes_module()
     spec = {
         "canonical_id": "vehicle_motorcycle_A",
         "name": "Motorcycle",
@@ -79,7 +79,7 @@ def test_scene_objects_are_the_preferred_builder_contract():
 
 
 def test_builder_no_longer_exposes_concept_specific_routes():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert not hasattr(builder, "wants_vehicle")
     assert not hasattr(builder, "wants_aircraft")
@@ -92,7 +92,7 @@ def test_builder_no_longer_exposes_concept_specific_routes():
 
 
 def test_two_wheeled_vehicle_parts_use_generic_categories():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.category_for_name("front wheel", None) == "ring"
     assert builder.category_for_name("handlebars", None) == "vehicle_controls"
@@ -103,7 +103,7 @@ def test_two_wheeled_vehicle_parts_use_generic_categories():
 
 
 def test_orientation_standard_is_explicit_builder_contract():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.orientation_standard({"kind": "vehicle"}) == {
         "front_axis": "+X",
@@ -118,7 +118,7 @@ def test_orientation_standard_is_explicit_builder_contract():
 
 
 def test_registry_primitive_dispatch_uses_material_and_transform(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     captured = {}
     mats = {"neutral": "neutral-mat", "blue": "blue-mat"}
 
@@ -162,7 +162,7 @@ def test_registry_primitive_dispatch_uses_material_and_transform(monkeypatch):
 
 
 def test_registry_primitive_dispatch_expands_quantity(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     captured = []
     mats = {"neutral": "neutral-mat", "blue": "blue-mat"}
 
@@ -194,7 +194,7 @@ def test_registry_primitive_dispatch_expands_quantity(monkeypatch):
 
 
 def test_registry_sphere_compiles_half_modifier_as_hemisphere(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     captured = []
 
     def fake_hemisphere(name, location, radius, mat):
@@ -218,7 +218,8 @@ def test_registry_sphere_compiles_half_modifier_as_hemisphere(monkeypatch):
 
 
 def test_material_sets_principled_base_color_for_render_and_export():
-    builder = load_builder_module()
+    load_recipes_module()
+    import oeb_blender.primitives as primitives
 
     class FakeInput:
         def __init__(self):
@@ -247,9 +248,9 @@ def test_material_sets_principled_base_color_for_render_and_export():
         created.append(mat)
         return mat
 
-    builder.bpy.data = types.SimpleNamespace(materials=types.SimpleNamespace(new=fake_new))
+    primitives.bpy.data = types.SimpleNamespace(materials=types.SimpleNamespace(new=fake_new))
 
-    mat = builder.material("component_blue", (0.05, 0.22, 0.85, 1))
+    mat = primitives.material("component_blue", (0.05, 0.22, 0.85, 1))
 
     assert mat.diffuse_color == (0.05, 0.22, 0.85, 1)
     assert mat.use_nodes is True
@@ -258,7 +259,7 @@ def test_material_sets_principled_base_color_for_render_and_export():
 
 
 def test_axis_placement_uses_oeb_local_axes():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.axis_position_for_placement("front") == (1.0, 0, 0.35)
     assert builder.axis_position_for_placement("rear") == (-1.0, 0, 0.35)
@@ -269,7 +270,7 @@ def test_axis_placement_uses_oeb_local_axes():
 
 
 def test_aircraft_parts_use_generic_categories():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.category_for_name("long aircraft fuselage", None) == "vehicle_fuselage"
     assert builder.category_for_name("left wing", None) == "vehicle_wing"
@@ -282,7 +283,7 @@ def test_aircraft_parts_use_generic_categories():
 
 
 def test_builder_prefers_structured_scene_plan_over_flat_components():
-    builder = load_builder_module()
+    builder = load_recipes_module()
     spec = {
         "canonical_id": "vehicle_plane_A",
         "name": "Plane",
@@ -313,7 +314,7 @@ def test_builder_prefers_structured_scene_plan_over_flat_components():
 
 
 def test_builder_falls_back_to_components_without_scene_objects():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.layout_items_for_spec({
         "canonical_id": "vehicle_plane_A",
@@ -326,14 +327,14 @@ def test_builder_falls_back_to_components_without_scene_objects():
 
 
 def test_builder_fails_fast_without_scene_objects_or_components():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     with pytest.raises(ValueError, match="scene objects or non-empty components"):
         builder.components_for_layout({"canonical_id": "vehicle_plane_A", "kind": "vehicle"})
 
 
 def test_scene_object_preserves_structured_render_hints():
-    builder = load_builder_module()
+    builder = load_recipes_module()
     obj = {
         "id": "ship_wings",
         "label": "wing",
@@ -351,7 +352,7 @@ def test_scene_object_preserves_structured_render_hints():
 
 
 def test_scene_object_tokens_include_structured_detail_fields():
-    builder = load_builder_module()
+    builder = load_recipes_module()
     obj = {
         "id": "table_1",
         "label": "dining table",
@@ -375,7 +376,7 @@ def test_scene_object_tokens_include_structured_detail_fields():
 
 
 def test_primitive_scene_object_uses_named_color_material(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     created = []
     blue_material = object()
 
@@ -416,7 +417,7 @@ def test_primitive_scene_object_uses_named_color_material(monkeypatch):
 
 
 def test_cone_scene_object_routes_to_cone_primitive(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     created = []
     yellow_material = object()
 
@@ -457,7 +458,7 @@ def test_cone_scene_object_routes_to_cone_primitive(monkeypatch):
 
 
 def test_structured_rounded_corner_table_builds_rounded_corner_parts(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     created = []
 
     def fake_cube(name, location, scale, mat):
@@ -496,7 +497,7 @@ def test_structured_rounded_corner_table_builds_rounded_corner_parts(monkeypatch
 
 
 def test_vehicle_wing_count_offsets_across_left_right_axis():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     left, right = [
         builder.offset_position_for_category((-0.05, 0, 0.58), copy_idx, 2, "vehicle_wing")
@@ -508,7 +509,7 @@ def test_vehicle_wing_count_offsets_across_left_right_axis():
 
 
 def test_location_shell_uses_kind_not_fuzzy_text():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.uses_location_shell({"kind": "location"})
     assert builder.uses_location_shell({"kind": "set", "scene_shell": True})
@@ -518,7 +519,7 @@ def test_location_shell_uses_kind_not_fuzzy_text():
 
 
 def test_assets_do_not_get_environment_shells():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.layout_shell_descriptors({"kind": "vehicle"}) == []
     assert builder.layout_shell_descriptors({"kind": "prop"}) == []
@@ -526,7 +527,7 @@ def test_assets_do_not_get_environment_shells():
 
 
 def test_locations_keep_environment_shells():
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.layout_shell_descriptors({"kind": "location"}) == [
         ("layout_floor", (0, 0, -0.08), (6.2, 3.8, 0.1), "neutral"),
@@ -539,7 +540,7 @@ def test_locations_keep_environment_shells():
 
 
 def test_canonical_camera_views_match_oeb_axes():
-    builder = load_builder_module()
+    builder = load_recipes_module()
     views = builder.canonical_camera_views()
 
     assert views["front"]["location"] == (6.4, 0, 0.45)
@@ -555,7 +556,7 @@ def test_scene_object_category_maps_llm_schema_enum_to_recipes():
     # category from a fixed enum including "seating"/"storage"/"bed". These
     # must route to the matching make_chair/make_cabinet/make_bed recipes,
     # not fall through to guessing a category from the object's label text.
-    builder = load_builder_module()
+    builder = load_recipes_module()
 
     assert builder.scene_object_category({"category": "seating", "label": "anything"}) == "chair"
     assert builder.scene_object_category({"category": "storage", "label": "anything"}) == "cabinet"
@@ -563,7 +564,7 @@ def test_scene_object_category_maps_llm_schema_enum_to_recipes():
 
 
 def test_seating_storage_bed_scene_objects_dispatch_to_matching_recipes(monkeypatch):
-    builder = load_builder_module()
+    builder = load_recipes_module()
     calls = []
 
     monkeypatch.setattr(builder, "make_chair", lambda name, x, y, mat: calls.append(("chair", name)) or [])

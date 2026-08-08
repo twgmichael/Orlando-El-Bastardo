@@ -157,3 +157,11 @@ def wedge(name, location, scale, mat, rotation=(0, 0, 0)):
 def clear_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete()
+
+
+def parent_to_root(canonical_id, objects):
+    root = bpy.data.objects.new(canonical_id, None)
+    bpy.context.collection.objects.link(root)
+    for obj in objects:
+        obj.parent = root
+    return root

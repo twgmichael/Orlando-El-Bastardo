@@ -5,10 +5,12 @@ Wires tools/blueprint_interpreter.py into the harness job system: no
 server-side changes needed, since the generic POST /api/v1/jobs endpoint
 already accepts an arbitrary payload dict, and the worker's
 BlenderCLIAdapter already runs any script_file/script_args generically
-(the same mechanism tools/primitive_asset_builder.py already runs
-through). This is what makes the interpreter's output show up as real
-Artifact rows -- required for tools/register_studio_chat_asset.py-style
-registration to find it. See docs/planning/REVIEW-AUDIT.md section 13.
+(the same mechanism Studio Chat's own build jobs run through -- see
+app.routers.conversations._build_job_payload, which now targets this
+same script). This is what makes the interpreter's output show up as
+real Artifact rows -- required for
+tools/register_studio_chat_asset.py-style registration to find it. See
+docs/planning/REVIEW-AUDIT.md section 13.
 
 Usage:
     python3 tools/submit_blueprint_job.py --blueprint-file blueprint.json \\

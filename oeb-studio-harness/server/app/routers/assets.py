@@ -26,8 +26,16 @@ ASSET_KINDS = {
     "camera_rig",
     "lighting_rig",
     "location",
+    "scene",
 }
-ASSET_STATUSES = {"available", "wip", "needed", "missing"}
+ASSET_STATUSES = {
+    "available", "wip", "needed", "missing",
+    # Tier-2 placeholder lifecycle (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+    # section 7): a generated placeholder starts "unapproved"; human review moves it
+    # to "rejected" (discard, regenerate fresh next time), "draft_fallback" (reusable,
+    # permanently non-final), or "available" (promoted to a real Tier-1 asset).
+    "unapproved", "draft_fallback", "rejected",
+}
 
 
 def _validate_kind(kind: str) -> None:
@@ -134,6 +142,8 @@ async def seed_assets(force: bool = False, db: AsyncSession = Depends(get_db)):
             continue
 
         file_path = entry.get("file")
+        known_keys = {"file", "node", "kind", "status", "tags"}
+        extra_metadata = {key: value for key, value in entry.items() if key not in known_keys}
         payload = {
             "canonical_id": canonical_id,
             "name": canonical_id,
@@ -141,10 +151,10 @@ async def seed_assets(force: bool = False, db: AsyncSession = Depends(get_db)):
             "file_path": file_path,
             "node_name": entry.get("node"),
             "format": Path(file_path).suffix.removeprefix(".").lower() if file_path else None,
-            "status": "available",
+            "status": entry.get("status") or "available",
             "provenance": {"source": "oeb.config.json", "seeded_at": seeded_at},
-            "tags": [],
-            "asset_metadata": {},
+            "tags": entry.get("tags") or [],
+            "asset_metadata": extra_metadata,
         }
 
         result = await db.execute(select(Asset).where(Asset.canonical_id == canonical_id))

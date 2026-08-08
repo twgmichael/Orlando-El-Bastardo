@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:blueprint:0.1.0",
+  "title": "Blueprint",
+  "description": "Canonical, engine-agnostic construction spec for one Canonical Asset or one scene-scoped composition of assets. Describes primitives, deterministic operations, and (for scenes) imported-asset references plus camera/timeline choreography, in terms any compatible translator can realize -- per docs/ARCHITECTURE.md's 'Mathematics, Language, And Blueprint' and docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md sections 2-3. This schema describes the spec only; it does not describe or require any particular execution engine. tools/blueprint_interpreter.py is the current (Blender) translator that consumes this shape -- see that file's module docstring for the translator-side contract. `compiled_spec`, when present, carries a full Studio Chat PrimitiveBuildSpec (scene_plan/components/registry primitives) for the hierarchical/recipe system in tools/oeb_blender/recipes.py; this is a transitional passthrough for spec shapes not yet expressed as native primitives/operations, not a second parallel format -- see UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "canonical_id"],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/semver" },
+    "canonical_id": { "$ref": "#/$defs/logical_id" },
+    "name": { "type": "string" },
+    "kind": { "type": "string" },
+    "units_per_meter": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1.0,
+      "description": "How many Blender units equal one real-world meter. Declares this Blueprint's scale reference for relative-edit operations to convert against; does not affect primitive construction itself. Defaults to Blender's native 1 unit = 1 meter convention when absent."
+    },
+    "frame_range": { "$ref": "#/$defs/FrameRange" },
+    "primitives": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/Primitive" }
+    },
+    "operations": {
+      "type": "array",
+      "default": [],
+      "items": { "$ref": "#/$defs/Operation" }
+    },
+    "compiled_spec": {
+      "type": "object",
+      "description": "Transitional passthrough: a full Studio Chat PrimitiveBuildSpec (scene_plan/components/registry primitives), routed to the hierarchical/recipe system instead of the native primitives/operations vocabulary above. Mutually exclusive with `primitives` in practice -- a translator consuming this field builds geometry from it instead of from `primitives`."
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "logical_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vec3": {
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "Transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "location": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "scale": { "$ref": "#/$defs/vec3" }
+      }
+    },
+    "Material": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "minItems": 3,
+          "maxItems": 4
+        }
+      }
+    },
+    "FrameRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "integer", "default": 1 },
+        "end": { "type": "integer", "default": 250 },
+        "fps": { "type": "number", "exclusiveMinimum": 0, "default": 24.0 }
+      }
+    },
+    "Primitive": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "\"camera\" is reserved -- the interpreter always creates and registers a camera object under this id before applying operations; do not use it for a geometry primitive."
+        },
+        "type": {
+          "enum": ["cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "import"]
+        },
+        "transform": { "$ref": "#/$defs/Transform" },
+        "material": {
+          "$ref": "#/$defs/Material",
+          "description": "Ignored for type=import -- an imported asset keeps its own materials."
+        },
+        "canonical_id": {
+          "type": "string",
+          "description": "Required when type=import: references an existing Canonical Asset by canonical_id, resolved against oeb.config.json's assets map."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "import" } } },
+          "then": { "required": ["id", "type", "canonical_id"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "Operation": {
+      "type": "object",
+      "required": ["op", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": ["bevel", "mirror", "array", "set_camera_keyframe", "orbit_around", "dolly_to"],
+          "description": "The full ontology vocabulary (bisect, loft, sweep, boolean, extrude) is deliberately deferred; added one operation at a time as an actual need surfaces -- see tools/blueprint_interpreter.py's module docstring."
+        },
+        "target": {
+          "type": "string",
+          "description": "A primitive id, or \"camera\" for the three camera/timeline operations."
+        },
+        "params": {
+          "type": "object",
+          "description": "Operation-specific parameters -- see tools/blueprint_interpreter.py's OPERATIONS dispatch table and per-op _apply_<op> functions for the authoritative parameter contract of each op."
+        }
+      }
+    }
+  }
+}

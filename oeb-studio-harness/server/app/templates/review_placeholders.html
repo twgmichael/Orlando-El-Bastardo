@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Review Placeholders{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Jobs</a>
+  <span>/</span>
+  <span>Review Placeholders</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>Review Placeholders</h1>
+    <p>Tier-2 fallback assets generated automatically when a teleplay calls
+      for something no approved asset covers. Each one is deliberately
+      crude and stays out of final delivery until a human decides what
+      happens to it here. See
+      docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Placeholders</h2>
+  {% if not placeholders %}
+  <p class="empty">No placeholders yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Asset</th>
+        <th>Kind</th>
+        <th>Tags</th>
+        <th>Status</th>
+        <th>Updated</th>
+        <th>Decision</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for asset in placeholders %}
+      <tr>
+        <td>
+          <a href="/review/assets/{{ asset.canonical_id }}">{{ asset.name or asset.canonical_id }}</a>
+          <div class="mono small">{{ asset.canonical_id }}</div>
+        </td>
+        <td>{{ asset.kind }}</td>
+        <td class="mono small">{{ asset.tags | join(', ') if asset.tags else '—' }}</td>
+        <td><span class="badge status-{{ asset.status }}">{{ asset.status }}</span></td>
+        <td class="mono small">{{ asset.updated_at }}</td>
+        <td>
+          {% if asset.status == 'unapproved' %}
+          <form class="inline-render-form" method="post" action="/review/placeholders/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="reject">
+            <button type="submit">Reject</button>
+          </form>
+          <form class="inline-render-form" method="post" action="/review/placeholders/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="draft_fallback">
+            <button type="submit">Approve as fallback</button>
+          </form>
+          <form class="inline-render-form" method="post" action="/review/placeholders/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="promote">
+            <button type="submit">Promote to Tier 1</button>
+          </form>
+          {% elif asset.status == 'draft_fallback' %}
+          <form class="inline-render-form" method="post" action="/review/placeholders/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="promote">
+            <button type="submit">Promote to Tier 1</button>
+          </form>
+          {% else %}
+          <span class="mono small">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% endblock %}

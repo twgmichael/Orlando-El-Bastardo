@@ -48,6 +48,23 @@
       "file": "ships/jb100.glb",
       "node": "prop_jb100_A",
       "kind": "prop"
+    },
+    "scene_oeb_title_A": {
+      "kind": "scene",
+      "current_revision": "scene_versions/oeb_scene_title_v0.0.12",
+      "tags": ["oeb title", "title sequence", "logo", "1999 teaser"]
+    },
+    "scene_pirate_escape_A": {
+      "kind": "scene",
+      "current_revision": null,
+      "tags": ["pirate escape", "jb100", "ellipso flyer", "ventradi cruiser", "chase"],
+      "note": "Stub entry, not yet a scene_versions build. Closest known source: tools/pirate-escape.py / tools/JB100-pirate-escape.py."
+    },
+    "scene_bugblatter_swarm_flythrough_A": {
+      "kind": "scene",
+      "current_revision": null,
+      "tags": ["bugblatter", "swarm", "fly-through", "jb100"],
+      "note": "Stub entry, not yet confirmed to a scene_versions build. Closest naming match found is scene_versions/jb100_hyberspace_swarm_v1.0.21, unverified as the same scene."
     }
   }
 }

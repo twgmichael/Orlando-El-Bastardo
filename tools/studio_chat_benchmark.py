@@ -11,8 +11,9 @@ Submits a fixed set of creative prompts to a running Studio Chat harness
 for each build job to complete, and records what actually got built --
 primitive count and the mix of primitive types used per job, pulled from
 the real worker's build log. Re-run this after any change to the resolver,
-compiler, or tools/primitive_asset_builder.py and diff the results against
-a prior run to see whether output variety actually moved.
+compiler, or tools/blueprint_interpreter.py / tools/oeb_blender/recipes.py
+and diff the results against a prior run to see whether output variety
+actually moved.
 
 This intentionally does not judge visual quality (no human/vision-model
 review here) -- it judges structural variety: object count and primitive

@@ -1,3 +1,5 @@
+import json
+
 from app.routers.conversations import _build_job_payload, _normalize_spec_for_request
 from app.schemas.conversation import PrimitiveBuildSpec
 
@@ -83,21 +85,29 @@ def test_job_payload_uses_job_scoped_output_paths():
     job_payload = payload["payload"]
 
     assert payload["title"] == "Build ship_capital_letter_v_A primitive vehicle"
+    assert job_payload["script_file"] == "tools/blueprint_interpreter.py"
     assert job_payload["output_path"] == (
         "{output_root}/jobs/{job_id}/renders/asset_previews/ship_capital_letter_v_A.png"
     )
     assert job_payload["artifact_paths"] == [
         "{output_root}/jobs/{job_id}/assets/vehicles/ship_capital_letter_v_A.glb",
+        "{output_root}/jobs/{job_id}/assets/vehicles/ship_capital_letter_v_A.blend",
         "{output_root}/jobs/{job_id}/renders/asset_previews/ship_capital_letter_v_A.png",
         "{output_root}/jobs/{job_id}/out/asset_builds/ship_capital_letter_v_A.json",
     ]
     assert job_payload["script_args"][2:] == [
-        "--output",
+        "--glb-output",
         "{output_root}/jobs/{job_id}/assets/vehicles/ship_capital_letter_v_A.glb",
+        "--blend-output",
+        "{output_root}/jobs/{job_id}/assets/vehicles/ship_capital_letter_v_A.blend",
         "--preview-output",
         "{output_root}/jobs/{job_id}/renders/asset_previews/ship_capital_letter_v_A.png",
         "--manifest-output",
         "{output_root}/jobs/{job_id}/out/asset_builds/ship_capital_letter_v_A.json",
     ]
+    assert job_payload["script_args"][0] == "--blueprint-json"
+    blueprint = json.loads(job_payload["script_args"][1])
+    assert blueprint["canonical_id"] == "ship_capital_letter_v_A"
+    assert blueprint["compiled_spec"]["canonical_id"] == "ship_capital_letter_v_A"
     assert job_payload["conversation"]["creative_request"] == prompt
     assert job_payload["conversation"]["spec"]["canonical_id"] == "ship_capital_letter_v_A"

@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -36,7 +37,13 @@ def _find_tool_path(filename: str) -> Path:
 
 def load_interpreter_module():
     sys.modules.setdefault("bpy", types.SimpleNamespace())
-    sys.modules.setdefault("mathutils", types.SimpleNamespace(Vector=lambda value: value))
+    # Vector/Quaternion are only exercised for real in _look_at_rotation,
+    # which every test here monkeypatches around (same pattern as
+    # bevel/mirror/array) rather than mocking mathutils's real vector
+    # math -- these bare placeholders just need to make the module import.
+    sys.modules.setdefault(
+        "mathutils", types.SimpleNamespace(Vector=lambda value: value, Quaternion=lambda *a: None)
+    )
     # oeb_blender.primitives is a real import (not loaded via file-location
     # trick), so it needs tools/ on sys.path -- the module under test does
     # this itself via sys.path.insert, but that only runs once it's
@@ -137,27 +144,79 @@ def test_material_for_caches_by_color():
 def test_apply_operation_dispatches_to_registered_op(monkeypatch):
     interpreter = load_interpreter_module()
     calls = []
-    monkeypatch.setitem(interpreter.OPERATIONS, "bevel", lambda obj, params: calls.append((obj, params)))
+    monkeypatch.setitem(
+        interpreter.OPERATIONS, "bevel", lambda obj, params, ctx: calls.append((obj, params, ctx))
+    )
 
     fake_obj = FakeObj()
     interpreter.apply_operation(
         {"op": "bevel", "target": "body", "params": {"width": 0.1}},
         {"body": fake_obj},
+        {"frame_start": 1, "frame_end": 10},
     )
 
-    assert calls == [(fake_obj, {"width": 0.1})]
+    assert calls == [(fake_obj, {"width": 0.1}, {"frame_start": 1, "frame_end": 10})]
 
 
 def test_apply_operation_unknown_op_raises():
     interpreter = load_interpreter_module()
     with pytest.raises(ValueError, match="Unknown operation"):
-        interpreter.apply_operation({"op": "extrude", "target": "body"}, {"body": FakeObj()})
+        interpreter.apply_operation({"op": "extrude", "target": "body"}, {"body": FakeObj()}, {})
 
 
 def test_apply_operation_unknown_target_raises():
     interpreter = load_interpreter_module()
     with pytest.raises(ValueError, match="unknown target"):
-        interpreter.apply_operation({"op": "bevel", "target": "missing"}, {})
+        interpreter.apply_operation({"op": "bevel", "target": "missing"}, {}, {})
+
+
+def test_apply_camera_keyframe_dispatches_via_reserved_camera_id(monkeypatch):
+    interpreter = load_interpreter_module()
+    calls = []
+    monkeypatch.setitem(
+        interpreter.OPERATIONS,
+        "set_camera_keyframe",
+        lambda obj, params, ctx: calls.append((obj, params, ctx)),
+    )
+
+    fake_camera = FakeObj()
+    interpreter.apply_operation(
+        {"op": "set_camera_keyframe", "target": "camera", "params": {"frame": 1}},
+        {"camera": fake_camera},
+        {"frame_start": 1, "frame_end": 193},
+    )
+
+    assert calls == [(fake_camera, {"frame": 1}, {"frame_start": 1, "frame_end": 193})]
+
+
+def test_validate_frame_rejects_out_of_range():
+    interpreter = load_interpreter_module()
+    ctx = {"frame_start": 1, "frame_end": 100}
+    assert interpreter._validate_frame(50, ctx) == 50
+    with pytest.raises(ValueError, match="outside this Blueprint's frame_range"):
+        interpreter._validate_frame(101, ctx)
+
+
+def test_apply_frame_range_rejects_end_before_start(monkeypatch):
+    interpreter = load_interpreter_module()
+    monkeypatch.setattr(
+        interpreter,
+        "bpy",
+        types.SimpleNamespace(context=types.SimpleNamespace(scene=types.SimpleNamespace(render=types.SimpleNamespace()))),
+    )
+    with pytest.raises(ValueError, match="frame_range.end"):
+        interpreter._apply_frame_range({"frame_range": {"start": 10, "end": 5}})
+
+
+def test_apply_frame_range_rejects_non_positive_fps(monkeypatch):
+    interpreter = load_interpreter_module()
+    monkeypatch.setattr(
+        interpreter,
+        "bpy",
+        types.SimpleNamespace(context=types.SimpleNamespace(scene=types.SimpleNamespace(render=types.SimpleNamespace()))),
+    )
+    with pytest.raises(ValueError, match="fps must be positive"):
+        interpreter._apply_frame_range({"frame_range": {"start": 1, "end": 10, "fps": 0}})
 
 
 def test_build_blueprint_wires_primitives_operations_and_root(monkeypatch):
@@ -177,10 +236,23 @@ def test_build_blueprint_wires_primitives_operations_and_root(monkeypatch):
         roots.append((canonical_id, list(objects)))
         return root
 
+    fake_ctx = {"frame_start": 1, "frame_end": 250, "fps": 24.0}
+
+    def fake_ensure_camera(objects_by_id):
+        camera = FakeObj(name="camera")
+        objects_by_id["camera"] = camera
+        return camera
+
     monkeypatch.setattr(interpreter, "clear_scene", lambda: None)
+    monkeypatch.setattr(interpreter, "_apply_frame_range", lambda blueprint: fake_ctx)
+    monkeypatch.setattr(interpreter, "_ensure_camera", fake_ensure_camera)
+    monkeypatch.setattr(interpreter, "_add_preview_light", lambda: None)
+    monkeypatch.setattr(interpreter, "_setup_default_preview_camera", lambda camera_obj: None)
     monkeypatch.setattr(interpreter, "cube", fake_cube)
     monkeypatch.setattr(interpreter, "material", lambda name, color: f"mat:{color}")
-    monkeypatch.setitem(interpreter.OPERATIONS, "bevel", lambda obj, params: op_calls.append((obj.name, params)))
+    monkeypatch.setitem(
+        interpreter.OPERATIONS, "bevel", lambda obj, params, ctx: op_calls.append((obj.name, params, ctx))
+    )
     monkeypatch.setattr(interpreter, "parent_to_root", fake_parent_to_root)
 
     blueprint = {
@@ -193,9 +265,147 @@ def test_build_blueprint_wires_primitives_operations_and_root(monkeypatch):
         ],
     }
 
-    root, applied_ops = interpreter.build_blueprint(blueprint)
+    root, applied_ops, ctx, variant = interpreter.build_blueprint(blueprint)
 
     assert root.name == "prop_test_A"
-    assert op_calls == [("body", {"width": 0.05})]
+    assert op_calls == [("body", {"width": 0.05}, fake_ctx)]
     assert applied_ops == [{"op": "bevel", "target": "body"}]
+    assert ctx == fake_ctx
+    assert variant is None
+    # Camera is registered for operation targeting but excluded from what
+    # gets parented under the asset root -- it's a scene-level sibling,
+    # not asset geometry (see build_blueprint's comment).
     assert roots == [("prop_test_A", [created_objects["body"]])]
+
+
+def _fake_import_bpy(gltf_calls, objects_by_name):
+    return types.SimpleNamespace(
+        ops=types.SimpleNamespace(
+            import_scene=types.SimpleNamespace(
+                gltf=lambda filepath: gltf_calls.append(filepath)
+            )
+        ),
+        data=types.SimpleNamespace(objects=types.SimpleNamespace(get=objects_by_name.get)),
+    )
+
+
+def test_build_import_primitive_resolves_and_applies_transform(monkeypatch, tmp_path):
+    interpreter = load_interpreter_module()
+    gltf_calls = []
+    node_obj = FakeObj(name="set_bar_small_A", location=(0, 0, 0), rotation_euler=(0, 0, 0), scale=(1, 1, 1))
+    monkeypatch.setattr(interpreter, "bpy", _fake_import_bpy(gltf_calls, {"set_bar_small_A": node_obj}))
+
+    glb_path = tmp_path / "sets" / "bar_scene_scifi.glb"
+    glb_path.parent.mkdir(parents=True)
+    glb_path.write_bytes(b"")  # only existence is checked
+
+    import_ctx = {
+        "config": {"assets": {"set_bar_small_A": {"file": "sets/bar_scene_scifi.glb", "node": "set_bar_small_A"}}},
+        "asset_root": tmp_path,
+        "imported_files": set(),
+    }
+
+    obj = interpreter.build_import_primitive(
+        {"id": "logo", "type": "import", "canonical_id": "set_bar_small_A",
+         "transform": {"location": [1, 2, 3]}},
+        import_ctx,
+    )
+
+    assert gltf_calls == [str(glb_path)]
+    assert obj is node_obj
+    assert obj.name == "logo"  # renamed from the source node name to the Blueprint's local id
+    assert obj.location == (1.0, 2.0, 3.0)
+    assert obj.rotation_euler == (0.0, 0.0, 0.0)  # default, not specified
+    assert obj.scale == (1.0, 1.0, 1.0)
+
+
+def test_build_import_primitive_dedupes_same_glb(monkeypatch, tmp_path):
+    interpreter = load_interpreter_module()
+    gltf_calls = []
+    objects_by_name = {
+        "prop_bar_counter_A": FakeObj(name="prop_bar_counter_A", location=(0, 0, 0), rotation_euler=(0, 0, 0), scale=(1, 1, 1)),
+        "prop_stool_A": FakeObj(name="prop_stool_A", location=(0, 0, 0), rotation_euler=(0, 0, 0), scale=(1, 1, 1)),
+    }
+    monkeypatch.setattr(interpreter, "bpy", _fake_import_bpy(gltf_calls, objects_by_name))
+
+    glb_path = tmp_path / "sets" / "bar_scene_scifi.glb"
+    glb_path.parent.mkdir(parents=True)
+    glb_path.write_bytes(b"")
+
+    import_ctx = {
+        "config": {"assets": {
+            "prop_bar_counter_A": {"file": "sets/bar_scene_scifi.glb", "node": "prop_bar_counter_A"},
+            "prop_stool_A": {"file": "sets/bar_scene_scifi.glb", "node": "prop_stool_A"},
+        }},
+        "asset_root": tmp_path,
+        "imported_files": set(),
+    }
+
+    interpreter.build_import_primitive({"id": "counter", "type": "import", "canonical_id": "prop_bar_counter_A"}, import_ctx)
+    interpreter.build_import_primitive({"id": "stool", "type": "import", "canonical_id": "prop_stool_A"}, import_ctx)
+
+    # Same source file referenced by two import primitives -- imported once.
+    assert gltf_calls == [str(glb_path)]
+
+
+def test_build_import_primitive_unknown_canonical_id_raises():
+    interpreter = load_interpreter_module()
+    import_ctx = {"config": {"assets": {}}, "asset_root": Path("/tmp"), "imported_files": set()}
+    with pytest.raises(ValueError, match="not found in oeb.config.json"):
+        interpreter.build_import_primitive({"id": "x", "type": "import", "canonical_id": "missing_A"}, import_ctx)
+
+
+def test_build_import_primitive_missing_file_raises(tmp_path, monkeypatch):
+    interpreter = load_interpreter_module()
+    monkeypatch.setattr(interpreter, "bpy", _fake_import_bpy([], {}))
+    import_ctx = {
+        "config": {"assets": {"x_A": {"file": "does/not/exist.glb", "node": "x_A"}}},
+        "asset_root": tmp_path,
+        "imported_files": set(),
+    }
+    with pytest.raises(ValueError, match="not found"):
+        interpreter.build_import_primitive({"id": "x", "type": "import", "canonical_id": "x_A"}, import_ctx)
+
+
+def test_load_import_config_resolves_relative_asset_root(tmp_path):
+    interpreter = load_interpreter_module()
+    config_path = tmp_path / "oeb.config.json"
+    config_path.write_text(json.dumps({"asset_root": "assets", "assets": {}}))
+
+    import_ctx = interpreter.load_import_config(config_path)
+
+    assert import_ctx["asset_root"] == interpreter.PROJECT_ROOT / "assets"
+    assert import_ctx["imported_files"] == set()
+
+
+def test_build_blueprint_routes_import_type_to_build_import_primitive(monkeypatch):
+    interpreter = load_interpreter_module()
+    import_calls = []
+
+    def fake_ensure_camera(objects_by_id):
+        camera = FakeObj(name="camera")
+        objects_by_id["camera"] = camera
+        return camera
+
+    def fake_build_import_primitive(spec, import_ctx):
+        import_calls.append((spec["id"], import_ctx))
+        return FakeObj(name=spec["id"], parent=None)
+
+    monkeypatch.setattr(interpreter, "clear_scene", lambda: None)
+    monkeypatch.setattr(interpreter, "_apply_frame_range", lambda blueprint: {"frame_start": 1, "frame_end": 10, "fps": 24.0})
+    monkeypatch.setattr(interpreter, "_ensure_camera", fake_ensure_camera)
+    monkeypatch.setattr(interpreter, "_add_preview_light", lambda: None)
+    monkeypatch.setattr(interpreter, "_setup_default_preview_camera", lambda camera_obj: None)
+    monkeypatch.setattr(interpreter, "load_import_config", lambda path: {"loaded_from": path})
+    monkeypatch.setattr(interpreter, "build_import_primitive", fake_build_import_primitive)
+    monkeypatch.setattr(interpreter, "parent_to_root", lambda canonical_id, objects: FakeObj(name=canonical_id))
+
+    blueprint = {
+        "canonical_id": "prop_test_A",
+        "primitives": [{"id": "logo", "type": "import", "canonical_id": "set_bar_small_A"}],
+        "operations": [],
+    }
+
+    interpreter.build_blueprint(blueprint, config_path="/fake/oeb.config.json")
+
+    assert import_calls == [("logo", {"loaded_from": "/fake/oeb.config.json"})]

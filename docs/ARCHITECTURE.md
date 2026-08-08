@@ -1,7 +1,7 @@
 ---
 title: Architecture
 created: 2026-07-03T21:43:45-04:00
-updated: 2026-07-27T12:00:00-04:00
+updated: 2026-08-08T00:00:00-04:00
 doc_type: spec
 production_area: pipeline
 department: pipeline
@@ -41,6 +41,11 @@ wiki_order: 10
 - Do not let target-specific requirements leak into authoring.
 - Keep intent separate from resolved assets where possible.
 - Validate every scene before export.
+- Automation may lower fidelity, substitute assets, simplify motion, invent
+  provisional staging, and make provisional creative decisions. It may not
+  silently convert those decisions into canonical truth. The model can write
+  the draft; humans decide what becomes production truth. See "LLM role"
+  below.
 
 ## Mathematics, Language, And Blueprint
 
@@ -135,11 +140,24 @@ than define it.
 
 ## LLM role
 
-Approved: translator, constraint engine, scene fitting assistant, format conversion
-layer, structured extraction layer.
+Automation may lower fidelity, substitute assets, simplify motion, invent
+provisional staging, and make provisional creative decisions. It may not
+silently convert those decisions into canonical truth. This replaces the
+older, stricter framing of this section: the model can write the draft;
+humans decide what becomes production truth. A draft carries no authority
+of its own — it becomes production truth only through the same human
+review/promotion step Canonical Assets already require, never by default
+and never silently.
 
-Rejected: story author, freeform director, frame generator, unvalidated final file
-author.
+Approved: translator, constraint engine, scene fitting assistant, format
+conversion layer, structured extraction layer, and — scoped to provisional
+draft output only, never to anything treated as final — semantic asset
+substitution, motion simplification, and provisional staging/blocking
+decisions.
+
+Rejected: story authorship (inventing narrative content beyond the
+human-authored source), silently promoting a provisional or draft decision
+to canonical or production truth, and unvalidated final file authorship.
 
 The LLM should usually output `SceneIntent` or a partially resolved `SceneSpec`,
 not direct Blender/Godot/USD files. This is safer, lets a deterministic resolver

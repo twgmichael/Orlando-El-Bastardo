@@ -1118,7 +1118,7 @@ async def _upsert_asset_state_from_build(
         asset = StudioChatAsset(
             thread_id=thread_id,
             asset_id=asset_id,
-            base_builder=str(build_payload.get("tool") or "primitive_asset_builder"),
+            base_builder=str(build_payload.get("tool") or "blueprint_interpreter"),
             current_revision=revision_number,
             state_json=state_after,
             source_blend_path=source_blend_path,

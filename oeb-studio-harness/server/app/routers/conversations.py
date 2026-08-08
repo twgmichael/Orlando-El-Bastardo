@@ -75,9 +75,20 @@ def _build_job_payload(creative_request: str, spec: PrimitiveBuildSpec) -> dict:
     spec.creative_request = creative_request
     job_root = PurePosixPath("jobs") / "{job_id}"
     asset_path = job_root / "assets" / f"{spec.kind}s" / f"{spec.canonical_id}.glb"
+    blend_path = job_root / "assets" / f"{spec.kind}s" / f"{spec.canonical_id}.blend"
     preview_path = job_root / "renders" / "asset_previews" / f"{spec.canonical_id}.png"
     manifest_path = job_root / "out" / "asset_builds" / f"{spec.canonical_id}.json"
     spec_json = spec.model_dump_json()
+    blueprint_json = json.dumps({
+        "schema_version": "0.1.0",
+        "canonical_id": spec.canonical_id,
+        "name": spec.name,
+        "kind": spec.kind,
+        "units_per_meter": 1.0,
+        "compiled_spec": json.loads(spec_json),
+        "primitives": [],
+        "operations": [],
+    })
 
     return {
         "title": f"Build {spec.canonical_id} primitive {spec.kind}",
@@ -85,21 +96,24 @@ def _build_job_payload(creative_request: str, spec: PrimitiveBuildSpec) -> dict:
         "required_capabilities": ["blender.command_line"],
         "policy": "run_anywhere",
         "payload": {
-            "tool": "primitive_asset_builder",
-            "script_file": "tools/primitive_asset_builder.py",
+            "tool": "blueprint_interpreter",
+            "script_file": "tools/blueprint_interpreter.py",
             "cwd": "{workspace_root}",
             "output_path": f"{{output_root}}/{preview_path}",
             "artifact_paths": [
                 f"{{output_root}}/{asset_path}",
+                f"{{output_root}}/{blend_path}",
                 f"{{output_root}}/{preview_path}",
                 f"{{output_root}}/{manifest_path}",
             ],
             "artifact_type": "asset_build",
             "script_args": [
-                "--spec-json",
-                spec_json,
-                "--output",
+                "--blueprint-json",
+                blueprint_json,
+                "--glb-output",
                 f"{{output_root}}/{asset_path}",
+                "--blend-output",
+                f"{{output_root}}/{blend_path}",
                 "--preview-output",
                 f"{{output_root}}/{preview_path}",
                 "--manifest-output",

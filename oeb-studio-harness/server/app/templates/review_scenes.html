@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Scenes{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Jobs</a>
+  <span>/</span>
+  <span>Scenes</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>Scenes</h1>
+    <p>Registered scenes, extended into the same asset registry as
+      canonical assets per docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+      section 9. "Load X" chat commands resolve against this list.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Registered scenes</h2>
+  {% if not scenes %}
+  <p class="empty">No scenes registered yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Scene</th>
+        <th>Tags</th>
+        <th>Current revision</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for scene in scenes %}
+      <tr>
+        <td>
+          {{ scene.name or scene.canonical_id }}
+          <div class="mono small">{{ scene.canonical_id }}</div>
+        </td>
+        <td class="mono small">{{ scene.tags | join(', ') if scene.tags else '—' }}</td>
+        <td class="mono small">
+          {% if scene.asset_metadata and scene.asset_metadata.get('current_revision') %}
+            {{ scene.asset_metadata.get('current_revision') }}
+          {% else %}
+            <span class="empty">not yet built</span>
+          {% endif %}
+          {% if scene.asset_metadata and scene.asset_metadata.get('note') %}
+            <div class="mono small">{{ scene.asset_metadata.get('note') }}</div>
+          {% endif %}
+        </td>
+        <td><span class="badge status-{{ scene.status }}">{{ scene.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% endblock %}
