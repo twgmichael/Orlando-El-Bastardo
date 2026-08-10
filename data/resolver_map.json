@@ -3,43 +3,227 @@
   "locations": {
     "small_bar_interior": {
       "set_id": "set_bar_small_A",
-      "variants": { "night": "variant_night", "day": "variant_day" },
-      "marks": ["hero_barstool_A", "bartender_idle_A", "bartender_backbar_A", "hero_entry_A", "hero_stool_front_A"],
+      "variants": {
+        "night": "variant_night",
+        "day": "variant_day"
+      },
+      "marks": [
+        "hero_barstool_A",
+        "bartender_idle_A",
+        "bartender_backbar_A",
+        "hero_entry_A",
+        "hero_stool_front_A"
+      ],
       "default_props": [
-        { "prop_id": "counter_main", "asset_id": "prop_bar_counter_A" },
-        { "prop_id": "stool_hero", "asset_id": "prop_stool_A", "at_mark": "hero_barstool_A" },
-        { "prop_id": "glass_hero", "asset_id": "prop_glass_tumbler_A" },
-        { "prop_id": "bottle_shelf", "asset_id": "prop_bottle_generic_A" }
+        {
+          "prop_id": "counter_main",
+          "asset_id": "prop_bar_counter_A"
+        },
+        {
+          "prop_id": "stool_hero",
+          "asset_id": "prop_stool_A",
+          "at_mark": "hero_barstool_A"
+        },
+        {
+          "prop_id": "glass_hero",
+          "asset_id": "prop_glass_tumbler_A"
+        },
+        {
+          "prop_id": "bottle_shelf",
+          "asset_id": "prop_bottle_generic_A"
+        }
       ]
+    },
+    "deep_space": {
+      "set_id": "placeholder_location_deep_space_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_deep_space_A_entry",
+        "placeholder_location_deep_space_A_center",
+        "placeholder_location_deep_space_A_exit"
+      ],
+      "default_props": [],
+      "environment": "deep_space",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "journeyblaster_cockpit": {
+      "set_id": "placeholder_location_journeyblaster_cockpit_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_journeyblaster_cockpit_A_entry",
+        "placeholder_location_journeyblaster_cockpit_A_center",
+        "placeholder_location_journeyblaster_cockpit_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "asteroid_field": {
+      "set_id": "placeholder_location_asteroid_field_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_asteroid_field_A_entry",
+        "placeholder_location_asteroid_field_A_center",
+        "placeholder_location_asteroid_field_A_exit"
+      ],
+      "default_props": [],
+      "environment": "deep_space",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     }
   },
   "roles": {
     "protagonist": {
       "character_id": "char_hero_v1",
-      "spawn_mark": "hero_barstool_A",
+      "spawn_marks": {
+        "small_bar_interior": "hero_barstool_A"
+      },
       "idle_clip": "idle_seated_relaxed",
       "talk_clip": "talk_neutral_seated",
-      "entrance": {
-        "from_mark": "hero_entry_A",
-        "approach_mark": "hero_stool_front_A",
-        "stand_clip": "idle_standing_relaxed",
-        "walk_clip": "walk_to_stool",
-        "walk_duration": 2.6667,
-        "settle_clip": "sit_barstool",
-        "settle_duration": 1.3,
-        "rise_clip": "stand_from_stool",
-        "rise_duration": 1.3
+      "entrances": {
+        "small_bar_interior": {
+          "from_mark": "hero_entry_A",
+          "approach_mark": "hero_stool_front_A",
+          "stand_clip": "idle_standing_relaxed",
+          "walk_clip": "walk_to_stool",
+          "walk_duration": 2.6667,
+          "settle_clip": "sit_barstool",
+          "settle_duration": 1.3,
+          "rise_clip": "stand_from_stool",
+          "rise_duration": 1.3
+        }
       }
     },
     "bartender": {
       "character_id": "char_bartender_v1",
-      "spawn_mark": "bartender_idle_A",
+      "spawn_marks": {
+        "small_bar_interior": "bartender_idle_A"
+      },
       "idle_clip": "idle_standing_relaxed",
       "talk_clip": "talk_friendly_standing"
+    },
+    "ship_ai": {
+      "character_id": "placeholder_character_ship_ai_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "casey": {
+      "character_id": "placeholder_character_casey_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "orlando": {
+      "character_id": "placeholder_character_orlando_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "deep_space": "placeholder_location_deep_space_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "deep_space": {
+          "from_mark": "placeholder_location_deep_space_A_entry",
+          "approach_mark": "placeholder_location_deep_space_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "journeyblaster": {
+      "character_id": "placeholder_vehicle_journeyblaster_A",
+      "spawn_marks": {
+        "asteroid_field": "placeholder_location_asteroid_field_A_center",
+        "deep_space": "placeholder_location_deep_space_A_center",
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "asteroid_field": {
+          "from_mark": "placeholder_location_asteroid_field_A_entry",
+          "approach_mark": "placeholder_location_asteroid_field_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "deep_space": {
+          "from_mark": "placeholder_location_deep_space_A_entry",
+          "approach_mark": "placeholder_location_deep_space_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     }
   },
   "defaults": {
-    "render": { "fps": 24, "resolution": { "width": 1920, "height": 1080 }, "engine": "eevee" },
-    "export_targets": ["blender", "godot", "usd"]
+    "render": {
+      "fps": 24,
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "engine": "eevee"
+    },
+    "export_targets": [
+      "blender",
+      "godot",
+      "usd"
+    ]
   }
 }

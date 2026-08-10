@@ -25,6 +25,11 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from oeb_blender.cue_execution import apply_move as _shared_apply_move  # noqa: E402
+from oeb_blender.cue_execution import apply_nla_clip, to_frame  # noqa: E402
+from oeb_blender.space_env import setup_space_env  # noqa: E402
+
 # ─── Project root (script lives at <root>/tools/export_blender.py) ────────────
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -59,10 +64,6 @@ def _parse_args():
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
 
-def to_frame(t_seconds, fps):
-    """R3: convert absolute seconds to Blender 1-based frame number."""
-    return round(t_seconds * fps) + 1
-
 
 def _load_json(path):
     with open(path, 'r', encoding='utf-8') as fh:
@@ -83,111 +84,18 @@ def _resolve_path(arg_path, base=PROJECT_ROOT):
         return arg_path
     return os.path.join(base, arg_path)
 
-# ─── R7: clip lookup ──────────────────────────────────────────────────────────
-
-def _find_action(clip_id):
-    """
-    R7: resolve *clip_id* to exactly one bpy.data.actions entry.
-    Candidate = exact name match OR name with trailing .NNN suffix stripped.
-    Exactly one candidate → return it; otherwise → die(2).
-    """
-    import bpy  # noqa – available inside Blender
-
-    candidates = []
-    seen_ptr = set()
-    for action in bpy.data.actions:
-        nm = action.name
-        match = (nm == clip_id) or (re.sub(r'\.\d+$', '', nm) == clip_id)
-        if match and id(action) not in seen_ptr:
-            candidates.append(action)
-            seen_ptr.add(id(action))
-
-    if len(candidates) == 1:
-        return candidates[0]
-    _die(f"clip '{clip_id}' resolved to {len(candidates)} actions", 2)
-
 # ─── R12: move-cue keyframing ─────────────────────────────────────────────────
+# Now lives in oeb_blender/cue_execution.py, shared with
+# blueprint_interpreter.py's play_move_cue/play_animation_cue operations
+# (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 11 item 3) --
+# this wrapper just translates that shared code's ValueError into this
+# script's die(2) convention, preserving exact prior behavior.
 
 def _apply_move(obj, cue, start_frame, end_frame, fps):
-    """
-    R12: keyframe *obj* location from from_mark to to_mark across the cue.
-
-    Facing convention: OEB character assets face -Y at object rotation 0
-    (UAL clip baseline), so the absolute heading that faces travel
-    direction (dx, dy) is atan2(dx, -dy). facing='travel' keys that
-    heading for the journey and turns back to the asset's resting rotation
-    over the final ~0.4 s; facing='hold' leaves rotation alone.
-    """
-    import bpy  # noqa
-
-    from_obj = bpy.data.objects.get(cue['from_mark'])
-    to_obj = bpy.data.objects.get(cue['to_mark'])
-    cue_id = cue.get('cue_id', '<no-id>')
-    if from_obj is None:
-        _die(f"move cue '{cue_id}' from_mark '{cue['from_mark']}' "
-             f"not found in scene", 2)
-    if to_obj is None:
-        _die(f"move cue '{cue_id}' to_mark '{cue['to_mark']}' "
-             f"not found in scene", 2)
-
-    src = from_obj.location.copy()
-    dst = to_obj.location.copy()
-
-    # glTF-imported objects arrive in QUATERNION rotation mode; convert so
-    # z-euler keyframes apply.
-    if obj.rotation_mode != 'XYZ':
-        eul = obj.rotation_quaternion.to_euler('XYZ') \
-            if obj.rotation_mode == 'QUATERNION' \
-            else obj.rotation_euler.to_quaternion().to_euler('XYZ')
-        obj.rotation_mode = 'XYZ'
-        obj.rotation_euler = eul
-    base_rz = obj.rotation_euler.z
-
-    obj.location = src
-    obj.keyframe_insert('location', frame=start_frame)
-    obj.location = dst
-    obj.keyframe_insert('location', frame=end_frame)
-
-    facing = cue.get('facing', 'travel')
-    if facing in ('travel', 'travel_hold'):
-        dx, dy = dst.x - src.x, dst.y - src.y
-        if (dx * dx + dy * dy) > 1e-8:
-            heading = math.atan2(dx, -dy)
-            turn_frames = max(2, int(round(0.4 * fps)))
-            if facing == 'travel':
-                # Arrive: enter already facing travel, turn back to the
-                # resting facing (expressed nearest the heading — no
-                # long-way spins) over the final ~0.4 s.
-                delta = (base_rz - heading + math.pi) % (2 * math.pi) \
-                    - math.pi
-                rest_rz = heading + delta
-                obj.rotation_euler.z = heading
-                obj.keyframe_insert('rotation_euler', index=2,
-                                    frame=start_frame)
-                obj.keyframe_insert(
-                    'rotation_euler', index=2,
-                    frame=max(start_frame + 1, end_frame - turn_frames),
-                )
-                obj.rotation_euler.z = rest_rz
-                obj.keyframe_insert('rotation_euler', index=2,
-                                    frame=end_frame)
-            else:
-                # Exit: anchor the CURRENT resting facing at move start
-                # (numerically base_rz, matching any earlier rest keys —
-                # a different 2π representation would slow-spin the actor
-                # across the gap between keys), turn INTO travel over
-                # ~0.4 s, and keep facing it (constant extrapolation).
-                heading_n = base_rz + ((heading - base_rz + math.pi)
-                                       % (2 * math.pi) - math.pi)
-                obj.rotation_euler.z = base_rz
-                obj.keyframe_insert('rotation_euler', index=2,
-                                    frame=start_frame)
-                obj.rotation_euler.z = heading_n
-                obj.keyframe_insert(
-                    'rotation_euler', index=2,
-                    frame=min(end_frame, start_frame + turn_frames),
-                )
-            obj.rotation_euler.z = base_rz
+    try:
+        _shared_apply_move(obj, cue, start_frame, end_frame, fps)
+    except ValueError as exc:
+        _die(str(exc), 2)
 
 # ─── R1: validation gate ──────────────────────────────────────────────────────
 
@@ -213,6 +121,7 @@ def _run_gate(spec_path, out_dir, scene_id):
 def _export(args):
     """Build a .blend from a validated SceneSpec (rules R1–R10)."""
     import bpy  # noqa
+    import mathutils  # noqa
 
     spec_path = os.path.abspath(args.spec)
     if not os.path.isfile(spec_path):
@@ -298,6 +207,15 @@ def _export(args):
     scene.render.resolution_x = render_cfg['resolution']['width']
     scene.render.resolution_y = render_cfg['resolution']['height']
     scene.frame_start = 1
+
+    # ── R5: environment preset (SetSpec.environment) ─────────────────────────
+    # An EXT space location with no real set geometry gets its backdrop from
+    # here instead: star sphere + emissive sun + bloom, same recipe as
+    # docs/world-building/SPACESCAPE.md, shared with blueprint_interpreter.py's
+    # set_environment operation via tools/oeb_blender/space_env.py.
+    environment = spec['set'].get('environment')
+    if environment == 'deep_space':
+        setup_space_env(scene)
 
     # ── R3: frame_end = frame(last shot end_time) - 1 ────────────────────────
     last_shot = max(shots, key=lambda s: s['order'])
@@ -414,47 +332,51 @@ def _export(args):
                 if not clip_id:
                     continue   # transform-only move
 
-            # R7: resolve clip to exactly one action
-            action = _find_action(clip_id)
-
-            if obj.animation_data is None:
-                obj.animation_data_create()
-
-            # R8: one NLA track per cue_id (overlap-proof, deterministic)
-            track = obj.animation_data.nla_tracks.new()
-            track.name = cue_id
-
-            strip = track.strips.new(cue_id, frame_num, action)
-
-            # R8 (2026-07-11): HOLD_FORWARD, not the default HOLD — HOLD
-            # projects a lone strip's first frame BACKWARD over the whole
-            # timeline at REPLACE priority (a later shot's seated-talk
-            # strip froze the entire walk-in). Forward hold is still
-            # needed so actors keep their last pose across later shots.
-            strip.extrapolation = 'HOLD_FORWARD'
-
-            # R8 (2026-07-11): crossfade — the strip fades in over the pose
-            # held by the previous (lower) track's strip, per spec blend_in.
-            blend_in = cue.get('blend_in', 0.0)
-            if blend_in:
-                strip.blend_in = blend_in * fps
-
-            if loop:
-                # R8: repeat = max(1, ceil(available / action_frames));
-                # a looped move clip fills the MOVE duration, a looped
-                # animation cue fills the rest of the shot.
-                action_frames = max(
-                    1.0,
-                    action.frame_range[1] - action.frame_range[0],
+            # R7/R8: resolve clip, create the NLA track/strip (HOLD_FORWARD
+            # extrapolation, optional crossfade, optional loop-to-fill) --
+            # a looped move clip fills the MOVE duration, a looped
+            # animation cue fills the rest of the shot.
+            if ctype == 'move':
+                available_frames = move_end_frame - frame_num
+            else:
+                available_frames = to_frame(shot_end, fps) - frame_num
+            try:
+                apply_nla_clip(
+                    obj, cue_id, clip_id, frame_num, fps,
+                    blend_in=cue.get('blend_in', 0.0),
+                    loop=loop,
+                    available_frames=available_frames,
                 )
-                if ctype == 'move':
-                    available_frames = move_end_frame - frame_num
-                else:
-                    available_frames = to_frame(shot_end, fps) - frame_num
-                repeat = max(1, math.ceil(available_frames / action_frames))
-                strip.repeat = repeat
+            except ValueError as exc:
+                _die(str(exc), 2)
 
     # ── R9: shot markers with camera binding ──────────────────────────────────
+    fallback_cam = {"obj": None}
+
+    def _fallback_camera():
+        # A placeholder set (tools/placeholder_blueprint.py) has no
+        # camera baked into its .glb at all -- Blueprint's own reserved
+        # "camera" is excluded from geometry export by design (it's a
+        # scene-level sibling of the asset root, not asset geometry).
+        # render_blend.py hard-requires *some* camera bound to a
+        # marker, so a scene with zero real camera_grammar matches
+        # needs one created here, lazily, once, shared across every
+        # unbound marker -- same simple framing
+        # blueprint_interpreter.py's own _setup_default_preview_camera
+        # falls back to when nothing else says where the camera goes.
+        if fallback_cam["obj"] is None:
+            cam_data = bpy.data.cameras.new("fallback_camera")
+            cam_obj = bpy.data.objects.new("fallback_camera", cam_data)
+            scene.collection.objects.link(cam_obj)
+            cam_obj.location = (0.0, -8.0, 3.0)
+            direction = mathutils.Vector((0.0, 0.0, 1.0)) - cam_obj.location
+            cam_obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+            fallback_cam["obj"] = cam_obj
+            print("EXPORT-WARNING: no camera_grammar scene_object found anywhere in "
+                  "this scene's imported sets; created a default fallback camera",
+                  file=sys.stderr)
+        return fallback_cam["obj"]
+
     for shot in shots:
         frame_num = to_frame(shot['start_time'], fps)
         marker = scene.timeline_markers.new(shot['shot_id'], frame=frame_num)
@@ -464,12 +386,16 @@ def _export(args):
             cam_obj_name = cam_info['scene_object']
             cam_obj = bpy.data.objects.get(cam_obj_name)
             if cam_obj is None:
-                _die(
-                    f"camera object '{cam_obj_name}' for setup '{cam_id}' "
-                    f"not found in scene",
-                    2,
-                )
-            marker.camera = cam_obj
+                # validate_spec.py's V5 already treats this as a warning
+                # (unsupported_camera_grammar), not an error -- matching
+                # that leniency here, but the marker still needs *some*
+                # bound camera for render_blend.py to work at all.
+                print(f"EXPORT-WARNING: camera object '{cam_obj_name}' for setup "
+                      f"'{cam_id}' not found in scene; binding the fallback camera",
+                      file=sys.stderr)
+                marker.camera = _fallback_camera()
+            else:
+                marker.camera = cam_obj
 
     # ── R9: dialogue markers ─────────────────────────────────────────────────
     for shot in shots:

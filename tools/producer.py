@@ -40,6 +40,13 @@ import screenplay  # noqa: E402
 import tickets     # noqa: E402
 from script_desk import find_ffmpeg, find_slate_font, slate_drawtext  # noqa: E402
 from producer_studio_chat_client import build_scene_via_studio_chat  # noqa: E402
+import placeholder_blueprint  # noqa: E402
+from screenplay_entity_resolution import extract_entity_candidates  # noqa: E402
+
+CONFIG_PATH = "oeb.config.json"
+RESOLVER_MAP_PATH = "data/resolver_map.json"
+STANDINS_PATH = "data/standins.json"
+PLACEHOLDER_ASSETS_ROOT = "assets/placeholders"
 
 VENV_PY = ".venv/bin/python"
 LLAMA = "llama-completion"
@@ -82,6 +89,16 @@ def parse_args():
                         "client for a rough draft instead of leaving it as a "
                         "bare NEEDS_ASSETS ticket. Off by default -- opt in "
                         "explicitly; requires OEB_HARNESS_URL/API_ADMIN_TOKEN.")
+    p.add_argument("--primitive-fallback", action="store_true",
+                   help="docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md "
+                        "section 7: when producer's own vocabulary sweep "
+                        "blocks a scene on a missing location or role, "
+                        "register a crude primitive placeholder (deterministic, "
+                        "offline -- no live harness needed, unlike "
+                        "--studio-chat-fallback) and keep going instead of "
+                        "leaving the scene NEEDS_ASSETS. Off by default; a "
+                        "placeholder-generation failure never fails the run, "
+                        "the scene just stays NEEDS_ASSETS as it does today.")
     return p.parse_args()
 
 
@@ -142,19 +159,29 @@ def names_in(text, cast_names):
     return found
 
 
+def scene_action_text(scene):
+    return " ".join(p for sec in scene["sections"] for p in sec["action"])
+
+
+def present_actors(scene, cast):
+    scene_text = scene_action_text(scene)
+    speakers = {n.lower() for sec in scene["sections"]
+                for n, _t in sec["dialogue"]}
+    return [n for n in cast if n in speakers or names_in(scene_text, [n])]
+
+
 def build_intent(scene_id, scene, cast, location_tag, arrivals,
                  departures, descriptions):
     """Deterministic SceneIntent assembly from parsed structure."""
-    scene_text = " ".join(
-        p for sec in scene["sections"] for p in sec["action"])
-    speakers = {n.lower() for sec in scene["sections"]
-                for n, _t in sec["dialogue"]}
-    present = [n for n in cast
-               if n in speakers or names_in(scene_text, [n])]
+    present = present_actors(scene, cast)
+    # SceneIntent's actor_id must match ^[a-z][a-z0-9_]*$ -- a raw
+    # dialogue-cue speaker name can contain a space ("SHIP AI"), so the
+    # id used everywhere below is a slug, not the cast key itself.
+    slug = {name: _role_tag_for(name) for name in present}
 
     actors = []
     for name in present:
-        actor = {"actor_id": name, "role_tag": cast[name]}
+        actor = {"actor_id": slug[name], "role_tag": cast[name]}
         if name in arrivals:
             actor["arrives"] = True
         if name in departures:
@@ -166,14 +193,14 @@ def build_intent(scene_id, scene, cast, location_tag, arrivals,
     for j, sec in enumerate(scene["sections"]):
         sec_text = " ".join(sec["action"])
         actor_ids = sorted(set(
-            names_in(sec_text, present) +
-            [n.lower() for n, _t in sec["dialogue"] if n.lower() in cast]))
+            [slug[n] for n in names_in(sec_text, present)] +
+            [slug[n.lower()] for n, _t in sec["dialogue"] if n.lower() in cast]))
         beat = {"order": j, "description": descriptions.get(
             j, f"Section {j}.")}
         if actor_ids:
             beat["actor_ids"] = actor_ids
         if sec["dialogue"]:
-            beat["dialogue"] = [{"actor_id": n.lower(), "text": t}
+            beat["dialogue"] = [{"actor_id": slug.get(n.lower(), _role_tag_for(n)), "text": t}
                                 for n, t in sec["dialogue"]]
         beats.append(beat)
 
@@ -183,7 +210,7 @@ def build_intent(scene_id, scene, cast, location_tag, arrivals,
         if framing in ("close_on", "medium_on"):
             if subject in cast:
                 si["framing"] = framing
-                si["subject_actor_id"] = subject
+                si["subject_actor_id"] = slug[subject]
             else:
                 si["framing"] = "establishing"   # fallback, noted upstream
         else:
@@ -246,6 +273,190 @@ def scene_creative_request(scene_id, scene):
         for name, text in sec["dialogue"]:
             lines.append(f'{name}: "{text}"')
     return "\n".join(line for line in lines if line)
+
+
+def _role_tag_for(speaker_name):
+    return re.sub(r"[^a-z0-9]+", "_", speaker_name.strip().lower()).strip("_") or "actor"
+
+
+def primitive_fallback(blocking, rmap, cast, location_tag):
+    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7: for
+    each missing location/role this scene's vocabulary sweep found,
+    register a crude primitive placeholder -- deterministically and
+    offline (no live harness needed, unlike --studio-chat-fallback).
+    Mutates the real oeb.config.json / data/resolver_map.json /
+    data/standins.json on disk (tagged "placeholder": true -- the same
+    registry every other tool already reads, per section 7's "no
+    separate placeholder-specific store" decision, not a parallel one)
+    AND the in-memory *rmap*/*cast* dicts this same run already holds,
+    so the scene can immediately continue through the deterministic
+    pipeline using what was just registered, without re-reading files.
+
+    Returns `(still_blocking, resolved_location_tag)` -- entries still
+    genuinely unresolved (a placeholder build that itself failed; a
+    role blocker with no location, placeholder or real, to anchor
+    marks against), and the location_tag the caller should now use
+    (unchanged if there was no location blocker, the new placeholder's
+    tag otherwise). A failure here is never fatal to the run -- an
+    unresolved entry just leaves the scene NEEDS_ASSETS, same as
+    without this flag.
+    """
+    still_blocking = []
+    location_set_id = None
+    resolved_location_tag = location_tag
+
+    for item in blocking:
+        if item["kind"] != "location":
+            continue
+        try:
+            canonical_id = placeholder_blueprint.slugify_placeholder_id(item["name"], "location")
+            bp = placeholder_blueprint.default_placeholder_blueprint(
+                canonical_id, "location", item["name"], with_location_marks=True)
+            placeholder_blueprint.build_placeholder_glb(
+                bp, f"{PLACEHOLDER_ASSETS_ROOT}/{canonical_id}.glb",
+                f"out/blueprint_builds/{canonical_id}.blend",
+                f"out/blueprint_builds/{canonical_id}.manifest.json")
+            placeholder_blueprint.register_placeholder_asset(
+                CONFIG_PATH, canonical_id, "location", f"placeholders/{canonical_id}.glb")
+            placeholder_blueprint.register_placeholder_location(RESOLVER_MAP_PATH, item["name"], canonical_id)
+            rmap["locations"][item["name"]] = json.load(open(RESOLVER_MAP_PATH))["locations"][item["name"]]
+            location_set_id = canonical_id
+            resolved_location_tag = item["name"]
+            print(f"[producer]    primitive-fallback: registered placeholder location "
+                  f"'{item['name']}' -> {canonical_id}")
+        except Exception as exc:  # noqa: BLE001 -- must not crash the run
+            print(f"[producer]    primitive-fallback: FAILED building location "
+                  f"'{item['name']}' ({exc}); still blocked")
+            still_blocking.append(item)
+
+    if location_set_id is None and location_tag is not None:
+        # No location blocker this scene -- if a role blocker is also
+        # present, anchor its marks to this scene's own already-
+        # resolved location (real, or an existing stand-in).
+        location_set_id = rmap.get("locations", {}).get(location_tag, {}).get("set_id")
+
+    for item in blocking:
+        if item["kind"] != "role":
+            continue
+        if location_set_id is None:
+            print(f"[producer]    primitive-fallback: no location to anchor role "
+                  f"'{item['name']}' marks against; still blocked")
+            still_blocking.append(item)
+            continue
+        try:
+            role_tag = _role_tag_for(item["name"])
+            canonical_id = placeholder_blueprint.slugify_placeholder_id(item["name"], "character")
+            bp = placeholder_blueprint.default_placeholder_blueprint(canonical_id, "character", item["name"])
+            placeholder_blueprint.build_placeholder_glb(
+                bp, f"{PLACEHOLDER_ASSETS_ROOT}/{canonical_id}.glb",
+                f"out/blueprint_builds/{canonical_id}.blend",
+                f"out/blueprint_builds/{canonical_id}.manifest.json")
+            placeholder_blueprint.register_placeholder_asset(
+                CONFIG_PATH, canonical_id, "character", f"placeholders/{canonical_id}.glb")
+            placeholder_blueprint.register_placeholder_role(
+                RESOLVER_MAP_PATH, role_tag, canonical_id, resolved_location_tag, location_set_id)
+            placeholder_blueprint.register_placeholder_cast(STANDINS_PATH, item["name"], role_tag)
+            rmap["roles"][role_tag] = json.load(open(RESOLVER_MAP_PATH))["roles"][role_tag]
+            cast[item["name"]] = role_tag
+            print(f"[producer]    primitive-fallback: registered placeholder role "
+                  f"'{item['name']}' -> {canonical_id}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[producer]    primitive-fallback: FAILED building role "
+                  f"'{item['name']}' ({exc}); still blocked")
+            still_blocking.append(item)
+
+    for item in blocking:
+        if item["kind"] != "role_location":
+            continue
+        if location_set_id is None:
+            print(f"[producer]    primitive-fallback: no location to anchor "
+                  f"role '{item['name']}' marks against; still blocked")
+            still_blocking.append(item)
+            continue
+        try:
+            # Already cast and already has a built asset -- just extend the
+            # existing role with a spawn_mark for this new location, no
+            # rebuild/re-registration needed.
+            placeholder_blueprint.register_placeholder_role(
+                RESOLVER_MAP_PATH, item["role_tag"], item["character_id"],
+                resolved_location_tag, location_set_id)
+            rmap["roles"][item["role_tag"]] = json.load(
+                open(RESOLVER_MAP_PATH))["roles"][item["role_tag"]]
+            print(f"[producer]    primitive-fallback: extended placeholder "
+                  f"role '{item['role_tag']}' to location "
+                  f"'{resolved_location_tag}'")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[producer]    primitive-fallback: FAILED extending role "
+                  f"'{item['role_tag']}' ({exc}); still blocked")
+            still_blocking.append(item)
+
+    return still_blocking, resolved_location_tag
+
+
+def register_vehicle_placeholder(scene, cast, rmap, location_tag):
+    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7 item
+    7's second known blocker: a pure ship/vehicle shot with no on-camera
+    named character still needs `SceneIntent.actors` to be non-empty.
+    Rather than loosen that schema requirement, give the scene an
+    honest subject: extract candidate proper-noun phrases from the
+    scene's own action text (tools/screenplay_entity_resolution.py --
+    already built and tested for exactly this "what does this
+    capitalized phrase refer to" extraction, section 6) and register
+    the first one as a placeholder *vehicle* actor -- reusing
+    primitive_fallback's same role-registration path, just with
+    kind="vehicle" so the crude primitive is ship-shaped
+    (tools/placeholder_blueprint.py's _DEFAULT_PRIMITIVE_BY_KIND)
+    instead of person-shaped.
+
+    Returns the registered speaker-name key (already added to *cast*
+    in place) or None if no candidate phrase was found at all -- never
+    fatal, the scene just stays FAILED on the empty-actors schema error
+    exactly as it did before this existed.
+    """
+    text = scene_action_text(scene)
+    candidates = extract_entity_candidates(text)
+    candidates = [c for c in candidates if c.lower() not in cast]
+    if not candidates:
+        return None
+    # Prefer the most-repeated candidate, not just the first-seen one:
+    # a genuine recurring subject (e.g. a ship named throughout the
+    # scene) gets mentioned more than once; a one-off capitalized
+    # scene-opener word ("Black.", describing the void before the
+    # stars appear) doesn't. Confirmed live 2026-08-09 -- first-seen
+    # alone picked "Black" over "JourneyBlaster" for exactly this scene.
+    lowered = text.lower()
+    candidates.sort(key=lambda c: lowered.count(c.lower()), reverse=True)
+
+    location_set_id = rmap.get("locations", {}).get(location_tag or "", {}).get("set_id")
+    if location_set_id is None:
+        print("[producer]    primitive-fallback: no location to anchor vehicle "
+              "placeholder marks against; skipping")
+        return None
+
+    subject = candidates[0]
+    speaker_name = subject.lower()
+    try:
+        role_tag = _role_tag_for(subject)
+        canonical_id = placeholder_blueprint.slugify_placeholder_id(subject, "vehicle")
+        bp = placeholder_blueprint.default_placeholder_blueprint(canonical_id, "vehicle", subject)
+        placeholder_blueprint.build_placeholder_glb(
+            bp, f"{PLACEHOLDER_ASSETS_ROOT}/{canonical_id}.glb",
+            f"out/blueprint_builds/{canonical_id}.blend",
+            f"out/blueprint_builds/{canonical_id}.manifest.json")
+        placeholder_blueprint.register_placeholder_asset(
+            CONFIG_PATH, canonical_id, "vehicle", f"placeholders/{canonical_id}.glb")
+        placeholder_blueprint.register_placeholder_role(
+            RESOLVER_MAP_PATH, role_tag, canonical_id, location_tag, location_set_id)
+        placeholder_blueprint.register_placeholder_cast(STANDINS_PATH, speaker_name, role_tag)
+        rmap["roles"][role_tag] = json.load(open(RESOLVER_MAP_PATH))["roles"][role_tag]
+        cast[speaker_name] = role_tag
+        print(f"[producer]    primitive-fallback: registered placeholder vehicle "
+              f"'{subject}' -> {canonical_id} (subject for an otherwise actor-less shot)")
+        return speaker_name
+    except Exception as exc:  # noqa: BLE001 -- must not crash the run
+        print(f"[producer]    primitive-fallback: FAILED building vehicle "
+              f"'{subject}' ({exc}); scene stays as-is")
+        return None
 
 
 def studio_chat_rough_draft(scene_id, scene, episode, args):
@@ -355,12 +566,35 @@ def main():
         # Cast: unknown speakers block (no improvised casting)
         for sec in scene["sections"]:
             for name, _t in sec["dialogue"]:
-                if name.lower() not in cast:
+                lname = name.lower()
+                if lname not in cast:
                     blocking.append({
-                        "kind": "role", "name": name.lower(),
+                        "kind": "role", "name": lname,
                         "source": "producer vocabulary sweep",
                         "detail": f"speaker '{name}' has no cast mapping "
                                   f"in data/standins.json"})
+
+        # Already-cast actors present in this scene (dialogue OR named in
+        # the action text -- same rule build_intent()'s present_actors()
+        # uses) can still be missing a spawn_mark for THIS scene's
+        # location: data/resolver_map.json roles are per-location (see
+        # register_placeholder_role), and a role first registered for one
+        # location has nothing for a different one. The resolve stage
+        # would only catch this later, too late for --primitive-fallback
+        # to help unless flagged here.
+        if location_tag is not None:
+            for name in present_actors(scene, cast):
+                role_tag = cast[name]
+                role_entry = rmap.get("roles", {}).get(role_tag, {})
+                if location_tag not in role_entry.get("spawn_marks", {}):
+                    blocking.append({
+                        "kind": "role_location", "name": name,
+                        "role_tag": role_tag,
+                        "character_id": role_entry.get("character_id"),
+                        "source": "producer vocabulary sweep",
+                        "detail": f"'{name}' is cast as role '{role_tag}' "
+                                  f"but that role has no spawn_mark for "
+                                  f"location '{location_tag}'"})
 
         # Shot headings without a mapped framing → fallback + note
         for sec in scene["sections"]:
@@ -419,6 +653,15 @@ def main():
         if notes:
             tickets.write_ticket(episode, f"{scene_id}_vocab", notes,
                                  script_ref=args.script)
+
+        if blocking and args.primitive_fallback:
+            resolved_count = len(blocking)
+            blocking, location_tag = primitive_fallback(blocking, rmap, cast, location_tag)
+            resolved_count -= len(blocking)
+            if resolved_count:
+                print(f"[producer]    primitive-fallback: resolved "
+                      f"{resolved_count}/{resolved_count + len(blocking)} blocker(s)")
+
         if blocking:
             tpath = tickets.write_ticket(episode, scene_id, blocking,
                                          script_ref=args.script)
@@ -428,6 +671,9 @@ def main():
             print(f"[producer]    BLOCKED — {len(blocking)} missing; "
                   f"ticket written; continuing")
             continue
+
+        if args.primitive_fallback and not present_actors(scene, cast):
+            register_vehicle_placeholder(scene, cast, rmap, location_tag)
 
         arrivals = screenplay.detect_arrivals(scene, list(cast))
         departures = screenplay.detect_departures(scene, list(cast))

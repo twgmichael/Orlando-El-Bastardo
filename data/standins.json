@@ -3,8 +3,11 @@
   "_comment": "Screenplay vocabulary for the producer (tools/producer.py). Substitutions are EXPLICIT DATA, never silent translator behavior: every location stand-in used in a run is recorded in the production report AND ticketed so the real-asset backlog stays honest.",
   "cast": {
     "hero": "protagonist",
-    "orlando": "protagonist",
-    "bartender": "bartender"
+    "bartender": "bartender",
+    "ship ai": "ship_ai",
+    "casey": "casey",
+    "orlando": "orlando",
+    "journeyblaster": "journeyblaster"
   },
   "location_standins": {
     "neighborhood_bar": "small_bar_interior",
@@ -27,13 +30,46 @@
     "CLOSEUP": "close_on"
   },
   "audio_keywords": [
-    "hums", "hum", "murmur", "footsteps", "scrape", "scrapes",
-    "clicking", "clicks", "click", "hiss", "hisses",
-    "music", "jukebox", "song", "clink", "clinks", "creak", "creaks",
-    "thud", "echo", "echoes", "rings", "ringing", "sound", "sounds"
+    "hums",
+    "hum",
+    "murmur",
+    "footsteps",
+    "scrape",
+    "scrapes",
+    "clicking",
+    "clicks",
+    "click",
+    "hiss",
+    "hisses",
+    "music",
+    "jukebox",
+    "song",
+    "clink",
+    "clinks",
+    "creak",
+    "creaks",
+    "thud",
+    "echo",
+    "echoes",
+    "rings",
+    "ringing",
+    "sound",
+    "sounds"
   ],
   "known_items": [
-    "bar", "counter", "stool", "glass", "bottle", "bottles", "towel",
-    "door", "wall", "floor", "room", "frame", "shoulder", "hands"
+    "bar",
+    "counter",
+    "stool",
+    "glass",
+    "bottle",
+    "bottles",
+    "towel",
+    "door",
+    "wall",
+    "floor",
+    "room",
+    "frame",
+    "shoulder",
+    "hands"
   ]
 }

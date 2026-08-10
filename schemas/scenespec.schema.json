@@ -69,6 +69,11 @@
           "description": "Mark/spawn-point IDs this scene relies on; validator checks they exist in the set asset.",
           "items": { "$ref": "#/$defs/logical_id" }
         },
+        "environment": {
+          "type": "string",
+          "enum": ["deep_space"],
+          "description": "Optional scene-level backdrop preset, built by tools/oeb_blender/space_env.py's setup_space_env() at export time (star sphere + emissive sun + bloom) instead of coming from the set's own .glb -- for EXT space locations with no real set geometry. One preset today; more get added the same one-at-a-time way as the operation vocabulary."
+        },
         "target_bindings": { "$ref": "#/$defs/target_bindings" }
       }
     },

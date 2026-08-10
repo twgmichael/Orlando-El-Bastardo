@@ -43,8 +43,19 @@ from app.config import get_settings
 from app.models.asset import Asset
 from app.services.registry_resolution import is_ambiguous, resolve_reference
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_STANDINS_PATH = PROJECT_ROOT / "data" / "standins.json"
+def _data_root() -> Path:
+    """Resolved from Settings.data_root (OEB_DATA_ROOT), not a fixed
+    __file__ ancestor count: this module ships inside
+    oeb-studio-harness/server, which is bind-mounted into the local
+    Docker stack at a shallower path (/app) than its host checkout, so
+    a fixed parents[N] index is correct on the host and wrong in the
+    container -- same reasoning as Settings.oeb_config_path/asset_root.
+    """
+    return Path(get_settings().data_root).resolve()
+
+
+def _tickets_root() -> Path:
+    return Path(get_settings().tickets_root).resolve()
 
 # Deliberately crude, kind-agnostic default geometry -- section 7's own
 # "cup -> small cylinder with a handle" example generalizes to: one
@@ -69,7 +80,7 @@ class FallbackOutcome:
 
 
 def load_standins(path: Path | None = None) -> dict:
-    standins_path = path or DEFAULT_STANDINS_PATH
+    standins_path = path or (_data_root() / "standins.json")
     if not standins_path.is_file():
         return {}
     return json.loads(standins_path.read_text())
@@ -134,7 +145,7 @@ def build_needed_ticket(canonical_id: str, query: str, kind: str, requested_by: 
 
 
 def write_needed_ticket(ticket: dict, tickets_root: Path | None = None) -> str:
-    root = tickets_root or (PROJECT_ROOT / "out" / "production" / "studio_chat_placeholders" / "tickets")
+    root = tickets_root or _tickets_root()
     root.mkdir(parents=True, exist_ok=True)
     canonical_id = ticket["placeholder_canonical_id"]
     json_path = root / f"NEEDED-{canonical_id}.json"
@@ -152,6 +163,37 @@ def write_needed_ticket(ticket: dict, tickets_root: Path | None = None) -> str:
                  "source/build the real asset.", ""]
     (root / f"NEEDED-{canonical_id}.md").write_text("\n".join(md_lines))
     return str(json_path)
+
+
+def resolve_needed_ticket(ticket_path: str) -> None:
+    """Section 7 item 5: promoting a placeholder to Tier 1 is "the one
+    path that resolves the NEEDED ticket, since the real need is now
+    actually satisfied" -- reject/draft_fallback deliberately leave the
+    ticket open (a rejected placeholder needs a fresh one next time; a
+    draft fallback is reusable but still not the real asset). Missing
+    or already-resolved ticket files are a no-op, not an error -- a
+    placeholder can be promoted without a linked ticket (e.g. one
+    registered by hand) and this must not block that.
+    """
+    path = Path(ticket_path)
+    if not path.is_file():
+        return
+    ticket = json.loads(path.read_text())
+    if ticket.get("status") == "RESOLVED":
+        return
+    ticket["status"] = "RESOLVED"
+    ticket["resolved_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    ticket["resolution"] = "promoted_to_tier1"
+    path.write_text(json.dumps(ticket, indent=2) + "\n")
+
+    md_path = path.with_suffix(".md")
+    if md_path.is_file():
+        canonical_id = ticket.get("placeholder_canonical_id", "")
+        md_path.write_text(
+            md_path.read_text()
+            + f"\n---\n\n**RESOLVED** — `{canonical_id}` was promoted to a Tier 1 "
+              f"Canonical Asset at {ticket['resolved_at']}. The real need is satisfied.\n",
+        )
 
 
 async def resolve_missing_asset(

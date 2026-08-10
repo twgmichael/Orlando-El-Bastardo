@@ -179,6 +179,7 @@ from oeb_blender.primitives import (  # noqa: E402
     cone,
     cube,
     cylinder,
+    empty,
     hemisphere,
     material,
     parent_to_root,
@@ -192,6 +193,7 @@ from oeb_blender.recipes import (  # noqa: E402
     canonical_camera_views,
     orientation_standard,
 )
+from oeb_blender import cue_execution  # noqa: E402
 
 SCHEMA_VERSION = "0.1.0"
 
@@ -238,7 +240,7 @@ def _material_for(mat_spec, cache):
     return cache[key]
 
 
-_PRIMITIVE_TYPES = frozenset({"cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere"})
+_PRIMITIVE_TYPES = frozenset({"cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "empty"})
 
 
 def build_primitive(spec, mat_cache):
@@ -274,6 +276,9 @@ def build_primitive(spec, mat_cache):
         obj = hemisphere(prim_id, location, scale[0], mat)
         obj.rotation_euler = rotation
         obj.scale = scale
+    elif prim_type == "empty":
+        obj = empty(prim_id, location)
+        obj.rotation_euler = rotation
     else:
         raise ValueError(f"Unknown primitive type: {prim_type!r} (id={prim_id!r})")
 
@@ -701,6 +706,94 @@ def _apply_set_environment(params, ctx):
         scene.eevee.bloom_radius = float(params.get("bloom_radius", 6.0))
 
 
+def _apply_play_move_cue(obj, params, ctx):
+    """Actor-clip-driven move (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md
+    section 11 item 3 / section 3's fixed-vocabulary decision): keyframe
+    *obj* from `from_mark` to `to_mark` across [start_frame, end_frame],
+    optionally playing an NLA clip (`clip_id`) over the same span.
+    Delegates to oeb_blender.cue_execution -- the exact machinery
+    tools/export_blender.py's SceneSpec move cues already use, not a
+    second implementation.
+    """
+    start_frame = _validate_frame(params["start_frame"], ctx)
+    end_frame = _validate_frame(params["end_frame"], ctx)
+    if end_frame <= start_frame:
+        raise ValueError(
+            f"play_move_cue end_frame ({end_frame}) must be greater than start_frame ({start_frame})"
+        )
+    cue_id = params.get("cue_id", f"{obj.name}_move_{start_frame}")
+    cue = {
+        "cue_id": cue_id,
+        "from_mark": params["from_mark"],
+        "to_mark": params["to_mark"],
+        "facing": params.get("facing", "travel"),
+    }
+    cue_execution.apply_move(obj, cue, start_frame, end_frame, ctx["fps"])
+
+    clip_id = params.get("clip_id")
+    if clip_id:
+        cue_execution.apply_nla_clip(
+            obj, cue_id, clip_id, start_frame, ctx["fps"],
+            blend_in=float(params.get("blend_in", 0.0)),
+            loop=bool(params.get("loop", False)),
+            available_frames=end_frame - start_frame,
+        )
+
+
+def _apply_play_animation_cue(obj, params, ctx):
+    """Non-moving actor-clip playback (idle/stand/talk cycles) -- the
+    animation-only half of what export_blender.py's SceneSpec
+    "animation" cues do, via the same shared NLA-strip machinery
+    play_move_cue uses for its own optional clip.
+    """
+    frame = _validate_frame(params["frame"], ctx)
+    loop = bool(params.get("loop", False))
+    available_frames = None
+    if loop:
+        if "end_frame" not in params:
+            raise ValueError("play_animation_cue with loop=true requires end_frame")
+        available_frames = _validate_frame(params["end_frame"], ctx) - frame
+    cue_execution.apply_nla_clip(
+        obj, params.get("cue_id", f"{obj.name}_anim_{frame}"), params["clip_id"], frame, ctx["fps"],
+        blend_in=float(params.get("blend_in", 0.0)),
+        loop=loop,
+        available_frames=available_frames,
+    )
+
+
+def _apply_play_dialogue_cue(params, ctx):
+    """Scene-level dialogue timing marker -- matches export_blender.py's
+    `dlg_<cue_id>` markers exactly; the dialogue text itself is not
+    baked into the .blend (it lives in the source SceneIntent/audit
+    trail), same as the SceneSpec path.
+    """
+    frame = _validate_frame(params["frame"], ctx)
+    bpy.context.scene.timeline_markers.new(f"dlg_{params['cue_id']}", frame=frame)
+
+
+def _apply_set_active_camera(params, ctx):
+    """Scene-level: bind a named camera object (already present in the
+    scene -- e.g. a set's own camera_grammar scene_object, resolved the
+    same way import primitives resolve marks, not the reserved "camera"
+    id) as the active render camera from *frame* onward, via a timeline
+    marker -- matches export_blender.py's per-shot camera-switch
+    markers. For scenes with only one camera, set_camera_keyframe (the
+    reserved "camera" id) remains the right operation; this is for
+    scenes with several pre-existing camera objects to switch between.
+    """
+    frame = _validate_frame(params["frame"], ctx)
+    camera_object = params["camera_object"]
+    cam_obj = bpy.data.objects.get(camera_object)
+    if cam_obj is None:
+        raise ValueError(
+            f"set_active_camera references camera_object {camera_object!r}, not found in the scene "
+            f"-- the set's own import primitive must appear earlier in `primitives`"
+        )
+    marker_name = params.get("marker_name", f"shot_{frame}")
+    marker = bpy.context.scene.timeline_markers.new(marker_name, frame=frame)
+    marker.camera = cam_obj
+
+
 OPERATIONS = {
     "bevel": _apply_bevel,
     "mirror": _apply_mirror,
@@ -712,10 +805,14 @@ OPERATIONS = {
     "set_material": _apply_set_material,
     "set_shape_detail": _apply_set_shape_detail,
     "set_environment": _apply_set_environment,
+    "play_move_cue": _apply_play_move_cue,
+    "play_animation_cue": _apply_play_animation_cue,
+    "play_dialogue_cue": _apply_play_dialogue_cue,
+    "set_active_camera": _apply_set_active_camera,
 }
 
 
-SCENE_LEVEL_OPERATIONS = frozenset({"set_environment"})
+SCENE_LEVEL_OPERATIONS = frozenset({"set_environment", "play_dialogue_cue", "set_active_camera"})
 """Operations that act on the scene as a whole, not one target object --
 `target` is still required in the Blueprint JSON for a uniform operation
 shape, but is not resolved against objects_by_id or passed to the apply
@@ -785,6 +882,22 @@ def build_blueprint(blueprint, config_path=None):
                 objects_by_id[prim_spec["id"]] = build_primitive(prim_spec, mat_cache)
         root = parent_to_root(blueprint["canonical_id"], list(objects_by_id.values()))
         variant = None
+
+    # Give every imported action a fake user (so it survives orphan
+    # purging with no NLA strip referencing it yet) and clear each
+    # object's own animation_data (export_blender.py's R4) -- without
+    # this, an imported object can arrive with animation_data.action
+    # already pointing at whichever action the glTF importer picked as
+    # "active", and a later play_move_cue's obj.keyframe_insert() calls
+    # land IN that leftover action instead of a fresh one, corrupting
+    # its frame_range for every other NLA strip that legitimately
+    # references it. Harmless no-op for primitives with no imported
+    # animation data (freshly built geometry, compiled_spec builds).
+    for action in bpy.data.actions:
+        action.use_fake_user = True
+    for obj in bpy.data.objects:
+        if obj.animation_data:
+            obj.animation_data_clear()
 
     # The camera is a reserved id, registered for operation targeting after
     # geometry construction so it's never mistaken for a geometry object --

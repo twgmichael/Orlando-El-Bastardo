@@ -87,7 +87,7 @@
           "description": "\"camera\" is reserved -- the interpreter always creates and registers a camera object under this id before applying operations; do not use it for a geometry primitive."
         },
         "type": {
-          "enum": ["cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "import"]
+          "enum": ["cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "empty", "import"]
         },
         "transform": { "$ref": "#/$defs/Transform" },
         "material": {
@@ -121,8 +121,8 @@
       "additionalProperties": false,
       "properties": {
         "op": {
-          "enum": ["bevel", "mirror", "array", "set_keyframe", "set_camera_keyframe", "orbit_around", "dolly_to", "set_material", "set_shape_detail", "set_environment"],
-          "description": "\"set_keyframe\" and \"set_camera_keyframe\" are the identical operation under two names -- the general form (any target id) and the camera-framing-specific name (conventionally \"camera\"). \"set_environment\" is scene-level, not target-object-specific -- `target` is still required for a uniform shape but is not resolved against a primitive id. The full ontology vocabulary (bisect, loft, sweep, boolean, extrude) is deliberately deferred; added one operation at a time as an actual need surfaces -- see tools/blueprint_interpreter.py's module docstring."
+          "enum": ["bevel", "mirror", "array", "set_keyframe", "set_camera_keyframe", "orbit_around", "dolly_to", "set_material", "set_shape_detail", "set_environment", "play_move_cue", "play_animation_cue", "play_dialogue_cue", "set_active_camera"],
+          "description": "\"set_keyframe\" and \"set_camera_keyframe\" are the identical operation under two names -- the general form (any target id) and the camera-framing-specific name (conventionally \"camera\"). \"set_environment\", \"play_dialogue_cue\", and \"set_active_camera\" are scene-level, not target-object-specific -- `target` is still required for a uniform shape but is not resolved against a primitive id. \"play_move_cue\"/\"play_animation_cue\" (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 11 item 3) are the clip-driven-actor-motion vocabulary resolve_intent.py's SceneIntent -> Blueprint retargeting needs -- from_mark/to_mark moves and NLA clip playback, sharing tools/oeb_blender/cue_execution.py with tools/export_blender.py's equivalent SceneSpec move/animation cues rather than a second implementation. The full ontology vocabulary (bisect, loft, sweep, boolean, extrude) is deliberately deferred; added one operation at a time as an actual need surfaces -- see tools/blueprint_interpreter.py's module docstring."
         },
         "target": {
           "type": "string",

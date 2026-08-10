@@ -1,5 +1,7 @@
+import json
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +12,9 @@ from app.services.missing_asset_fallback import (
     default_placeholder_blueprint,
     normalize_via_standins,
     resolve_missing_asset,
+    resolve_needed_ticket,
     slugify_placeholder_id,
+    write_needed_ticket,
 )
 
 FAKE_STANDINS = {
@@ -131,7 +135,7 @@ async def test_tier1_direct_registry_match_without_standin():
 @pytest.mark.anyio
 async def test_tier2_creates_unapproved_placeholder_with_linked_ticket(tmp_path, monkeypatch):
     import app.services.missing_asset_fallback as fallback_module
-    monkeypatch.setattr(fallback_module, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(fallback_module, "_tickets_root", lambda: tmp_path / "out" / "production" / "studio_chat_placeholders" / "tickets")
 
     db = FakeSession([])  # nothing in the registry at all
 
@@ -148,3 +152,47 @@ async def test_tier2_creates_unapproved_placeholder_with_linked_ticket(tmp_path,
     assert (tmp_path / "out" / "production" / "studio_chat_placeholders" / "tickets"
             / "NEEDED-placeholder_prop_motorcycle_A.json").is_file()
     assert db.added == [outcome.asset]
+
+
+def _write_fixture_ticket(tmp_path):
+    ticket = build_needed_ticket("placeholder_prop_cup_A", "cup", "prop", "test-producer")
+    ticket_path = write_needed_ticket(ticket, tickets_root=tmp_path)
+    return ticket_path
+
+
+def test_resolve_needed_ticket_marks_status_resolved(tmp_path):
+    ticket_path = _write_fixture_ticket(tmp_path)
+
+    resolve_needed_ticket(ticket_path)
+
+    resolved = json.loads((tmp_path / "NEEDED-placeholder_prop_cup_A.json").read_text())
+    assert resolved["status"] == "RESOLVED"
+    assert resolved["resolution"] == "promoted_to_tier1"
+    assert "resolved_at" in resolved
+
+
+def test_resolve_needed_ticket_appends_note_to_markdown(tmp_path):
+    ticket_path = _write_fixture_ticket(tmp_path)
+
+    resolve_needed_ticket(ticket_path)
+
+    md = (tmp_path / "NEEDED-placeholder_prop_cup_A.md").read_text()
+    assert "RESOLVED" in md
+    assert "placeholder_prop_cup_A" in md
+
+
+def test_resolve_needed_ticket_is_idempotent(tmp_path):
+    ticket_path = _write_fixture_ticket(tmp_path)
+
+    resolve_needed_ticket(ticket_path)
+    first_resolved_at = json.loads(Path(ticket_path).read_text())["resolved_at"]
+    resolve_needed_ticket(ticket_path)
+    second_resolved_at = json.loads(Path(ticket_path).read_text())["resolved_at"]
+
+    assert first_resolved_at == second_resolved_at
+    md = (tmp_path / "NEEDED-placeholder_prop_cup_A.md").read_text()
+    assert md.count("RESOLVED") == 1
+
+
+def test_resolve_needed_ticket_missing_file_is_a_noop(tmp_path):
+    resolve_needed_ticket(str(tmp_path / "NEEDED-does-not-exist.json"))

@@ -34,18 +34,39 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from studio_chat import post_json  # noqa: E402
 
 DEFAULT_MODEL = "oeb-qwen2.5-3b"
+BUILDER_PRESET_ID = "asset_builder_translator"
 CLARIFICATION_AUTO_REPLY = (
     "Use your best judgment and proceed with the single most reasonable "
     "interpretation. Do not invent story content beyond what was given; "
     "prefer existing/registered assets, stand-ins, or simple primitives "
     "over anything elaborate."
 )
+
+
+def _get_builder_system_prompt(harness_url: str, admin_token: str) -> str:
+    """/chat forwards `messages` to Ollama verbatim -- it does not inject
+    a thread's stored system_prompt for the caller (see
+    routers/studio_chat.py's studio_chat_ollama). Without an explicit
+    system message telling the model to answer in the compiler's asset
+    intent JSON, it just chats conversationally and every build-jobs
+    call fails as outcome="invalid" (assistant_json_invalid), never
+    reaching a meaningful compile or clarification. This mirrors what
+    the human Studio Chat UI does when a preset is selected.
+    """
+    req = urllib.request.Request(
+        f"{harness_url.rstrip('/')}/api/v1/studio-chat/presets",
+        headers={"Authorization": f"Bearer {admin_token}"} if admin_token else {},
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        presets = json.loads(response.read().decode("utf-8"))["presets"]
+    return next(p["system_prompt"] for p in presets if p["id"] == BUILDER_PRESET_ID)
 
 
 class NeedsClarification(Exception):
@@ -56,10 +77,17 @@ class NeedsClarification(Exception):
         super().__init__(reason or "needs_clarification")
 
 
-def create_agent_thread(harness_url: str, admin_token: str, title: str, actor_id: str = "producer") -> dict:
+def create_agent_thread(
+    harness_url: str, admin_token: str, title: str, actor_id: str = "producer",
+    system_prompt: str | None = None,
+) -> dict:
+    body = {"title": title, "actor_type": "agent", "actor_id": actor_id}
+    if system_prompt:
+        body["system_prompt"] = system_prompt
+        body["default_preset_id"] = BUILDER_PRESET_ID
     return post_json(
         f"{harness_url.rstrip('/')}/api/v1/studio-chat/threads",
-        {"title": title, "actor_type": "agent", "actor_id": actor_id},
+        body,
         token=admin_token,
         timeout=30,
     )
@@ -115,10 +143,17 @@ def build_scene_via_studio_chat(
     couldn't compile -- callers should ticket that case, not retry
     forever).
     """
-    thread = create_agent_thread(harness_url, admin_token, thread_title or creative_request[:80], actor_id)
+    system_prompt = _get_builder_system_prompt(harness_url, admin_token)
+    thread = create_agent_thread(
+        harness_url, admin_token, thread_title or creative_request[:80], actor_id,
+        system_prompt=system_prompt,
+    )
     thread_id = str(thread["id"])
 
-    messages = [{"role": "user", "content": creative_request}]
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": creative_request},
+    ]
     assistant_response = _ask_llm(harness_url, admin_token, thread_id, model, messages)
 
     try:

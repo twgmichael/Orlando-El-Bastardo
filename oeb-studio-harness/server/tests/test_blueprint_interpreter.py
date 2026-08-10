@@ -64,6 +64,27 @@ class FakeObj(types.SimpleNamespace):
     pass
 
 
+def test_build_primitive_dispatches_empty(monkeypatch):
+    interpreter = load_interpreter_module()
+    captured = {}
+
+    def fake_empty(name, location):
+        captured.update(name=name, location=location)
+        return FakeObj(rotation_euler=None)
+
+    monkeypatch.setattr(interpreter, "empty", fake_empty)
+    monkeypatch.setattr(interpreter, "material", lambda name, color: f"mat:{color}")
+
+    obj = interpreter.build_primitive(
+        {"id": "mark_entry", "type": "empty", "transform": {"location": [1, 2, 3]}},
+        {},
+    )
+
+    assert captured["name"] == "mark_entry"
+    assert captured["location"] == (1.0, 2.0, 3.0)
+    assert obj.rotation_euler == (0.0, 0.0, 0.0)
+
+
 def test_build_primitive_dispatches_cube(monkeypatch):
     interpreter = load_interpreter_module()
     captured = {}
@@ -245,6 +266,7 @@ def test_build_blueprint_wires_primitives_operations_and_root(monkeypatch):
 
     monkeypatch.setattr(interpreter, "clear_scene", lambda: None)
     monkeypatch.setattr(interpreter, "_apply_frame_range", lambda blueprint: fake_ctx)
+    monkeypatch.setattr(interpreter.bpy, "data", types.SimpleNamespace(actions=[], objects=[]), raising=False)
     monkeypatch.setattr(interpreter, "_ensure_camera", fake_ensure_camera)
     monkeypatch.setattr(interpreter, "_add_preview_light", lambda: None)
     monkeypatch.setattr(interpreter, "_setup_default_preview_camera", lambda camera_obj: None)
@@ -393,6 +415,7 @@ def test_build_blueprint_routes_import_type_to_build_import_primitive(monkeypatc
 
     monkeypatch.setattr(interpreter, "clear_scene", lambda: None)
     monkeypatch.setattr(interpreter, "_apply_frame_range", lambda blueprint: {"frame_start": 1, "frame_end": 10, "fps": 24.0})
+    monkeypatch.setattr(interpreter.bpy, "data", types.SimpleNamespace(actions=[], objects=[]), raising=False)
     monkeypatch.setattr(interpreter, "_ensure_camera", fake_ensure_camera)
     monkeypatch.setattr(interpreter, "_add_preview_light", lambda: None)
     monkeypatch.setattr(interpreter, "_setup_default_preview_camera", lambda camera_obj: None)

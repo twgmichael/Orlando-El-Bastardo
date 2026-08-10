@@ -24,6 +24,7 @@ import shutil
 import subprocess
 
 import bpy
+from mathutils import Vector
 
 VENV_FFMPEG_GLOB = ".venv/lib/python*/site-packages/imageio_ffmpeg/binaries/ffmpeg-*"
 
@@ -40,6 +41,46 @@ def parse_args():
 
 
 def setup_lighting():
+    # A scene built with a SetSpec.environment preset (tools/export_blender.py's
+    # R5 step, oeb_blender.space_env.setup_space_env()) already carries its own
+    # backdrop and sun -- interior-scale review lights/world would just wash it
+    # out or get hidden entirely behind the star sphere's own opaque geometry.
+    env_sphere = bpy.data.objects.get("env_star_sphere")
+    if env_sphere is not None:
+        # env_sun is a purely emissive MESH (self-illuminating only, not a
+        # Blender Light) -- without an actual light source, any ordinary
+        # (non-emissive) geometry in the scene, e.g. actors/ships/asteroids,
+        # rendered pure black and invisible against the starfield, found live
+        # 2026-08-09 rendering the asteroid-field scenes. One SUN lamp aimed
+        # from the visual sun's direction fixes that without touching the
+        # black world background or adding the interior review lights below.
+        env_sun = bpy.data.objects.get("env_sun")
+        if env_sun is not None and env_sun.location.length > 0:
+            direction = env_sun.location.normalized()
+            sun_data = bpy.data.lights.new("env_sun_light", type='SUN')
+            sun_data.energy = 3.0
+            sun = bpy.data.objects.new("env_sun_light", sun_data)
+            bpy.context.scene.collection.objects.link(sun)
+            sun.rotation_euler = (-direction).to_track_quat('-Z', 'Y').to_euler()
+        # A single hard sun plus a fully black world (no ambient at all) only
+        # lights whatever face happens to align with it -- props placed at
+        # arbitrary rotations (e.g. the asteroid field's per-instance spin)
+        # can end up with their camera-facing side unlit and invisible even
+        # though the sun light itself works fine, confirmed live 2026-08-09.
+        # A soft camera-direction fill guarantees whatever's actually on
+        # screen gets some light, without touching the black background.
+        camera = bpy.context.scene.camera
+        if camera is not None:
+            cam_dir = camera.matrix_world.to_quaternion() @ Vector((0.0, 0.0, -1.0))
+            fill_data = bpy.data.lights.new("env_fill_light", type='SUN')
+            fill_data.energy = 1.5
+            fill = bpy.data.objects.new("env_fill_light", fill_data)
+            bpy.context.scene.collection.objects.link(fill)
+            fill.rotation_euler = cam_dir.to_track_quat('-Z', 'Y').to_euler()
+        print("[render_blend] environment preset detected (env_star_sphere); "
+              "skipping standard review lighting")
+        return
+
     world = bpy.data.worlds.get("World") or bpy.data.worlds.new("World")
     bpy.context.scene.world = world
     world.use_nodes = True
@@ -103,9 +144,10 @@ def main():
 
     bpy.ops.wm.open_mainfile(filepath=blend)
     scene = bpy.context.scene
-    setup_lighting()
 
     # First marker's camera is the starting camera; markers switch the rest.
+    # Bound BEFORE setup_lighting() -- the space-environment fill light needs
+    # scene.camera already resolved to aim itself.
     markers = sorted(scene.timeline_markers, key=lambda m: m.frame)
     for m in markers:
         if m.camera:
@@ -114,6 +156,8 @@ def main():
     if scene.camera is None:
         print("[render_blend] ERROR: no camera bound to any timeline marker")
         sys.exit(1)
+
+    setup_lighting()
 
     for candidate in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE", "CYCLES"):
         try:

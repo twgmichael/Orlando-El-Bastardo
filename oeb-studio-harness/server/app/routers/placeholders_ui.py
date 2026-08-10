@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.audit import AuditEvent
+from app.services.missing_asset_fallback import resolve_needed_ticket
 from app.services.placeholder_review import (
     apply_decision,
     get_placeholder_asset,
@@ -38,6 +39,11 @@ async def decide_placeholder(canonical_id: str, request: Request, db: AsyncSessi
         apply_decision(asset, decision)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if decision == "promote":
+        ticket_path = (asset.asset_metadata or {}).get("needed_ticket")
+        if ticket_path:
+            resolve_needed_ticket(ticket_path)
 
     db.add(AuditEvent(
         event_type="placeholder.reviewed",

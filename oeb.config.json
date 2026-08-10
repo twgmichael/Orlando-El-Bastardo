@@ -49,22 +49,148 @@
       "node": "prop_jb100_A",
       "kind": "prop"
     },
+    "prop_starbase_86_A": {
+      "file": "locations/starbase_86_v1.1.0/starbase_86_v1.1.0.glb",
+      "node": "prop_starbase_86_A",
+      "kind": "prop",
+      "status": "available",
+      "tags": [
+        "starbase 86",
+        "space station",
+        "orbital station",
+        "hero asset",
+        "exterior"
+      ],
+      "hero": true,
+      "version": "1.1.0",
+      "height_meters": 150.0,
+      "hangar_states": "1:open;2:half-closed;3:closed",
+      "hangar_doors_per_pod": 2,
+      "hangar_face_direction": "opposed tangential; face planes parallel to spokes",
+      "pod_construction": "rounded box with squashed top and bottom hemispheres",
+      "source": "user-annotated original pod restoration v005"
+    },
     "scene_oeb_title_A": {
       "kind": "scene",
       "current_revision": "scene_versions/oeb_scene_title_v0.0.12",
-      "tags": ["oeb title", "title sequence", "logo", "1999 teaser"]
+      "tags": [
+        "oeb title",
+        "title sequence",
+        "logo",
+        "1999 teaser"
+      ]
     },
     "scene_pirate_escape_A": {
       "kind": "scene",
       "current_revision": null,
-      "tags": ["pirate escape", "jb100", "ellipso flyer", "ventradi cruiser", "chase"],
+      "tags": [
+        "pirate escape",
+        "jb100",
+        "ellipso flyer",
+        "ventradi cruiser",
+        "chase"
+      ],
       "note": "Stub entry, not yet a scene_versions build. Closest known source: tools/pirate-escape.py / tools/JB100-pirate-escape.py."
     },
     "scene_bugblatter_swarm_flythrough_A": {
       "kind": "scene",
       "current_revision": null,
-      "tags": ["bugblatter", "swarm", "fly-through", "jb100"],
+      "tags": [
+        "bugblatter",
+        "swarm",
+        "fly-through",
+        "jb100"
+      ],
       "note": "Stub entry, not yet confirmed to a scene_versions build. Closest naming match found is scene_versions/jb100_hyberspace_swarm_v1.0.21, unverified as the same scene."
+    },
+    "placeholder_location_deep_space_A": {
+      "file": "placeholders/placeholder_location_deep_space_A.glb",
+      "node": "placeholder_location_deep_space_A",
+      "kind": "location",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_orlando_A": {
+      "file": "placeholders/placeholder_character_orlando_A.glb",
+      "node": "placeholder_character_orlando_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_location_journeyblaster_cockpit_A": {
+      "file": "placeholders/placeholder_location_journeyblaster_cockpit_A.glb",
+      "node": "placeholder_location_journeyblaster_cockpit_A",
+      "kind": "location",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_ship_ai_A": {
+      "file": "placeholders/placeholder_character_ship_ai_A.glb",
+      "node": "placeholder_character_ship_ai_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_location_asteroid_field_A": {
+      "file": "placeholders/placeholder_location_asteroid_field_A.glb",
+      "node": "placeholder_location_asteroid_field_A",
+      "kind": "location",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_prop_asteroid_round_A": {
+      "file": "placeholders/asteroids/placeholder_prop_asteroid_round_A.glb",
+      "node": "placeholder_prop_asteroid_round_A",
+      "kind": "prop",
+      "placeholder": true,
+      "tags": ["asteroid", "space rock", "round", "1999 cgi"],
+      "source": "tools/build_asteroid_placeholders.py"
+    },
+    "placeholder_prop_asteroid_oblong_A": {
+      "file": "placeholders/asteroids/placeholder_prop_asteroid_oblong_A.glb",
+      "node": "placeholder_prop_asteroid_oblong_A",
+      "kind": "prop",
+      "placeholder": true,
+      "tags": ["asteroid", "space rock", "oblong", "1999 cgi"],
+      "source": "tools/build_asteroid_placeholders.py"
+    },
+    "placeholder_prop_asteroid_jagged_A": {
+      "file": "placeholders/asteroids/placeholder_prop_asteroid_jagged_A.glb",
+      "node": "placeholder_prop_asteroid_jagged_A",
+      "kind": "prop",
+      "placeholder": true,
+      "tags": ["asteroid", "space rock", "jagged", "1999 cgi"],
+      "source": "tools/build_asteroid_placeholders.py"
+    },
+    "placeholder_prop_asteroid_peanut_A": {
+      "file": "placeholders/asteroids/placeholder_prop_asteroid_peanut_A.glb",
+      "node": "placeholder_prop_asteroid_peanut_A",
+      "kind": "prop",
+      "placeholder": true,
+      "tags": ["asteroid", "space rock", "peanut", "1999 cgi"],
+      "source": "tools/build_asteroid_placeholders.py"
+    },
+    "placeholder_prop_asteroid_cratered_A": {
+      "file": "placeholders/asteroids/placeholder_prop_asteroid_cratered_A.glb",
+      "node": "placeholder_prop_asteroid_cratered_A",
+      "kind": "prop",
+      "placeholder": true,
+      "tags": ["asteroid", "space rock", "cratered", "1999 cgi"],
+      "source": "tools/build_asteroid_placeholders.py"
+    },
+    "placeholder_character_casey_A": {
+      "file": "placeholders/placeholder_character_casey_A.glb",
+      "node": "placeholder_character_casey_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_vehicle_journeyblaster_A": {
+      "file": "placeholders/placeholder_vehicle_journeyblaster_A.glb",
+      "node": "placeholder_vehicle_journeyblaster_A",
+      "kind": "vehicle",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     }
   }
 }

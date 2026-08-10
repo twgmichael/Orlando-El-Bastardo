@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     artifact_server_path_prefix: str = Field(default="", alias="ARTIFACT_SERVER_PATH_PREFIX")
     asset_root: str = Field(default="assets", alias="OEB_ASSET_ROOT")
     oeb_config_path: str = Field(default="../../oeb.config.json", alias="OEB_CONFIG_PATH")
+    data_root: str = Field(default="../../data", alias="OEB_DATA_ROOT")
+    tickets_root: str = Field(
+        default="../../out/production/studio_chat_placeholders/tickets",
+        alias="OEB_TICKETS_ROOT",
+    )
     studio_chat_harness_url: str = Field(default="", alias="OEB_STUDIO_CHAT_HARNESS_URL")
     studio_chat_admin_token: str = Field(default="", alias="OEB_STUDIO_CHAT_ADMIN_TOKEN")
     ollama_base_url: str = Field(default="", alias="OEB_OLLAMA_BASE_URL")

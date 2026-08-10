@@ -13,6 +13,14 @@ from pathlib import Path
 
 import jsonschema
 
+from motion_library import (
+    build_departure_cues,
+    build_entrance_cues,
+    build_idle_cue,
+    departure_times,
+    entrance_times,
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -72,16 +80,37 @@ def resolve_intent(intent, rmap, grammar, config):
             errors.append(
                 f"E_UNMAPPED_ROLE: role_tag '{role_tag}' for actor '{aid}' not found in resolver map roles"
             )
+            continue
+        char_id = role_entry["character_id"]
+        if char_id in seen_char_ids:
+            errors.append(
+                f"E_DUPLICATE_CHARACTER: character_id '{char_id}' resolved for both "
+                f"'{seen_char_ids[char_id]}' and '{aid}'"
+            )
+            continue
+        # A role's marks/entrance are per-location (data/resolver_map.json
+        # "spawn_marks"/"entrances" dicts keyed by location_tag) since the
+        # same character/vehicle can appear across multiple placeholder
+        # locations. Resolve down to the singular spawn_mark/entrance shape
+        # here, once, so every downstream site can keep reading
+        # role_entry["spawn_mark"] / role_entry.get("entrance") unchanged.
+        spawn_marks = role_entry.get("spawn_marks", {})
+        spawn_mark = spawn_marks.get(loc_tag)
+        if spawn_mark is None:
+            errors.append(
+                f"E_UNMAPPED_ROLE_LOCATION: role_tag '{role_tag}' for actor '{aid}' "
+                f"has no spawn_mark registered for location '{loc_tag}'"
+            )
+            continue
+        seen_char_ids[char_id] = aid
+        normalized_entry = dict(role_entry)
+        normalized_entry["spawn_mark"] = spawn_mark
+        entrance = role_entry.get("entrances", {}).get(loc_tag)
+        if entrance is not None:
+            normalized_entry["entrance"] = entrance
         else:
-            char_id = role_entry["character_id"]
-            if char_id in seen_char_ids:
-                errors.append(
-                    f"E_DUPLICATE_CHARACTER: character_id '{char_id}' resolved for both "
-                    f"'{seen_char_ids[char_id]}' and '{aid}'"
-                )
-            else:
-                seen_char_ids[char_id] = aid
-                resolved_roles[aid] = role_entry
+            normalized_entry.pop("entrance", None)
+        resolved_roles[aid] = normalized_entry
 
     # ------------------------------------------------------------------
     # R4: ID sanity
@@ -194,7 +223,12 @@ def resolve_intent(intent, rmap, grammar, config):
         if role_entry is None:
             continue
         ent = role_entry.get("entrance")
-        if ent is None or "rise_clip" not in ent:
+        # rise_duration (timing), not rise_clip (an NLA clip name): a
+        # placeholder entrance (tools/placeholder_blueprint.py) has the
+        # former but not the latter -- departure_times() only needs
+        # the timing, and build_departure_cues() already tolerates a
+        # missing rise_clip/walk_clip/stand_clip by omitting clip_id.
+        if ent is None or "rise_duration" not in ent:
             errors.append(
                 f"E_NO_DEPARTURE: actor '{aid}' has departs=true but role "
                 f"'{actor['role_tag']}' has no entrance/rise mapping in "
@@ -206,23 +240,6 @@ def resolve_intent(intent, rmap, grammar, config):
     # Early exit — cannot safely proceed to camera/shot resolution
     if errors:
         return None, errors
-
-    def entrance_times(ent):
-        """R13 timeline for one entrance. The stand clip exists only as a
-        blend source: the walk starts after a 0.3 s standing beat and fades
-        in over it; the settle overlaps the walk's end by 0.3 s and the
-        idle overlaps the settle's end by 0.2 s (NLA crossfades)."""
-        lead = 0.3 if ent.get("stand_clip") else 0.0
-        walk_end = round(lead + ent["walk_duration"], 4)
-        settle_start = round(max(lead, walk_end - 0.3), 4)
-        settle_end = round(settle_start + ent["settle_duration"], 4)
-        return {
-            "lead": lead,
-            "walk_end": walk_end,
-            "settle_start": settle_start,
-            "settle_end": settle_end,
-            "idle_start": round(max(0.0, settle_end - 0.2), 4),
-        }
 
     def present_for(si):
         """R9 presence rule for one shot_intent (shared with R13 check)."""
@@ -368,16 +385,7 @@ def resolve_intent(intent, rmap, grammar, config):
             if ent_end > 0.0:
                 base = max(base, round(ent_end + 0.5, 1))
             for aid in dep_here:
-                dep = departures[aid]
-                rise_end = round(base + dep["rise_duration"], 4)
-                walk_start = round(rise_end - 0.3, 4)
-                walk_end = round(walk_start + dep["walk_duration"], 4)
-                dep_times[aid] = {
-                    "rise_start": base,
-                    "walk_start": walk_start,
-                    "walk_end": walk_end,
-                    "idle_start": round(walk_end - 0.2, 4),
-                }
+                dep_times[aid] = departure_times(departures[aid], base)
 
         # R8: Shot timing
         if lines:
@@ -409,106 +417,39 @@ def resolve_intent(intent, rmap, grammar, config):
             idle_start = 0.0
             idle_blend = None
             if ent:
-                t = entrance_times(ent)
-                idle_start = t["idle_start"]
-                idle_blend = 0.2
-                if ent.get("stand_clip"):
-                    cues.append({
-                        "type": "animation",
-                        "cue_id": f"{aid}_stand_{shot_num:03d}",
-                        "start_time": 0.0,
-                        "actor_id": aid,
-                        "clip_id": ent["stand_clip"],
-                    })
-                walk = {
-                    "type": "move",
-                    "cue_id": f"{aid}_enter_{shot_num:03d}",
-                    "start_time": t["lead"],
-                    "duration": ent["walk_duration"],
-                    "actor_id": aid,
-                    "from_mark": ent["from_mark"],
-                    "to_mark": ent["approach_mark"],
-                    "clip_id": ent["walk_clip"],
-                    "loop": True,
-                }
-                if ent.get("stand_clip"):
-                    walk["blend_in"] = 0.3
-                cues.append(walk)
-                cues.append({
-                    "type": "move",
-                    "cue_id": f"{aid}_settle_{shot_num:03d}",
-                    "start_time": t["settle_start"],
-                    "duration": ent["settle_duration"],
-                    "actor_id": aid,
-                    "from_mark": ent["approach_mark"],
-                    "to_mark": resolved_roles[aid]["spawn_mark"],
-                    "clip_id": ent["settle_clip"],
-                    "facing": "hold",
-                    "blend_in": 0.3,
-                })
-            idle = {
-                "type": "animation",
-                "cue_id": f"{aid}_idle_{shot_num:03d}",
-                "start_time": idle_start,
-                "actor_id": aid,
-                "clip_id": resolved_roles[aid]["idle_clip"],
-                "loop": True,
-            }
-            if idle_blend:
-                idle["blend_in"] = idle_blend
-            cues.append(idle)
+                entrance_cues, idle_start, idle_blend = build_entrance_cues(
+                    aid, ent, resolved_roles[aid]["spawn_mark"], shot_num,
+                )
+                cues.extend(entrance_cues)
+            # Placeholder roles (tools/placeholder_blueprint.py,
+            # section 7's --primitive-fallback) have no idle_clip --
+            # nothing to loop, so no idle cue at all; the actor just
+            # holds its last transform (HOLD_FORWARD extrapolation on
+            # whatever move cue placed it there).
+            idle_clip = resolved_roles[aid].get("idle_clip")
+            if idle_clip:
+                cues.append(build_idle_cue(aid, idle_clip, shot_num, idle_start, idle_blend))
 
             # R14: rise from the mark, walk out, hold a standing idle
             t = dep_times.get(aid)
             if t:
-                dep = departures[aid]
-                cues.append({
-                    "type": "move",
-                    "cue_id": f"{aid}_rise_{shot_num:03d}",
-                    "start_time": t["rise_start"],
-                    "duration": dep["rise_duration"],
-                    "actor_id": aid,
-                    "from_mark": resolved_roles[aid]["spawn_mark"],
-                    "to_mark": dep["approach_mark"],
-                    "clip_id": dep["rise_clip"],
-                    "facing": "hold",
-                    "blend_in": 0.2,
-                })
-                cues.append({
-                    "type": "move",
-                    "cue_id": f"{aid}_exit_{shot_num:03d}",
-                    "start_time": t["walk_start"],
-                    "duration": dep["walk_duration"],
-                    "actor_id": aid,
-                    "from_mark": dep["approach_mark"],
-                    "to_mark": dep["from_mark"],
-                    "clip_id": dep["walk_clip"],
-                    "loop": True,
-                    "facing": "travel_hold",
-                    "blend_in": 0.3,
-                })
-                if dep.get("stand_clip"):
-                    cues.append({
-                        "type": "animation",
-                        "cue_id": f"{aid}_idle_out_{shot_num:03d}",
-                        "start_time": t["idle_start"],
-                        "actor_id": aid,
-                        "clip_id": dep["stand_clip"],
-                        "loop": True,
-                        "blend_in": 0.2,
-                    })
+                cues.extend(build_departure_cues(
+                    aid, departures[aid], resolved_roles[aid]["spawn_mark"], shot_num, t,
+                ))
 
         # Per dialogue line: talk AnimationCue immediately followed by DialogueCue
         for k, line in enumerate(lines, start=1):
             global_line_counter += 1
             act_id = line["actor_id"]
-            cues.append({
-                "type": "animation",
-                "cue_id": f"{act_id}_talk_{shot_num:03d}_{k:02d}",
-                "start_time": line["start_time"],
-                "actor_id": act_id,
-                "clip_id": resolved_roles[act_id]["talk_clip"],
-            })
+            talk_clip = resolved_roles[act_id].get("talk_clip")
+            if talk_clip:
+                cues.append({
+                    "type": "animation",
+                    "cue_id": f"{act_id}_talk_{shot_num:03d}_{k:02d}",
+                    "start_time": line["start_time"],
+                    "actor_id": act_id,
+                    "clip_id": talk_clip,
+                })
             cues.append({
                 "type": "dialogue",
                 "cue_id": f"line_{global_line_counter * 10:03d}",
@@ -545,6 +486,8 @@ def resolve_intent(intent, rmap, grammar, config):
         "marks": list(loc_entry["marks"]),
         "props": props,
     }
+    if "environment" in loc_entry:
+        set_spec["environment"] = loc_entry["environment"]
 
     # Actors
     actors_out = []

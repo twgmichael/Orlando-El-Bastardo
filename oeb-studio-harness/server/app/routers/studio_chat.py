@@ -31,6 +31,7 @@ from app.models.studio_chat import (
     StudioChatTraceEvent,
 )
 from app.routers.review import _artifact_file_path
+from app.services.asset_review import image_artifacts_by_view
 from app.services.missing_asset_fallback import resolve_missing_asset
 from app.services.registry_resolution import detect_load_command, is_ambiguous, resolve_reference
 from app.routers.conversations import _build_job_payload, create_conversation_job
@@ -1203,6 +1204,35 @@ def _edit_build_job_from_state(
     return job, review_url, asset_review_url
 
 
+async def _candidate_thumbnail_url(db: AsyncSession, asset_id: str) -> str | None:
+    """The "action" view artifact from an asset's latest completed
+    review-render job -- the same hero image review_asset.html already
+    shows -- so the "load X" chooser (section 6) is a visual pick, not
+    a name guess, without inventing a second thumbnail pipeline.
+    """
+    job_result = await db.execute(
+        select(Job)
+        .where(
+            Job.payload["job_type"].as_string() == "asset.review_render",
+            Job.payload["asset_id"].as_string() == asset_id,
+            Job.status == "completed",
+        )
+        .order_by(Job.updated_at.desc())
+        .limit(1)
+    )
+    job = job_result.scalar_one_or_none()
+    if not job:
+        return None
+    artifact_result = await db.execute(
+        select(Artifact).where(Artifact.job_id == job.id).order_by(Artifact.created_at)
+    )
+    by_view = image_artifacts_by_view(asset_id, artifact_result.scalars().all())
+    action = by_view.get("action")
+    if not action:
+        return None
+    return action.public_url or f"/review/artifacts/{action.id}"
+
+
 async def _record_thread_event(
     db: AsyncSession,
     thread_id: uuid.UUID | None,
@@ -1589,7 +1619,12 @@ async def create_studio_chat_thread_message(
                         "query": load_query,
                         "clarification_question": f"Multiple matches for {load_query!r} — which one?",
                         "candidates": [
-                            {"canonical_id": m.asset.canonical_id, "name": m.asset.name, "score": m.score}
+                            {
+                                "canonical_id": m.asset.canonical_id,
+                                "name": m.asset.name,
+                                "score": m.score,
+                                "thumbnail_url": await _candidate_thumbnail_url(db, m.asset.canonical_id),
+                            }
                             for m in matches[:8]
                         ],
                     },

@@ -23,6 +23,19 @@ def material(name, color):
     return mat
 
 
+def empty(name, location, size=0.2):
+    """A plain marker object (Blender Empty, no mesh/material) -- lets a
+    Blueprint synthesize its own named mark objects (e.g. a tier-2
+    placeholder location's auto-generated entry/center/exit marks,
+    docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7) instead
+    of marks only ever coming from a pre-authored, imported glTF.
+    """
+    bpy.ops.object.empty_add(type="PLAIN_AXES", radius=size, location=location)
+    obj = bpy.context.object
+    obj.name = name
+    return obj
+
+
 def cube(name, location, scale, mat):
     bpy.ops.mesh.primitive_cube_add(size=1, location=location)
     obj = bpy.context.object

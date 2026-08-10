@@ -762,6 +762,68 @@
     return card;
   }
 
+  function renderLoadEventCard(event) {
+    const payload = event.payload || {};
+    const card = document.createElement("div");
+    card.className = "chat-build-card chat-load-card";
+    const eyebrow = document.createElement("div");
+    eyebrow.className = "chat-build-eyebrow";
+    const title = document.createElement("strong");
+    card.append(eyebrow, title);
+
+    if (event.event_type === "load_resolved") {
+      eyebrow.textContent = "Loaded";
+      title.textContent = payload.canonical_id || "";
+      const meta = document.createElement("div");
+      meta.className = "build-job-meta";
+      const score = typeof payload.score === "number" ? payload.score.toFixed(2) : payload.score;
+      meta.textContent = `Matched "${payload.query}" (score ${score})`;
+      card.appendChild(meta);
+    } else if (event.event_type === "load_resolved_via_fallback") {
+      eyebrow.textContent = "Placeholder created";
+      title.textContent = payload.canonical_id || "";
+      const meta = document.createElement("div");
+      meta.className = "build-job-meta";
+      meta.textContent = `"${payload.query}" wasn't found in the registry — a tier ${payload.fallback_tier} `
+        + "placeholder was registered and a NEEDED ticket was filed.";
+      card.appendChild(meta);
+      const links = document.createElement("div");
+      links.className = "build-job-links";
+      const assetLink = document.createElement("a");
+      assetLink.href = `/review/assets/${payload.canonical_id}`;
+      assetLink.textContent = "Review placeholder";
+      links.appendChild(assetLink);
+      card.appendChild(links);
+    } else if (event.event_type === "load_needs_clarification") {
+      eyebrow.textContent = "Which one?";
+      title.textContent = payload.clarification_question || `Multiple matches for "${payload.query}"`;
+      const candidates = payload.candidates || [];
+      if (candidates.length) {
+        const grid = document.createElement("div");
+        grid.className = "chat-render-grid";
+        for (const candidate of candidates) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "chat-render-thumb";
+          button.setAttribute("aria-label", `Load ${candidate.canonical_id}`);
+          button.addEventListener("click", () => submitLoadCommand(`load ${candidate.canonical_id}`));
+          if (candidate.thumbnail_url) {
+            const image = document.createElement("img");
+            image.src = candidate.thumbnail_url;
+            image.alt = candidate.name || candidate.canonical_id;
+            button.appendChild(image);
+          }
+          const span = document.createElement("span");
+          span.textContent = candidate.name || candidate.canonical_id;
+          button.appendChild(span);
+          grid.appendChild(button);
+        }
+        card.appendChild(grid);
+      }
+    }
+    return card;
+  }
+
   function renderAssistantActivityContent(content, labelText, indicatorClass, indicatorLabel) {
     content.classList.add("assistant-waiting-content");
     const label = document.createElement("span");
@@ -833,6 +895,11 @@
         const spacer = document.createElement("div");
         spacer.className = "chat-message-build-spacer";
         row.append(spacer, renderMilestoneCard(message.milestone));
+      }
+      if (message.loadEvent) {
+        const spacer = document.createElement("div");
+        spacer.className = "chat-message-build-spacer";
+        row.append(spacer, renderLoadEventCard(message.loadEvent));
       }
       for (const event of message.revisionEvents || []) {
         const spacer = document.createElement("div");
@@ -1310,6 +1377,9 @@
         message.revisionEvents = message.revisionEvents || [];
         message.revisionEvents.push(event);
       }
+      if (String(event.event_type || "").startsWith("load_")) {
+        message.loadEvent = event;
+      }
     }
   }
 
@@ -1411,6 +1481,33 @@
     return thread.id;
   }
 
+  async function fetchLoadEventForMessage(messageId) {
+    if (!state.activeThreadId || !messageId) return null;
+    const events = await fetchJson(`/api/v1/studio-chat/threads/${state.activeThreadId}/events`);
+    const list = Array.isArray(events) ? events : [];
+    return list.find(
+      (item) => item.message_id === messageId && String(item.event_type || "").startsWith("load_"),
+    ) || null;
+  }
+
+  async function submitLoadCommand(text) {
+    clearError();
+    try {
+      const savedUser = await saveThreadMessage("user", text, {});
+      const userMessage = {
+        id: savedUser.id,
+        role: savedUser.role,
+        content: savedUser.content,
+        raw: savedUser.raw || {},
+      };
+      userMessage.loadEvent = await fetchLoadEventForMessage(userMessage.id);
+      state.messages.push(userMessage);
+      renderTranscript();
+    } catch (err) {
+      showError("Could not resolve load command", err.message);
+    }
+  }
+
   async function saveThreadMessage(role, content, raw) {
     const threadId = await ensureThread();
     return fetchJson(`/api/v1/studio-chat/threads/${threadId}/messages`, {
@@ -1510,6 +1607,18 @@
     } catch (err) {
       showError("Could not save user message", err.message);
       setStatus("Thread save failed");
+      return;
+    }
+    // "load X" chat commands (UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 6)
+    // are detected server-side, on the same message-save call above, and
+    // recorded as a thread event rather than blocking the save. Pick that
+    // event up here and render it as a card instead of sending "load X"
+    // itself to the model -- it isn't a creative request.
+    const loadEvent = await fetchLoadEventForMessage(userMessage.id);
+    if (loadEvent) {
+      userMessage.loadEvent = loadEvent;
+      state.messages.push(userMessage);
+      renderTranscript();
       return;
     }
     state.messages.push(userMessage);
