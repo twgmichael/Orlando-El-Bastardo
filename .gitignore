@@ -4,6 +4,7 @@ models/
 !oeb-studio-harness/server/app/models/*.py
 llm
 assets/
+data/asset_index.json
 __pycache__/
 renders
 out

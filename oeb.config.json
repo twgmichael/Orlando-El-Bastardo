@@ -60,7 +60,8 @@
     "prop_jb100_A": {
       "file": "ships/jb100.glb",
       "node": "prop_jb100_A",
-      "kind": "prop"
+      "kind": "prop",
+      "radius_m": 3.3
     },
     "prop_starbase_86_A": {
       "file": "locations/starbase_86_v1.1.0/starbase_86_v1.1.0.glb",
@@ -156,7 +157,12 @@
       "node": "placeholder_prop_asteroid_round_A",
       "kind": "prop",
       "placeholder": true,
-      "tags": ["asteroid", "space rock", "round", "1999 cgi"],
+      "tags": [
+        "asteroid",
+        "space rock",
+        "round",
+        "1999 cgi"
+      ],
       "source": "tools/build_asteroid_placeholders.py"
     },
     "placeholder_prop_asteroid_oblong_A": {
@@ -164,7 +170,12 @@
       "node": "placeholder_prop_asteroid_oblong_A",
       "kind": "prop",
       "placeholder": true,
-      "tags": ["asteroid", "space rock", "oblong", "1999 cgi"],
+      "tags": [
+        "asteroid",
+        "space rock",
+        "oblong",
+        "1999 cgi"
+      ],
       "source": "tools/build_asteroid_placeholders.py"
     },
     "placeholder_prop_asteroid_jagged_A": {
@@ -172,7 +183,12 @@
       "node": "placeholder_prop_asteroid_jagged_A",
       "kind": "prop",
       "placeholder": true,
-      "tags": ["asteroid", "space rock", "jagged", "1999 cgi"],
+      "tags": [
+        "asteroid",
+        "space rock",
+        "jagged",
+        "1999 cgi"
+      ],
       "source": "tools/build_asteroid_placeholders.py"
     },
     "placeholder_prop_asteroid_peanut_A": {
@@ -180,7 +196,12 @@
       "node": "placeholder_prop_asteroid_peanut_A",
       "kind": "prop",
       "placeholder": true,
-      "tags": ["asteroid", "space rock", "peanut", "1999 cgi"],
+      "tags": [
+        "asteroid",
+        "space rock",
+        "peanut",
+        "1999 cgi"
+      ],
       "source": "tools/build_asteroid_placeholders.py"
     },
     "placeholder_prop_asteroid_cratered_A": {
@@ -188,7 +209,12 @@
       "node": "placeholder_prop_asteroid_cratered_A",
       "kind": "prop",
       "placeholder": true,
-      "tags": ["asteroid", "space rock", "cratered", "1999 cgi"],
+      "tags": [
+        "asteroid",
+        "space rock",
+        "cratered",
+        "1999 cgi"
+      ],
       "source": "tools/build_asteroid_placeholders.py"
     },
     "placeholder_character_casey_A": {
@@ -201,6 +227,20 @@
     "placeholder_vehicle_journeyblaster_A": {
       "file": "placeholders/placeholder_vehicle_journeyblaster_A.glb",
       "node": "placeholder_vehicle_journeyblaster_A",
+      "kind": "vehicle",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_location_test_set_designer_location_alpha_A": {
+      "file": "placeholders/placeholder_location_test_set_designer_location_alpha_A.glb",
+      "node": "placeholder_location_test_set_designer_location_alpha_A",
+      "kind": "location",
+      "placeholder": true,
+      "source": "set_designer"
+    },
+    "placeholder_vehicle_nothing_A": {
+      "file": "placeholders/placeholder_vehicle_nothing_A.glb",
+      "node": "placeholder_vehicle_nothing_A",
       "kind": "vehicle",
       "placeholder": true,
       "source": "producer --primitive-fallback"

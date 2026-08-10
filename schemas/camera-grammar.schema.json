@@ -17,7 +17,7 @@
         "required": ["camera_id", "framing", "description"],
         "properties": {
           "camera_id": { "type": "string", "pattern": "^cam_[a-z0-9_]+$" },
-          "framing": { "enum": ["establishing", "two_shot", "close_on"] },
+          "framing": { "enum": ["establishing", "two_shot", "close_on", "medium_on"] },
           "description": { "type": "string", "minLength": 1 },
           "subject_marks": {
             "type": "array",
@@ -29,6 +29,10 @@
             "type": "string",
             "description": "Camera object name in the set/placeholder asset, when pre-placed.",
             "pattern": "^[a-z][a-zA-Z0-9_]*$"
+          },
+          "shot_scale": {
+            "enum": ["intimate", "vast"],
+            "description": "docs/planning/CAMERA-SHOT-SCALE-PLAN.md: which locations (by their resolver_map.json shot_scale, itself derived from the script's own INT/EXT + text) this establishing/two_shot camera applies to. Omitted for close_on/medium_on, which are already actor-mark-scoped regardless of location scale."
           }
         }
       }

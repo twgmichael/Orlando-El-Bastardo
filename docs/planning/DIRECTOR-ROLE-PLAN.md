@@ -1,7 +1,7 @@
 ---
 title: Director Role Plan
 created: 2026-07-17T00:00:00-04:00
-updated: 2026-08-10T10:08:09-04:00
+updated: 2026-08-10T17:30:00-04:00
 doc_type: plan
 production_area: pipeline
 department: production
@@ -19,8 +19,15 @@ Recorded 2026-07-17 from review of `oeb-text-adventures.md` and follow-up
 discussion about the distinction between producer and director responsibilities
 inside `oeb-studio-harness`.
 
-**Updated 2026-08-10 — real code identified, DirectorPlan decided.** See
-"2026-08-10 discussion and discovery" below: `tools/producer.py`'s
+**Updated 2026-08-10 — all three built and live-verified**: framing/
+subject, blocking, and the mid-scene move-beat mechanism ("flies into
+asteroid field") — `tools/director.py`, `schemas/directorplan.schema.json`,
+and (for the move mechanism specifically) a real `SceneIntent` schema
+change plus `tools/resolve_intent.py` changes. See both "2026-08-10
+built" sections below.
+
+**Earlier 2026-08-10 update — real code identified, DirectorPlan
+decided.** See "2026-08-10 discussion and discovery" below: `tools/producer.py`'s
 `build_intent()` turned out to already be making Director's calls
 (camera framing, blocking flags) via dumb deterministic heuristics with
 no LLM involved, exactly the role-conflation this document warned
@@ -184,6 +191,139 @@ richer beat data (the "flies into asteroid field" case) enters
 `SceneSpec` — a new cue path, or additional `SceneIntent` fields
 resolve_intent.py learns to read — is not decided here; that is the
 schema/build work "Near-Term Work" below still needs to do.
+
+## 2026-08-10 built: framing/subject and blocking, LLM-assisted
+
+Built and live-verified against the real local LLM (the same
+`llama-completion` CLI + `qwen2.5-3b-instruct-q4_k_m.gguf` model
+`llm_review()` already uses, not a mock):
+
+- **`schemas/directorplan.schema.json`** (new): `dramatic_intent`
+  (human-review only), `shots[]` (`order`, `framing` — same four-value
+  enum as `SceneIntent.shot_intents[].framing`, no new camera-intent
+  vocabulary — `subject_actor`, `purpose`, `motion_note`), `blocking[]`
+  (`actor`, `arrives`, `departs`, `evidence`).
+- **`tools/director.py`** (new): `direct_scene()` makes one constrained
+  local-LLM call per scene, same call/fallback discipline as
+  `llm_review()` (grammar-constrained via `--json-schema`, hard failure
+  → `(None, note)`, caller falls back to the pre-existing deterministic
+  heuristics — a broken/unavailable LLM never blocks a scene).
+  `sanitize_plan()` re-validates past the schema boundary: a JSON-schema
+  grammar constrains *shape*, not *this scene's actual cast or section
+  count*, so any shot/blocking entry referencing something outside the
+  real scene data is dropped rather than trusted.
+- **`tools/producer.py`**: `build_intent()` takes an optional
+  `director_plan` argument. Framing/subject: an explicit author shot
+  heading's framing type is never overridden (same "deliberate author
+  direction first" principle as slugline resolution,
+  `SCREENPLAY-SLUGLINE-ACTOR-PRESENCE-GAP.md`) — the director only
+  fills sections the screenplay left open, or supplies a subject when
+  the heading's own `subject_raw` didn't resolve to cast. The director
+  call happens in `main()`'s scene loop right where the "Answered
+  2026-08-10" pipeline slot below says it should, immediately before
+  `build_intent()`; the plan is persisted to
+  `out/production/<episode>/scenes/<scene_id>/director_plan.json` for
+  human review (Recommendation 4).
+- **Real reliability finding, not a hypothetical concern — changed the
+  design:** live-testing `direct_scene()` against a realistic bar scene
+  ("The Hero walks in... The Hero finishes the drink and walks out.")
+  showed the local 3B model is not reliable enough to safely *replace*
+  `screenplay.py`'s keyword-based `detect_arrivals()`/`detect_departures()`
+  for blocking. First pass: the model asserted `bartender.arrives=true`
+  with no textual basis (hallucination) while missing `hero.departs`
+  that the keyword regex catches cleanly. Adding an `evidence` field to
+  the schema (requiring a quote from the scene's own action text,
+  checked as a real substring before a flag is trusted — a grounding
+  check that accepts free-form phrasing the keyword list would miss,
+  without trusting an unverified assertion) fixed the hallucination but
+  swung the other way: the model then defaulted both actors to
+  false/false, missing the "walks in"/"walks out" evidence that was
+  right there in the text it was given. **Resulting design: blocking is
+  a UNION, not a replacement** — an actor arrives/departs if EITHER the
+  keyword regex OR the grounded director plan says so. The regex stays
+  as the reliability floor (the plan's own "reuse existing rails"
+  recommendation, applied literally); the director can only ADD
+  coverage for phrasing the regex misses, never remove coverage the
+  regex already correctly provides. Confirmed via a full
+  `producer.py --no-render` run: the hero's `arrives`/`departs` came
+  through correctly in the final `SceneIntent` from the regex floor
+  even on a run where the director's own plan asserted neither.
+- **Superseded below**: the mid-scene move-beat mechanism ("flies into
+  asteroid field") was left unbuilt as of this section; see "2026-08-10
+  built: mid-scene move-beat mechanism" further down for what shipped.
+
+## 2026-08-10 built: mid-scene move-beat mechanism
+
+**Decision, resolving the "not decided here" open question above:**
+`SceneIntent` gains one new optional field — `beats[].moves[]`
+(`actor_id`, `to_mark`, optional `clip_id`/`duration_s`), schema change
+in `schemas/sceneintent.schema.json`. `resolve_intent.py` resolves each
+into a standard `move` `SceneSpec` cue — the exact same cue type
+entrances/departures already emit (`type: "move", from_mark, to_mark,
+duration, clip_id?, facing`) — no new cue type, no exporter change:
+`export_blender.py`/`blueprint_interpreter.py` need nothing new, since
+a `move` cue with no `clip_id` was already a supported transform-only
+move for both actors and placeholder props.
+
+- **`tools/resolve_intent.py`**: tracks each actor's *current* mark
+  across the shot loop (`current_mark`, seeded from `spawn_mark`,
+  updated whenever a beat move places the actor elsewhere) — new
+  resolver state; nothing before this needed to know "where is this
+  actor right now" mid-scene. A beat move resolves to a `move` cue
+  scheduled after that shot's dialogue (same anchor R14 departures
+  already use), `from_mark` = the actor's tracked current mark,
+  `to_mark` = the beat's own field, `facing: "travel"`, `duration`
+  defaulting to 2.0s. **Real correctness fix as a side effect**: a
+  departure in the same shot as a prior move now correctly rises from
+  the actor's *actual* current mark instead of always their original
+  `spawn_mark` — `build_departure_cues()`'s mark argument changed from
+  `resolved_roles[aid]["spawn_mark"]` to `current_mark[aid]`. Verified
+  live: a synthetic scene with both a move and a departure in the same
+  shot produces `rise: from=<the move's to_mark>`, not the old spawn
+  mark.
+- **No new mark vocabulary invented.** `to_mark` must be exactly one of
+  the resolved location's own registered marks
+  (`data/resolver_map.json`'s `locations[location_tag].marks`) — for
+  placeholder-tier locations that's the entry/center/exit vocabulary
+  this document anticipated below, but the mechanism reads whatever
+  marks a location actually has (a real hand-built set like the bar has
+  semantic mark names, not entry/center/exit) rather than hardcoding
+  that one vocabulary. An invalid `to_mark` isn't resolver-checked
+  directly — it falls through to `tools/validate_spec.py`'s existing
+  `unknown_mark` check, same discipline as every other cue's marks, no
+  duplicated validation.
+- **`tools/director.py`**: `direct_scene()` takes a new
+  `location_marks` parameter (the list above) and prompts the model to
+  propose a per-shot `move` (`actor`, `to_mark`, `evidence`) only when
+  the action text clearly describes it and a real mark plausibly
+  matches. `schemas/directorplan.schema.json` gained the matching
+  `shots[].move` object. Same evidence-grounding discipline the
+  blocking fix above established: `sanitize_plan()` discards a proposed
+  move unless `to_mark` is literally one of `location_marks` (not just
+  well-formed) AND `evidence` is a real substring of the scene's own
+  action text — an ungrounded or invented-mark move is dropped exactly
+  like an ungrounded arrival/departure flag was.
+- **`tools/producer.py`**: passes the resolved location's marks into
+  `direct_scene()`; `build_intent()` turns a validated
+  `plan_shots[j]["move"]` into `beats[j]["moves"]`.
+- **Verified, full chain, real screenplay parse**: a synthetic scene
+  ("The Journeyblaster flies into the asteroid field...") parsed for
+  real via `tools/screenplay.py`, run through `director.sanitize_plan()`
+  with a well-formed plan, `producer.build_intent()`, and
+  `resolve_intent.resolve_intent()` — produced a real, schema-valid
+  `move` cue (`from: ..._center`, `to: ..._exit`, `facing: travel`).
+  Same reliability caveat as the blocking fix: a *live* local-3B-model
+  call against this same scene did not itself propose a move (the
+  model's own known section-indexing unreliability, already documented
+  above for framing/blocking — `sanitize_plan()` correctly dropped the
+  malformed shot rather than trusting it). The wiring is proven
+  correct; the local model's proposal rate for this specific judgment
+  call is not — same honest gap as the blocking union fix, not
+  something this pass tried to solve. A full 7-scene real-teaser
+  regression run (`--primitive-fallback --no-render`) delivered 7/7
+  after the `resolve_intent.py` changes, confirming no regression to
+  existing entrance/departure behavior. Full `oeb-studio-harness/server`
+  pytest suite (382 tests) unaffected; `tools/security_sweep.py` clean.
 
 **What Director needs to run standalone:**
 
@@ -351,6 +491,14 @@ Open schema work:
   fields via plain heuristics with no LLM involved (shot-heading dict
   lookup, keyword-based arrival/departure detection) — that is the code
   `DirectorPlan` replaces, not new scope.
+- **2026-08-10: the mid-scene move-beat mechanism gets a real
+  `SceneIntent` schema addition (`beats[].moves[]`), not a workaround
+  to avoid touching the schema** — the "resolve_intent.py/SceneSpec do
+  not change shape" constraint from the decision above was scoped to
+  the framing/blocking work specifically; this document always left the
+  move mechanism's own shape "not decided" until built. `SceneSpec`
+  itself is genuinely unchanged: the new field resolves into the
+  already-existing `move` cue type.
 - The recommended architecture is:
 
 ```text
@@ -368,7 +516,9 @@ script scene
 - Add `DirectorPlan` to the schema consolidation discussion alongside
   `SceneIntent`, conversational scene plans, primitive build specs, and
   `SceneSpec`.
-- Draft a minimal `directorplan.schema.json` with conservative vocabularies.
+- **Built 2026-08-10**: `schemas/directorplan.schema.json` — see
+  "2026-08-10 built" above for the actual (deliberately conservative)
+  vocabulary shipped.
 - Create one fixture from the pilot or bar scene showing factual extraction,
   director plan, and resolved scene spec side by side.
 - **Answered 2026-08-10**: the director step runs in `tools/producer.py`
@@ -378,4 +528,13 @@ script scene
   once `DirectorPlan` exists to inform those fields instead.
 - Add a qualification drill: one in-library scene should produce useful staged
   direction; one scene needing an unavailable camera, mark, or clip should
-  produce a clean NEEDED path rather than a hidden substitution.
+  produce a clean NEEDED path rather than a hidden substitution. Still
+  open — not built.
+- **Still open**: the local 3B model's proposal *rate* for both blocking
+  and moves is genuinely low (documented in both "2026-08-10 built"
+  sections above) — the wiring is correct and safe (ungrounded/invalid
+  proposals are dropped, never a crash or a bad cue), but a stronger
+  local model, a better-tuned prompt, or a small few-shot example in
+  the system prompt (Recommendation 7's "worked examples" rule) would
+  likely raise how often Director actually contributes something beyond
+  the deterministic floor. Not attempted this pass.

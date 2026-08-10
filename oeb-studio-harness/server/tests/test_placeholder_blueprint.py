@@ -72,8 +72,12 @@ def test_default_placeholder_blueprint_with_location_marks_adds_three_empties():
         "placeholder_location_deep_space_A_center",
         "placeholder_location_deep_space_A_exit",
     }
-    # body (a real primitive) plus the three marks
-    assert len(bp["primitives"]) == 4
+    # body (a real primitive), the three marks, and a baked
+    # shot_scale-appropriate camera (docs/planning/CAMERA-SHOT-SCALE-PLAN.md)
+    cameras = [p for p in bp["primitives"] if p["type"] == "camera"]
+    assert len(cameras) == 1
+    assert cameras[0]["id"] == "cam_establishing_wide"  # default shot_scale: intimate
+    assert len(bp["primitives"]) == 5
 
 
 def test_default_placeholder_blueprint_without_location_marks_has_no_empties():

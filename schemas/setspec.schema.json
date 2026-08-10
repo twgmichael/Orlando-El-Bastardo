@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:setspec:1.0.0",
+  "title": "SetSpec",
+  "description": "The set designer kitbash tier's build DATA (docs/planning/PRODUCTION-DESIGNER-PLAN.md, 'Build order' step 2): tools/build_set.py reads this and assembles a real, human-approved set from approved library kit pieces plus small hand-built primitives, generalizing tools/build_scifi_bar.py's hardcoded LAYOUT table into an authorable, diffable, reviewable spec. The designer authors DATA, not code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "canonical_id", "kit_root", "layout", "canonical_node"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "canonical_id": {
+      "type": "string",
+      "description": "The set's own canonical_id, e.g. 'set_bar_small_A' -- becomes both the joined mesh's object name and (via canonical_node) its exported node name."
+    },
+    "name": { "type": "string", "description": "Human-readable name for review UI display." },
+    "kit_root": {
+      "type": "string",
+      "description": "Directory containing the approved kit GLB pieces layout[].piece names reference, e.g. 'assets/Ultimate Modular Sci-Fi - Feb 2021/GLB'."
+    },
+    "base_placeholder": {
+      "type": "string",
+      "description": "A placeholder .glb to import first -- its props/marks/cameras carry over verbatim into the real set (the grey-box-to-kitbash upgrade path). Optional: a from-scratch set omits this."
+    },
+    "remove_from_base": {
+      "type": "array",
+      "description": "Object names to delete from the imported base_placeholder before placement (e.g. the old grey-box set mesh and any single-piece prop being rebuilt from primitive_props instead).",
+      "items": { "type": "string" }
+    },
+    "layout": {
+      "type": "array",
+      "description": "Kit-piece placements. Each entry imports kit_root/<piece>.glb once as a template (world transform baked into vertex data) and instantiates linked copies at each listed placement.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["piece", "position"],
+        "properties": {
+          "piece": { "type": "string", "description": "Kit GLB filename stem, e.g. 'Wall_2'." },
+          "position": {
+            "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+          },
+          "z_rotation_deg": { "type": "number", "default": 0 }
+        }
+      }
+    },
+    "primitive_props": {
+      "type": "array",
+      "description": "Small hand-built props as stacked box/cylinder primitives (generalizes build_scifi_bar.py's bespoke bar-counter/barstool bmesh code into data) -- for pieces the kit library doesn't have, not a general modeling system.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "position", "primitives"],
+        "properties": {
+          "id": { "type": "string", "description": "Canonical object name for this prop, e.g. 'prop_bar_counter_A'." },
+          "position": {
+            "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+          },
+          "primitives": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["shape", "center"],
+              "properties": {
+                "shape": { "enum": ["box", "cylinder"] },
+                "center": {
+                  "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3,
+                  "description": "Offset from the prop's own position, not world space."
+                },
+                "size": {
+                  "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3,
+                  "description": "box only: full width/depth/height."
+                },
+                "radius": { "type": "number", "exclusiveMinimum": 0, "description": "cylinder only." },
+                "height": { "type": "number", "exclusiveMinimum": 0, "description": "cylinder only." }
+              }
+            }
+          },
+          "material": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "base_color": {
+                "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4
+              },
+              "roughness": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+    "marks": {
+      "type": "array",
+      "description": "Mark empties to add or, if the name already exists (carried over from base_placeholder), reposition. Covers both new entrance/approach marks and repositioning an existing mark for a kitbashed layout.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "position"],
+        "properties": {
+          "name": { "type": "string" },
+          "position": {
+            "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+          }
+        }
+      }
+    },
+    "cameras": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "position"],
+        "properties": {
+          "name": { "type": "string" },
+          "position": {
+            "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3
+          },
+          "aim_at": {
+            "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3,
+            "description": "Literal world-space point to aim at. Mutually exclusive with aim_at_mark."
+          },
+          "aim_at_mark": {
+            "type": "string",
+            "description": "Name of a mark (from marks[] or carried over from base_placeholder) to aim at instead of a literal point."
+          },
+          "lens_mm": { "type": "number", "exclusiveMinimum": 0, "default": 35 }
+        }
+      }
+    },
+    "material_fixes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "force_opaque": {
+          "type": "boolean",
+          "default": false,
+          "description": "Kit materials sometimes import alpha-hashed with alpha near 0 (renders invisible) -- force every layout-piece material opaque, alpha 1, no backface culling."
+        }
+      }
+    },
+    "canonical_node": {
+      "type": "string",
+      "description": "Object/mesh name the joined layout becomes on export. Usually equal to canonical_id."
+    },
+    "export": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "usdc": { "type": "boolean", "default": true }
+      },
+      "description": "GLB is always exported; usdc additionally unless set false."
+    }
+  }
+}

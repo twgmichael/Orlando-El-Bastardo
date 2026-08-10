@@ -34,10 +34,14 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import screenplay  # noqa: E402
 import tickets     # noqa: E402
+import director    # noqa: E402
+import motion_library  # noqa: E402
 from script_desk import find_ffmpeg, find_slate_font, slate_drawtext  # noqa: E402
 from producer_studio_chat_client import build_scene_via_studio_chat  # noqa: E402
 import placeholder_blueprint  # noqa: E402
@@ -49,6 +53,8 @@ STANDINS_PATH = "data/standins.json"
 PLACEHOLDER_ASSETS_ROOT = "assets/placeholders"
 
 VENV_PY = ".venv/bin/python"
+HARNESS_URL_ENV = "OEB_HARNESS_URL"
+HARNESS_ADMIN_TOKEN_ENV = "API_ADMIN_TOKEN"
 LLAMA = "llama-completion"
 MODEL = "llm/qwen2.5-3b-instruct-q4_k_m.gguf"
 REVIEW_SCHEMA = "schemas/scenereview.schema.json"
@@ -171,20 +177,44 @@ def present_actors(scene, cast):
 
 
 def build_intent(scene_id, scene, cast, location_tag, arrivals,
-                 departures, descriptions):
-    """Deterministic SceneIntent assembly from parsed structure."""
+                 departures, descriptions, director_plan=None):
+    """SceneIntent assembly from parsed structure. *arrivals*/*departures*
+    (tools/screenplay.py keyword detection) and each section's parsed
+    shot-heading framing/subject are the deterministic fallbacks; when
+    *director_plan* is given (tools/director.py, already sanitized
+    against this scene's actual cast/section count), its per-shot
+    framing/subject decisions fill sections the screenplay itself left
+    open (an explicit author shot heading's framing type is never
+    overridden -- only a missing/invalid subject on it gets filled in).
+
+    Blocking is a UNION, not a replacement: an actor arrives/departs if
+    EITHER the keyword regex OR the director's (evidence-grounded) plan
+    says so. Live testing against the local 3B director model showed
+    it isn't reliable enough on its own to safely replace the regex --
+    both false positives (asserting an arrival with no textual basis)
+    and, with a stricter grounding prompt, false negatives (missing an
+    arrival the regex catches cleanly) were observed. The union keeps
+    the regex as a reliability floor while still letting the director
+    add coverage for phrasing the regex misses ("storms off" etc.).
+    See docs/planning/DIRECTOR-ROLE-PLAN.md's 2026-08-10 decision.
+    """
     present = present_actors(scene, cast)
     # SceneIntent's actor_id must match ^[a-z][a-z0-9_]*$ -- a raw
     # dialogue-cue speaker name can contain a space ("SHIP AI"), so the
     # id used everywhere below is a slug, not the cast key itself.
     slug = {name: _role_tag_for(name) for name in present}
+    plan_blocking = (director_plan or {}).get("blocking", {})
+    plan_shots = (director_plan or {}).get("shots", {})
 
     actors = []
     for name in present:
         actor = {"actor_id": slug[name], "role_tag": cast[name]}
-        if name in arrivals:
+        pb = plan_blocking.get(name)
+        arr = name in arrivals or (pb is not None and pb["arrives"])
+        dep = name in departures or (pb is not None and pb["departs"])
+        if arr:
             actor["arrives"] = True
-        if name in departures:
+        if dep:
             actor["departs"] = True
         actors.append(actor)
 
@@ -202,17 +232,35 @@ def build_intent(scene_id, scene, cast, location_tag, arrivals,
         if sec["dialogue"]:
             beat["dialogue"] = [{"actor_id": slug.get(n.lower(), _role_tag_for(n)), "text": t}
                                 for n, t in sec["dialogue"]]
+        plan_shot = plan_shots.get(j)
+        # Mid-scene move (docs/planning/DIRECTOR-ROLE-PLAN.md): director's
+        # move, already validated against this scene's real cast and the
+        # location's real marks in director.sanitize_plan(); nothing
+        # deterministic feeds this, no move without a director decision.
+        if plan_shot and plan_shot.get("move"):
+            mv = plan_shot["move"]
+            beat["moves"] = [{"actor_id": slug[mv["actor"]], "to_mark": mv["to_mark"]}]
         beats.append(beat)
 
         framing = sec["framing"]
         subject = (sec["subject_raw"] or "").lower() or None
         si = {"order": j, "beat_orders": [j]}
         if framing in ("close_on", "medium_on"):
+            # Explicit author heading -- framing type is authoritative,
+            # never overridden; the director may only supply a subject
+            # when the screenplay's own subject_raw didn't resolve.
             if subject in cast:
                 si["framing"] = framing
                 si["subject_actor_id"] = slug[subject]
+            elif plan_shot is not None and plan_shot["subject_actor"]:
+                si["framing"] = framing
+                si["subject_actor_id"] = slug[plan_shot["subject_actor"]]
             else:
                 si["framing"] = "establishing"   # fallback, noted upstream
+        elif framing is None and plan_shot is not None:
+            si["framing"] = plan_shot["framing"]
+            if plan_shot["framing"] in ("close_on", "medium_on") and plan_shot["subject_actor"]:
+                si["subject_actor_id"] = slug[plan_shot["subject_actor"]]
         else:
             si["framing"] = framing or "establishing"
         shot_intents.append(si)
@@ -280,60 +328,45 @@ def _role_tag_for(speaker_name):
 
 
 def primitive_fallback(blocking, rmap, cast, location_tag):
-    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7: for
-    each missing location/role this scene's vocabulary sweep found,
-    register a crude primitive placeholder -- deterministically and
-    offline (no live harness needed, unlike --studio-chat-fallback).
-    Mutates the real oeb.config.json / data/resolver_map.json /
-    data/standins.json on disk (tagged "placeholder": true -- the same
-    registry every other tool already reads, per section 7's "no
-    separate placeholder-specific store" decision, not a parallel one)
-    AND the in-memory *rmap*/*cast* dicts this same run already holds,
-    so the scene can immediately continue through the deterministic
-    pipeline using what was just registered, without re-reading files.
+    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7 /
+    docs/planning/PRODUCTION-DESIGNER-PLAN.md's 2026-08-10 discovery:
+    for each missing role this scene's vocabulary sweep found, register
+    a crude primitive placeholder -- deterministically and offline (no
+    live harness needed, unlike --studio-chat-fallback). Mutates the
+    real oeb.config.json / data/resolver_map.json / data/standins.json
+    on disk (tagged "placeholder": true -- the same registry every
+    other tool already reads, per section 7's "no separate placeholder-
+    specific store" decision, not a parallel one) AND the in-memory
+    *rmap*/*cast* dicts this same run already holds, so the scene can
+    immediately continue through the deterministic pipeline using what
+    was just registered, without re-reading files.
+
+    Location handling moved to tools/set_designer.py (2026-08-10) --
+    this function only ever anchors role/role_location marks to a
+    location that's *already* resolved (real, or previously set-
+    designed); it never builds a location placeholder itself. A scene
+    whose location is still blocked leaves any role blockers in the
+    same batch blocked too (no location_set_id to anchor marks
+    against) -- they resolve on the re-run set_designer.py triggers
+    once the location exists.
 
     Returns `(still_blocking, resolved_location_tag)` -- entries still
-    genuinely unresolved (a placeholder build that itself failed; a
-    role blocker with no location, placeholder or real, to anchor
-    marks against), and the location_tag the caller should now use
-    (unchanged if there was no location blocker, the new placeholder's
-    tag otherwise). A failure here is never fatal to the run -- an
-    unresolved entry just leaves the scene NEEDS_ASSETS, same as
-    without this flag.
+    genuinely unresolved (a role blocker with no location, real or
+    already set-designed, to anchor marks against), and location_tag
+    unchanged (this function no longer changes it). A failure here is
+    never fatal to the run -- an unresolved entry just leaves the scene
+    NEEDS_ASSETS, same as without this flag.
     """
     still_blocking = []
-    location_set_id = None
     resolved_location_tag = location_tag
 
-    for item in blocking:
-        if item["kind"] != "location":
-            continue
-        try:
-            canonical_id = placeholder_blueprint.slugify_placeholder_id(item["name"], "location")
-            bp = placeholder_blueprint.default_placeholder_blueprint(
-                canonical_id, "location", item["name"], with_location_marks=True)
-            placeholder_blueprint.build_placeholder_glb(
-                bp, f"{PLACEHOLDER_ASSETS_ROOT}/{canonical_id}.glb",
-                f"out/blueprint_builds/{canonical_id}.blend",
-                f"out/blueprint_builds/{canonical_id}.manifest.json")
-            placeholder_blueprint.register_placeholder_asset(
-                CONFIG_PATH, canonical_id, "location", f"placeholders/{canonical_id}.glb")
-            placeholder_blueprint.register_placeholder_location(RESOLVER_MAP_PATH, item["name"], canonical_id)
-            rmap["locations"][item["name"]] = json.load(open(RESOLVER_MAP_PATH))["locations"][item["name"]]
-            location_set_id = canonical_id
-            resolved_location_tag = item["name"]
-            print(f"[producer]    primitive-fallback: registered placeholder location "
-                  f"'{item['name']}' -> {canonical_id}")
-        except Exception as exc:  # noqa: BLE001 -- must not crash the run
-            print(f"[producer]    primitive-fallback: FAILED building location "
-                  f"'{item['name']}' ({exc}); still blocked")
-            still_blocking.append(item)
+    # Location blockers pass straight through unresolved -- this
+    # function no longer handles them at all; tools/set_designer.py
+    # does, via the NEEDED ticket Producer already wrote.
+    still_blocking.extend(item for item in blocking if item["kind"] == "location")
 
-    if location_set_id is None and location_tag is not None:
-        # No location blocker this scene -- if a role blocker is also
-        # present, anchor its marks to this scene's own already-
-        # resolved location (real, or an existing stand-in).
-        location_set_id = rmap.get("locations", {}).get(location_tag, {}).get("set_id")
+    location_set_id = rmap.get("locations", {}).get(location_tag, {}).get("set_id") \
+        if location_tag is not None else None
 
     for item in blocking:
         if item["kind"] != "role":
@@ -391,6 +424,57 @@ def primitive_fallback(blocking, rmap, cast, location_tag):
             still_blocking.append(item)
 
     return still_blocking, resolved_location_tag
+
+
+def enqueue_set_designer_job(location_name, script, episode, scene_number, int_ext=None):
+    """Best-effort: POST a job to the harness worker queue
+    (docs/planning/WORKER-AGENT-PLAN.md) for tools/set_designer.py to
+    pick up via the *existing* BlenderCLIAdapter's script_file payload
+    mode -- no new adapter, per the 2026-08-10 decision to extend the
+    existing worker system rather than build a separate one. Silently
+    skipped if the harness isn't configured (OEB_HARNESS_URL/
+    API_ADMIN_TOKEN unset) -- Producer stays usable standalone; the
+    NEEDED ticket this accompanies is always written regardless and
+    remains the source of truth for what's blocked.
+    """
+    harness_url = os.environ.get(HARNESS_URL_ENV)
+    admin_token = os.environ.get(HARNESS_ADMIN_TOKEN_ENV)
+    if not harness_url or not admin_token:
+        return None
+
+    payload = {
+        "title": f"set-designer: {location_name}",
+        "description": (
+            f"Resolve unmapped location '{location_name}' for "
+            f"{episode} scene {scene_number} (stand-in match, else "
+            f"primitive placeholder), then continue production."
+        ),
+        "required_capabilities": ["blender.command_line"],
+        "payload": {
+            "script_file": "tools/set_designer.py",
+            "cwd": "{workspace_root}",
+            "script_args": [
+                "--location-name", location_name,
+                "--script", script,
+                "--episode", episode,
+                "--scene-number", str(scene_number),
+            ] + (["--int-ext", int_ext] if int_ext else []),
+        },
+    }
+    req = urllib.request.Request(
+        harness_url.rstrip("/") + "/api/v1/jobs",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {admin_token}",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        print(f"[producer]    set-designer job enqueue FAILED ({exc}); "
+              f"ticket written, no auto-follow-up")
+        return None
 
 
 def register_vehicle_placeholder(scene, cast, rmap, location_tag):
@@ -498,6 +582,7 @@ def main():
 
     vocab = json.load(open("data/standins.json"))
     rmap = json.load(open("data/resolver_map.json"))
+    config = json.load(open(CONFIG_PATH))
     cast = vocab.get("cast", {})
     import jsonschema
     intent_schema = json.load(open(INTENT_SCHEMA))
@@ -540,28 +625,20 @@ def main():
         notes = []          # non-blocking ticket entries (vocab backlog)
         standins_used = []
 
-        # Location: direct, stand-in, or blocked
+        # Location: direct match or blocked. Stand-in matching and
+        # primitive-placeholder building both moved to tools/set_designer.py
+        # (docs/planning/PRODUCTION-DESIGNER-PLAN.md, 2026-08-10 discovery)
+        # -- Producer's job is strictly to notice the gap and ticket it,
+        # never to resolve it itself, per PRODUCER-PLAN.md's own charter.
         loc = scene["location_tag"]
         if loc in rmap.get("locations", {}):
             location_tag = loc
         else:
-            standin = vocab.get("location_standins", {}).get(loc)
-            if standin and standin in rmap.get("locations", {}):
-                location_tag = standin
-                standins_used.append({"kind": "location", "script": loc,
-                                      "stand_in": standin})
-                notes.append({
-                    "kind": "location", "name": loc,
-                    "source": "producer stand-in",
-                    "detail": f"scene rendered with stand-in '{standin}'; "
-                              f"the real '{loc}' set does not exist yet"})
-            else:
-                location_tag = None
-                blocking.append({
-                    "kind": "location", "name": loc,
-                    "source": "producer vocabulary sweep",
-                    "detail": f"location '{loc}' is not in the resolver "
-                              f"map and has no stand-in"})
+            location_tag = None
+            blocking.append({
+                "kind": "location", "name": loc,
+                "source": "producer vocabulary sweep",
+                "detail": f"location '{loc}' is not in the resolver map"})
 
         # Cast: unknown speakers block (no improvised casting)
         for sec in scene["sections"]:
@@ -653,6 +730,8 @@ def main():
         if notes:
             tickets.write_ticket(episode, f"{scene_id}_vocab", notes,
                                  script_ref=args.script)
+        else:
+            tickets.clear_ticket(episode, f"{scene_id}_vocab")
 
         if blocking and args.primitive_fallback:
             resolved_count = len(blocking)
@@ -667,10 +746,26 @@ def main():
                                          script_ref=args.script)
             tickets.update_report(episode, scene_id, "NEEDS_ASSETS",
                                   ticket=os.path.basename(tpath))
+            for item in blocking:
+                if item["kind"] == "location":
+                    job = enqueue_set_designer_job(
+                        item["name"], args.script, episode, number,
+                        int_ext=scene.get("int_ext"))
+                    if job:
+                        print(f"[producer]    set-designer job enqueued "
+                              f"(id={job.get('id')}) for location "
+                              f"'{item['name']}'")
             outcomes[scene_id] = ("NEEDS_ASSETS", None)
             print(f"[producer]    BLOCKED — {len(blocking)} missing; "
                   f"ticket written; continuing")
             continue
+        else:
+            # Scene isn't blocked in this run -- if an earlier run left a
+            # NEEDED ticket for it (e.g. set_designer's continuation
+            # trigger re-invoking this exact scene after resolving its
+            # location), that ticket is now stale; clear it rather than
+            # let it pile up on disk indefinitely.
+            tickets.clear_ticket(episode, scene_id)
 
         if args.primitive_fallback and not present_actors(scene, cast):
             register_vehicle_placeholder(scene, cast, rmap, location_tag)
@@ -679,8 +774,45 @@ def main():
         departures = screenplay.detect_departures(scene, list(cast))
         vocab_findings[scene_id]["arrivals"] = sorted(arrivals)
         vocab_findings[scene_id]["departures"] = sorted(departures)
+
+        # Director: creative staging (docs/planning/DIRECTOR-ROLE-PLAN.md).
+        # Runs after location/casting are resolved (this scene reached
+        # here only because it isn't blocked) and before SceneIntent
+        # assembly. On any LLM failure director_plan stays None and
+        # build_intent() falls back to the deterministic heuristics
+        # exactly as before this role existed -- a broken/unavailable
+        # local LLM never blocks a scene.
+        present_now = present_actors(scene, cast)
+        location_entry = rmap.get("locations", {}).get(location_tag, {}) if location_tag else {}
+        # Collision avoidance (docs/planning/CAMERA-SHOT-SCALE-PLAN.md):
+        # filter to marks a real object of this scene's largest present
+        # actor's registered radius could occupy without overlapping a
+        # registered obstacle -- Director only ever sees safe move
+        # destinations, so it never has to reason about geometry in
+        # text at all. Actors/locations with no registered radius/
+        # obstacles degrade to the full unfiltered marks list (backward
+        # compatible with every scene registered before this existed).
+        mover_radius = 0.0
+        for name in present_now:
+            role_tag = cast.get(name)
+            char_id = rmap.get("roles", {}).get(role_tag, {}).get("character_id")
+            radius = config.get("assets", {}).get(char_id, {}).get("radius_m")
+            if radius:
+                mover_radius = max(mover_radius, radius)
+        location_marks = motion_library.clear_marks_for_mover(location_entry, mover_radius) \
+            if mover_radius else location_entry.get("marks", [])
+        director_plan, director_note = director.direct_scene(
+            scene_id, scene, present_now, location_marks=location_marks,
+            temp=args.temp, seed=args.seed)
+        print(f"[producer]    director: {director_note}")
+        if director_plan is not None:
+            with open(os.path.join(sdir, "director_plan.json"), "w") as f:
+                json.dump(director_plan, f, indent=2)
+                f.write("\n")
+
         intent = build_intent(scene_id, scene, cast, location_tag,
-                              arrivals, departures, descriptions)
+                              arrivals, departures, descriptions,
+                              director_plan=director_plan)
         try:
             jsonschema.Draft202012Validator(intent_schema).validate(intent)
         except jsonschema.ValidationError as exc:

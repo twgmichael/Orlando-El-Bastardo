@@ -4,10 +4,19 @@
     {
       "camera_id": "cam_establishing_wide",
       "framing": "establishing",
-      "description": "Wide shot of the whole bar interior; both actors and the counter visible.",
+      "description": "Wide shot of a small, confined interior (originally the bar); both actors and the counter visible. Reused by name across every 'intimate'-scale location -- each location's own .glb bakes its own object under this same name (tools/placeholder_blueprint.py's SHOT_SCALE_CAMERAS), not a single shared literal camera.",
       "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
       "lens_mm": 35,
-      "scene_object": "cam_establishing_wide"
+      "scene_object": "cam_establishing_wide",
+      "shot_scale": "intimate"
+    },
+    {
+      "camera_id": "cam_establishing_vast",
+      "framing": "establishing",
+      "description": "Wide shot for large-scale exterior locations (deep space, asteroid fields) -- a small subject in a big, mostly-empty area, pulled far back with a wide lens. docs/planning/CAMERA-SHOT-SCALE-PLAN.md.",
+      "lens_mm": 24,
+      "scene_object": "cam_establishing_vast",
+      "shot_scale": "vast"
     },
     {
       "camera_id": "cam_two_shot_bar",
@@ -15,7 +24,8 @@
       "description": "Medium two-shot across the counter, hero and bartender in frame.",
       "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
       "lens_mm": 35,
-      "scene_object": "cam_two_shot_bar"
+      "scene_object": "cam_two_shot_bar",
+      "shot_scale": "intimate"
     },
     {
       "camera_id": "cam_close_hero",

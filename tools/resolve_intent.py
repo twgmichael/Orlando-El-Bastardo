@@ -112,6 +112,12 @@ def resolve_intent(intent, rmap, grammar, config):
             normalized_entry.pop("entrance", None)
         resolved_roles[aid] = normalized_entry
 
+    # R15 support: each actor's mark right now, updated as mid-scene
+    # beat moves place them elsewhere (docs/planning/DIRECTOR-ROLE-PLAN.md's
+    # mid-scene move mechanism) -- starts at spawn_mark, same position
+    # entrances/departures already assumed before this existed.
+    current_mark = {aid: resolved_roles[aid]["spawn_mark"] for aid in resolved_roles}
+
     # ------------------------------------------------------------------
     # R4: ID sanity
     # ------------------------------------------------------------------
@@ -289,15 +295,27 @@ def resolve_intent(intent, rmap, grammar, config):
     sorted_shots_intents = sorted(intent["shot_intents"], key=lambda si: si["order"])
     cameras = grammar.get("cameras", [])
     shot_camera_map = []
+    # docs/planning/CAMERA-SHOT-SCALE-PLAN.md: establishing/two_shot must
+    # match a camera built for this location's own scale, not just any
+    # camera with the right framing -- the bug that shipped a small
+    # room's fixed-distance establishing camera onto a full-size
+    # spacecraft in a vast exterior. close_on/medium_on are unaffected;
+    # they're already scoped to a specific actor's spawn_mark below,
+    # which is scale-safe regardless of location. Missing on the
+    # location entry defaults to "intimate" -- every location registered
+    # before this field existed (the hand-authored bar) stays correct.
+    scene_shot_scale = (loc_entry or {}).get("shot_scale", "intimate")
 
     for si in sorted_shots_intents:
         framing = si["framing"]
         if framing in ("establishing", "two_shot"):
-            matches = [c for c in cameras if c["framing"] == framing]
+            matches = [c for c in cameras if c["framing"] == framing
+                      and c.get("shot_scale", "intimate") == scene_shot_scale]
             if len(matches) != 1:
                 errors.append(
-                    f"E_NO_CAMERA: framing '{framing}' in shot order {si['order']} "
-                    f"matched {len(matches)} cameras, expected exactly 1"
+                    f"E_NO_CAMERA: framing '{framing}' shot_scale '{scene_shot_scale}' "
+                    f"in shot order {si['order']} matched {len(matches)} cameras, "
+                    f"expected exactly 1"
                 )
                 shot_camera_map.append(None)
             else:
@@ -373,7 +391,38 @@ def resolve_intent(intent, rmap, grammar, config):
                 })
                 cur_start = round(cur_start + dur + 0.5, 1)
 
-        # R14: departures scheduled after this shot's dialogue
+        # R15: mid-scene beat moves -- Director-authored relocations
+        # (docs/planning/DIRECTOR-ROLE-PLAN.md's mid-scene move
+        # mechanism, e.g. "JB100 flies into asteroid field"). Scheduled
+        # after this shot's dialogue, same anchor R14 departures use;
+        # each move updates current_mark so a later move or departure
+        # starts from where the actor actually is now, not spawn_mark.
+        move_base = round(lines[-1]["start_time"] + lines[-1]["duration"] + 0.5, 1) \
+            if lines else (round(ent_end + 0.5, 1) if ent_end > 0.0 else 1.0)
+        move_cues = []
+        for bo in beat_orders_for_shot:
+            beat = beat_order_map[bo]
+            for k, mv in enumerate(beat.get("moves", []), start=1):
+                aid = mv["actor_id"]
+                duration = mv.get("duration_s", 2.0)
+                cue = {
+                    "type": "move",
+                    "cue_id": f"{aid}_move_{shot_num:03d}_{k:02d}",
+                    "start_time": move_base,
+                    "duration": duration,
+                    "actor_id": aid,
+                    "from_mark": current_mark.get(aid, resolved_roles[aid]["spawn_mark"]),
+                    "to_mark": mv["to_mark"],
+                    "facing": "travel",
+                }
+                if mv.get("clip_id"):
+                    cue["clip_id"] = mv["clip_id"]
+                move_cues.append(cue)
+                current_mark[aid] = mv["to_mark"]
+                move_base = round(move_base + duration + 0.3, 1)
+        moves_end = round(move_base - 0.3, 1) if move_cues else 0.0
+
+        # R14: departures scheduled after this shot's dialogue and moves
         dep_here = [aid for aid in sorted(departures)
                     if dep_shot_idx.get(aid) == i]
         dep_times = {}
@@ -384,8 +433,12 @@ def resolve_intent(intent, rmap, grammar, config):
                              + lines[-1]["duration"] + 0.5, 1)
             if ent_end > 0.0:
                 base = max(base, round(ent_end + 0.5, 1))
+            if moves_end > 0.0:
+                base = max(base, round(moves_end + 0.5, 1))
             for aid in dep_here:
-                dep_times[aid] = departure_times(departures[aid], base)
+                dep_times[aid] = departure_times(
+                    departures[aid], base,
+                )
 
         # R8: Shot timing
         if lines:
@@ -394,6 +447,8 @@ def resolve_intent(intent, rmap, grammar, config):
             shot_length = max(4.0, math.ceil(raw * 2) / 2)
         else:
             shot_length = max(4.0, math.ceil((ent_end + 1.0) * 2) / 2)
+        if moves_end > 0.0:
+            shot_length = max(shot_length, math.ceil((moves_end + 1.0) * 2) / 2)
         if dep_times:
             latest = max(t["walk_end"] for t in dep_times.values())
             shot_length = max(shot_length,
@@ -408,7 +463,7 @@ def resolve_intent(intent, rmap, grammar, config):
         present_ordered = [aid for aid in intent_actor_ids if aid in present_set]
 
         # R10: Cues
-        cues = []
+        cues = list(move_cues)
 
         # Per present actor (intent order): entrance moves (R13, opening
         # shot only) then idle; or just the idle from time 0.
@@ -430,11 +485,15 @@ def resolve_intent(intent, rmap, grammar, config):
             if idle_clip:
                 cues.append(build_idle_cue(aid, idle_clip, shot_num, idle_start, idle_blend))
 
-            # R14: rise from the mark, walk out, hold a standing idle
+            # R14: rise from the mark, walk out, hold a standing idle.
+            # Uses current_mark, not spawn_mark: a mid-scene move (R15)
+            # earlier in this same shot already updated it, so a
+            # departure correctly rises from wherever the actor
+            # actually ended up, not always their original spawn point.
             t = dep_times.get(aid)
             if t:
                 cues.extend(build_departure_cues(
-                    aid, departures[aid], resolved_roles[aid]["spawn_mark"], shot_num, t,
+                    aid, departures[aid], current_mark.get(aid, resolved_roles[aid]["spawn_mark"]), shot_num, t,
                 ))
 
         # Per dialogue line: talk AnimationCue immediately followed by DialogueCue

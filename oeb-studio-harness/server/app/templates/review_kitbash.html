@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Review Kitbash Sets{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <a href="/">Jobs</a>
+  <span>/</span>
+  <span>Review Kitbash Sets</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+
+<section class="review-hero">
+  <div>
+    <h1>Review Kitbash Sets</h1>
+    <p>Set designer kitbash tier: real sets assembled from approved library
+      kit pieces (tools/build_set.py). Each one stays out of production
+      until a human approves it here -- approval dispatches a
+      kitbash.register job that writes the real resolver-map entry a
+      worker's checkout can reach. See
+      docs/planning/PRODUCTION-DESIGNER-PLAN.md.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Sets</h2>
+  {% if not sets %}
+  <p class="empty">No kitbash sets awaiting review.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr>
+        <th>Set</th>
+        <th>Location</th>
+        <th>Status</th>
+        <th>Updated</th>
+        <th>Decision</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for asset in sets %}
+      <tr>
+        <td>
+          <a href="/review/kitbash/{{ asset.canonical_id }}">{{ asset.name or asset.canonical_id }}</a>
+          <div class="mono small">{{ asset.canonical_id }}</div>
+        </td>
+        <td class="mono small">{{ (asset.asset_metadata or {}).get('location_tag') or '—' }}</td>
+        <td><span class="badge status-{{ asset.status }}">{{ asset.status }}</span></td>
+        <td class="mono small">{{ asset.updated_at }}</td>
+        <td>
+          {% if asset.status == 'kitbash_pending' %}
+          <form class="inline-render-form" method="post" action="/review/kitbash/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="reject">
+            <button type="submit">Reject</button>
+          </form>
+          <form class="inline-render-form" method="post" action="/review/kitbash/{{ asset.canonical_id }}/decision">
+            <input type="hidden" name="decision" value="approve">
+            <button type="submit">Approve</button>
+          </form>
+          {% else %}
+          <span class="mono small">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+{% endblock %}

@@ -125,6 +125,39 @@ def write_ticket(episode, scene_id, missing, script_ref=None):
     return jpath
 
 
+def clear_ticket(episode, scene_id):
+    """Delete scene_id's NEEDED ticket files, if any, and drop its
+    `ticket` field from report.json's scene entry (recomputing
+    open_tickets). Called once a scene that previously blocked no
+    longer does -- out/production/<episode>/tickets/ has no other
+    retention mechanism, so a resolved ticket left in place would just
+    sit on disk indefinitely. No-op (returns False) if no ticket file
+    exists for scene_id.
+    """
+    tdir = os.path.join(episode_dir(episode), "tickets")
+    removed = False
+    for ext in ("json", "md"):
+        fpath = os.path.join(tdir, f"NEEDED-{scene_id}.{ext}")
+        if os.path.exists(fpath):
+            os.remove(fpath)
+            removed = True
+
+    rpath = os.path.join(episode_dir(episode), "report.json")
+    if os.path.exists(rpath):
+        report = json.load(open(rpath))
+        entry = report.get("scenes", {}).get(scene_id)
+        if entry and entry.get("ticket"):
+            entry.pop("ticket", None)
+            report["open_tickets"] = sorted(
+                e["ticket"] for e in report["scenes"].values()
+                if e.get("status") == "NEEDS_ASSETS" and e.get("ticket"))
+            report["updated"] = datetime.datetime.now().isoformat(timespec="seconds")
+            with open(rpath, "w") as f:
+                json.dump(report, f, indent=2)
+                f.write("\n")
+    return removed
+
+
 def update_report(episode, scene_id, status, **fields):
     """Merge one scene's outcome into the episode report.json; return path."""
     edir = episode_dir(episode)

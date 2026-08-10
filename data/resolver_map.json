@@ -50,7 +50,8 @@
       "default_props": [],
       "environment": "deep_space",
       "placeholder": true,
-      "source": "producer --primitive-fallback"
+      "source": "producer --primitive-fallback",
+      "shot_scale": "vast"
     },
     "journeyblaster_cockpit": {
       "set_id": "placeholder_location_journeyblaster_cockpit_A",
@@ -91,7 +92,89 @@
       ],
       "environment": "deep_space",
       "placeholder": true,
-      "source": "producer --primitive-fallback"
+      "source": "producer --primitive-fallback",
+      "shot_scale": "vast",
+      "obstacles": [
+        {
+          "label": "placeholder_prop_asteroid_round_A",
+          "position": [
+            -22.0,
+            8.0,
+            9.0
+          ],
+          "radius_m": 5.0
+        },
+        {
+          "label": "placeholder_prop_asteroid_oblong_A",
+          "position": [
+            -11.0,
+            -10.0,
+            7.0
+          ],
+          "radius_m": 5.0
+        },
+        {
+          "label": "placeholder_prop_asteroid_jagged_A",
+          "position": [
+            0.0,
+            11.0,
+            -8.0
+          ],
+          "radius_m": 5.0
+        },
+        {
+          "label": "placeholder_prop_asteroid_peanut_A",
+          "position": [
+            11.0,
+            -9.0,
+            -10.0
+          ],
+          "radius_m": 5.0
+        },
+        {
+          "label": "placeholder_prop_asteroid_cratered_A",
+          "position": [
+            22.0,
+            10.0,
+            -7.0
+          ],
+          "radius_m": 5.0
+        }
+      ],
+      "mark_positions": {
+        "placeholder_location_asteroid_field_A_entry": [
+          -25.0,
+          0.0,
+          0.0
+        ],
+        "placeholder_location_asteroid_field_A_center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "placeholder_location_asteroid_field_A_exit": [
+          25.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "test_set_designer_location_alpha": {
+      "set_id": "placeholder_location_test_set_designer_location_alpha_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_test_set_designer_location_alpha_A_entry",
+        "placeholder_location_test_set_designer_location_alpha_A_center",
+        "placeholder_location_test_set_designer_location_alpha_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer"
     }
   },
   "roles": {
@@ -215,6 +298,23 @@
       },
       "placeholder": false,
       "source": "tier-1 real-asset stand-in: JB100 (prop_jb100_A) for the fictional JourneyBlaster 5000 -- marks/entrances are still tier-2 placeholder-location geometry, unrelated to the ship mesh itself"
+    },
+    "nothing": {
+      "character_id": "placeholder_vehicle_nothing_A",
+      "spawn_marks": {
+        "test_set_designer_location_alpha": "placeholder_location_test_set_designer_location_alpha_A_center"
+      },
+      "entrances": {
+        "test_set_designer_location_alpha": {
+          "from_mark": "placeholder_location_test_set_designer_location_alpha_A_entry",
+          "approach_mark": "placeholder_location_test_set_designer_location_alpha_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     }
   },
   "defaults": {

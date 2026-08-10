@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-07-29T20:27:49-04:00
+updated: 2026-08-10T19:35:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -33,9 +33,13 @@ Linux GPU worker online with official Blender/CUDA; pipeline render scripts
 dispatching and writing renders to OEB-PROJECT external drive. JB100 final
 review renders are proven through the real harness with uploaded artifacts and
 gallery review pages. Remaining Phase 2: bar furniture, night lighting
-variant. Next frontier: publishing plan build (PUBLISHING-PLAN.md), pilot
-ticket backlog (lounge dressing, audio), Godot/USD move-cue support, and agent
-bus (AGENT-BUS-PLAN.md).
+variant. **2026-08-10: Set Designer (rough tier) and Director (framing/
+blocking) roles split out of Producer and built** — see Phase 6b below;
+both dispatch/decide for real now instead of living as inline heuristics
+in `producer.py`. Next frontier: publishing plan build (PUBLISHING-PLAN.md),
+pilot ticket backlog (lounge dressing, audio), Godot/USD move-cue support,
+Set Designer's kitbash tier, Director's mid-scene move-beat mechanism, and
+agent bus (AGENT-BUS-PLAN.md).
 
 Priorities are ordered highest-first within each phase. Check items off by moving
 them to `PROJECT-DONE.md` with a date.
@@ -654,6 +658,98 @@ departures (R14) + `travel_hold` facing; `medium_on` framing + two set
 cameras; orbital-lounge stand-in. Pilot ticket backlog is the open work
 (see Publishing + Pilot backlog below).
 
+## Phase 6b — Set Designer + Director roles split out of Producer (opened 2026-08-10)
+
+2026-08-10 discovery (both roles, same shape of finding): `producer.py`'s
+`--primitive-fallback` and `build_intent()` had each accreted a
+not-yet-built specialist role's job directly into Producer's own
+deterministic code, under time pressure to show progress, contradicting
+`PRODUCER-PLAN.md`'s own "never to improvise, substitute, or build"
+charter. Both roles now exist as real, relocated code.
+
+**Set Designer** — plan: `docs/planning/PRODUCTION-DESIGNER-PLAN.md`.
+Rough tier (primitive/stand-in, no human step) BUILT and live-verified
+2026-08-10.
+
+- [x] `tools/set_designer.py` — relocated tier-1 stand-in / tier-2
+  primitive-build location resolution out of `primitive_fallback()`,
+  plus `trigger_continuation()` (re-invokes `producer.py --scenes N`).
+- [x] `tools/producer.py` now only ever direct-matches or blocks+tickets
+  an unmapped location — never resolves it inline.
+- [x] Dispatch via the **existing** `oeb-studio-harness/worker/` job
+  queue — Producer POSTs a job (`enqueue_set_designer_job()`) at
+  ticket-write time; the **existing** `BlenderCLIAdapter`'s
+  `script_file` mode runs it, no new adapter. Optional/best-effort:
+  silently no-ops without `OEB_HARNESS_URL`/`API_ADMIN_TOKEN`, ticket
+  is always written regardless.
+- [x] Verified against the real Docker harness: job created, claimed by
+  a live worker (`render-mac-01`), executed, completed end-to-end;
+  location resolved, scene delivered.
+- [x] `tools/tickets.py` `clear_ticket()` — delete-on-resolution
+  cleanup so a resolved scene's `NEEDED-*.json`/`.md` files don't pile
+  up on disk indefinitely; wired into `producer.py`'s main loop and
+  vocab-ticket path. Live-verified two-pass (block → resolve → re-run
+  → ticket gone).
+- [x] Kitbash tier BUILT and live-verified 2026-08-10:
+  `schemas/setspec.schema.json` + `tools/build_set.py` (generalizes
+  `build_scifi_bar.py` into data; reproduces the real bar exactly —
+  same 20 placements/5762 polys/23 material slots, same node
+  inventory); `tools/index_assets.py` (739 pieces/17 packs indexed in
+  seconds, no Blender launch, parses glTF JSON chunks directly);
+  `.claude/agents/production-designer.md` (first agent profile in this
+  repo). Human sign-off: `POST /api/v1/jobs/kitbash-builds` +
+  `/review/kitbash` in oeb-studio-harness (reuses the existing `Asset`
+  table/`AuditEvent` pattern already proven by `/review/placeholders`,
+  no new DB table) — not GitHub Issues/Project, which stays a wanted
+  "eventually," not built now. Approval enqueues
+  `tools/register_kitbash_set.py` to write the real
+  `oeb.config.json`/`data/resolver_map.json` entries. Full round trip
+  verified live against the real harness and the real `render-mac-01`
+  worker: build → auto turntable renders → pending review → approve →
+  real file-registry write → set appears in `/review/assets`.
+- [ ] Kitbash tier still open: qualification drills and the
+  pipeline-verifier gate (steps 4-5 under PRODUCTION-DESIGNER-PLAN.md's
+  "Build order"); `data/camera_grammar.json` registration for
+  kitbash-authored cameras (known limitation, not silently skipped).
+- [ ] Open: where casting (role/role_location blockers) lands relative
+  to Producer/Set Designer — not decided.
+
+**Director** — plan: `docs/planning/DIRECTOR-ROLE-PLAN.md`. Camera
+framing/subject + actor blocking BUILT and live-verified 2026-08-10.
+
+- [x] `schemas/directorplan.schema.json` + `tools/director.py` — one
+  constrained local-LLM call per scene (same `llama-completion` +
+  qwen2.5-3b call/fallback discipline as `llm_review()`), sanitized
+  past the schema boundary against the scene's real cast/section count.
+- [x] `build_intent()` takes an optional `director_plan`: fills
+  framing/subject only for sections the screenplay left open (an
+  explicit author shot heading is never overridden); plan persisted to
+  `director_plan.json` per scene for human review.
+- [x] Real reliability finding that changed the design: live-tested
+  against a realistic bar scene, the local 3B model wasn't trustworthy
+  enough to *replace* the keyword-based arrival/departure detection
+  (hallucinated a false positive, then over-corrected to false
+  negatives once evidence-grounding was added). Landed on a UNION —
+  regex stays the reliability floor, director only adds coverage the
+  regex misses, never removes coverage it already has.
+- [x] Mid-scene move-beat mechanism BUILT and live-verified 2026-08-10
+  (the "flies into asteroid field" case): `SceneIntent` gains
+  `beats[].moves[]`, `resolve_intent.py` resolves it into the
+  *existing* `move` SceneSpec cue type entrances/departures already
+  use — no new cue type, no exporter change. Director proposes a move
+  only to one of the location's own real marks, grounded by the same
+  evidence-quote discipline as the blocking fix; `resolve_intent.py`
+  now tracks each actor's current mark across a scene, and a
+  same-shot departure after a move correctly rises from the new
+  position (a real correctness fix, not just new capability). Verified
+  full-chain with a real screenplay parse; a 7-scene real-teaser
+  regression run still delivers 7/7 after the resolver changes. Same
+  local-3B-model proposal-rate caveat as blocking — wiring proven
+  correct, model doesn't reliably volunteer moves on its own yet.
+
+Both verified against the full `oeb-studio-harness/server` pytest suite
+(382 passing, unaffected) and `tools/security_sweep.py` (clean).
+
 ## Publishing + public surface (opened 2026-07-11)
 
 Plan: docs/planning/PUBLISHING-PLAN.md (three-tier YouTube policy — auto
@@ -679,6 +775,28 @@ iteration renders never upload).
 
 ## JourneyBlaster backlog (docs/JOURNEYBLASTER.md; opened 2026-07-13)
 
+- [x] Camera shot-scale + collision/real-world-scale awareness BUILT
+  and live-verified 2026-08-10 — plan:
+  `docs/planning/CAMERA-SHOT-SCALE-PLAN.md`. Found by watching real
+  renders: the asteroid-field establishing shots had the camera
+  effectively inside JB100's hull (no camera object had ever been
+  baked into that placeholder location; fell back to a fixed
+  bar-scale distance). Fixed with a small `shot_scale` vocabulary
+  (`intimate`/`vast`) classified deterministically from the script's
+  own INT/EXT + text — not one camera per scene. Follow-on: real
+  measured scale (`tools/index_assets.py`'s bbox tool reused) showed
+  the asteroids were 4-8x too small and JB100 could fly straight
+  through them — fixed with a registered `radius_m` per asset plus
+  `tools/motion_library.py`'s `clear_marks_for_mover()`, a
+  deterministic pre-filter so Director only ever sees collision-safe
+  move destinations (never has to reason about geometry in text — same
+  discipline as the blocking/move-mark reliability findings). **Real
+  mistake caught mid-fix**: an early retrofit used the generic
+  placeholder builder on `asteroid_field` and silently destroyed its 5
+  real procedurally-built asteroids (a separate dedicated script,
+  `tools/build_asteroid_placeholders.py`, not the generic path) —
+  recovered via a Blender `.blend1` backup; see the plan doc's "a real
+  mistake" section.
 - [ ] Restore JB5K glass bubble (builder still has the solid-white
   debug material) + decide whether to back-port JB100 refinements
   (concave belly, yellow globes) or retire the JB5K asset

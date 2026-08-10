@@ -56,6 +56,22 @@ class AssetReviewRenderRequest(BaseModel):
         return quality
 
 
+class KitbashBuildRequest(BaseModel):
+    """Kicks off the set designer kitbash tier's human-approval flow
+    (docs/planning/PRODUCTION-DESIGNER-PLAN.md): a worker runs
+    tools/build_set.py against *spec_path*, then post_build_review
+    auto-follows with turntable renders and lands the set as a
+    kitbash_pending Asset row for /review/kitbash to show.
+    """
+    canonical_id: str
+    spec_path: str
+    location_tag: Optional[str] = None
+    name: Optional[str] = None
+    ticket_ref: Optional[str] = None
+    priority: int = 10
+    preferred_worker_id: Optional[str] = None
+
+
 class JobSummary(BaseModel):
     id: uuid.UUID
     title: str

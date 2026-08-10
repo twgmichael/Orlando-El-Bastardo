@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:directorplan:1.0.0",
+  "title": "DirectorPlan",
+  "description": "The director's constrained staging decisions for one scene (docs/planning/DIRECTOR-ROLE-PLAN.md, 2026-08-10 decision): a genuinely separate artifact from SceneIntent, not a replacement shape. Per-section camera framing/subject and per-actor arrival/departure blocking inform SceneIntent's existing shot_intents[].framing/subject_actor_id and actors[].arrives/departs fields -- resolve_intent.py and SceneSpec do not change shape for this. motion_note captures free-text mid-scene movement the script describes (e.g. 'flies into asteroid field') for human review only; no resolver mechanism consumes it yet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dramatic_intent", "shots", "blocking"],
+  "properties": {
+    "dramatic_intent": {
+      "type": "string",
+      "description": "One short phrase: what this scene is dramatically about. Human-review context only, not consumed downstream."
+    },
+    "shots": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order", "framing"],
+        "properties": {
+          "order": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Matches the script section index this shot covers."
+          },
+          "framing": {
+            "enum": ["establishing", "two_shot", "close_on", "medium_on"],
+            "description": "Same vocabulary as SceneIntent.shot_intents[].framing -- no new camera-intent vocabulary; reuses the existing rail."
+          },
+          "subject_actor": {
+            "type": "string",
+            "description": "Cast member (lowercase dialogue-cue name) this shot centers on. Only meaningful when framing is close_on/medium_on; must be a cast member actually present in this scene."
+          },
+          "purpose": {
+            "type": "string",
+            "description": "Human-readable reason for this shot choice, e.g. 'reveal', 'reaction', 'emphasize order'."
+          },
+          "motion_note": {
+            "type": "string",
+            "description": "Free-text mid-scene movement the script describes for this section, if any -- always captured for human review even when it doesn't resolve into a move (below)."
+          },
+          "move": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["actor", "to_mark", "evidence"],
+            "description": "A mid-scene relocation this section's action text describes (e.g. 'flies into the asteroid field') that resolves to one of the location's actual marks -- informs SceneIntent.beats[].moves (docs/planning/DIRECTOR-ROLE-PLAN.md's mid-scene move mechanism). Omit entirely when the text doesn't clearly describe movement to a specific place, or when no available mark plausibly matches -- do not invent one.",
+            "properties": {
+              "actor": {
+                "type": "string",
+                "description": "Cast member (lowercase dialogue-cue name) doing the moving; must be present in this scene."
+              },
+              "to_mark": {
+                "type": "string",
+                "description": "Must be exactly one of the marks given for this scene's location -- never a name you make up."
+              },
+              "evidence": {
+                "type": "string",
+                "description": "A short exact quote copied from the scene's own action text supporting this move."
+              }
+            }
+          }
+        }
+      }
+    },
+    "blocking": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["actor", "arrives", "departs", "evidence"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "Cast member (lowercase dialogue-cue name), must be present in this scene."
+          },
+          "arrives": {
+            "type": "boolean",
+            "description": "Actor enters on foot at scene start -- same meaning as SceneIntent.actors[].arrives."
+          },
+          "departs": {
+            "type": "boolean",
+            "description": "Actor exits on foot at scene end -- same meaning as SceneIntent.actors[].departs."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "A short exact quote copied from the scene's own action text supporting arrives/departs; empty string if both are false. A claimed flag whose evidence isn't an actual substring of the scene text is discarded -- this is the grounding check that lets free-form phrasing (not just a fixed keyword list) count, without trusting an unverified assertion."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 ---
 title: Studio Chat / Production Pipeline Unification — Plan
 created: 2026-08-09T21:53:36-04:00
-updated: 2026-08-10T04:08:06-04:00
+updated: 2026-08-10T16:05:00-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -58,6 +58,35 @@ Audit](REVIEW-AUDIT.md) section 19 (build-path unification) into a
 forward architecture and phased build order. `REVIEW-AUDIT.md` remains
 the discussion/evidence trail this plan is derived from — read it for
 the reasoning; read this for the destination.
+
+**Update 2026-08-10: Set Designer and Director split out of Producer
+and built, live-verified.** Section 5 below anticipated "set designer"
+as `PRODUCTION-DESIGNER-PLAN.md`'s worker-agent role; what actually
+happened first was the same shape of finding this whole document is
+built on — `producer.py`'s `--primitive-fallback` (location resolution)
+and `build_intent()` (camera framing, blocking flags) had each already
+absorbed a not-yet-built specialist role's job inline, under time
+pressure to keep showing progress. Both are now relocated: real,
+detailed writeups and decisions live in
+`docs/planning/PRODUCTION-DESIGNER-PLAN.md` and
+`docs/planning/DIRECTOR-ROLE-PLAN.md`'s own 2026-08-10 sections; short
+version here since this doc is the index —
+`tools/set_designer.py` resolves an unmapped location (stand-in, else
+primitive) and re-triggers `producer.py --scenes N`, dispatched by
+Producer enqueueing a job on the **existing**
+`oeb-studio-harness/worker/` job queue at ticket-write time (not the
+GitHub Issues/Project bus section 5 assumed — that stays unbuilt/
+aspirational; live-verified against the real harness end-to-end,
+including a real worker claiming and completing the job);
+`tools/director.py` decides per-shot camera framing/subject and actor
+arrival/departure blocking via a constrained local-LLM call, informing
+`SceneIntent`'s existing fields rather than replacing them. Also new:
+`tools/tickets.py` `clear_ticket()` deletes a scene's NEEDED ticket
+once it's no longer blocked, so file tickets don't pile up indefinitely
+now that a real job queue sits alongside them. Not built: Set
+Designer's kitbash tier, Director's mid-scene move-beat mechanism (the
+"flies into asteroid field" case) — motion text is captured for human
+review but nothing resolves it into a move cue yet.
 
 ## 1. Goal
 
@@ -346,6 +375,20 @@ composition within guardrails, not design authority.
 set designer, it has no build order, no profile file, no qualification
 drill — it's documented here only as a stated future agent role in the
 same family, to be scoped in detail when it's actually picked up.
+
+**Update 2026-08-10:** set designer's rough tier is now real (see the
+top status block's 2026-08-10 update). It did **not** end up dispatched
+through the GitHub Issues/Project bus this section describes —
+`AGENT-BUS-PLAN.md` remains unbuilt/aspirational for that tier.
+Instead, per direct discussion, it extends the **existing**
+`oeb-studio-harness/worker/` Postgres-backed job queue
+(`docs/planning/WORKER-AGENT-PLAN.md`): Producer enqueues a job at
+ticket-write time, the existing `BlenderCLIAdapter` runs it, no new
+adapter. The kitbash tier (real library composition, human sign-off)
+is still designed against the ticket-dispatch model above and remains
+unbuilt, so this section's GitHub Issues/Project framing is still the
+live design for that tier specifically — just not for the rough tier
+that shipped first.
 
 ## 6. Semantic asset resolution and "load X"
 

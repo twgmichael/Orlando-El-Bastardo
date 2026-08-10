@@ -68,6 +68,25 @@
                 "text": { "type": "string", "minLength": 1 }
               }
             }
+          },
+          "moves": {
+            "type": "array",
+            "description": "Mid-scene relocations the action text describes (e.g. 'flies into the asteroid field') — decided by the director (tools/director.py), not a Producer heuristic. The resolver moves the actor from wherever it currently is to to_mark over duration_s, transform-only (no clip) unless clip_id is given. Distinct from arrives/departs, which only cover scene-start/scene-end walk-in/walk-out.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["actor_id", "to_mark"],
+              "properties": {
+                "actor_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+                "to_mark": {
+                  "type": "string",
+                  "description": "Must be one of the resolved location's actual marks — the resolver does not invent one.",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+                },
+                "clip_id": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+                "duration_s": { "type": "number", "exclusiveMinimum": 0, "default": 2.0 }
+              }
+            }
           }
         }
       }

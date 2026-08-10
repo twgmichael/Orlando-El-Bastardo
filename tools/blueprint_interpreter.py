@@ -100,7 +100,7 @@ Blueprint JSON shape (v0.1):
   "primitives": [
     {
       "id": "body",
-      "type": "cube",   # cube|cylinder|cone|sphere|torus|plane|wedge|hemisphere
+      "type": "cube",   # cube|cylinder|cone|sphere|torus|plane|wedge|hemisphere|empty|camera
       "transform": {"location": [0, 0, 0.5], "rotation": [0, 0, 0], "scale": [1, 1, 1]},
       "material": {"color": [0.6, 0.6, 0.6, 1.0]}
     },
@@ -136,6 +136,18 @@ validated against. The camera is intentionally excluded from the .glb
 export (geometry only, the Production Variant placed by canonical_id) --
 camera choreography lives only in the saved .blend, since presentation
 timing is not part of an asset's placeable geometry.
+
+A `"type": "camera"` PRIMITIVE is a different thing -- a real, static
+camera object exported WITH the geometry (docs/planning/CAMERA-SHOT-SCALE-PLAN.md),
+used by tools/placeholder_blueprint.py to bake a
+data/camera_grammar.json-registered `scene_object` (e.g.
+`cam_establishing_vast`) directly into a location's own .glb, the same
+way a hand-built set like the bar carries its own cameras. Give it
+`transform.location` and, optionally, `aim_at: [x,y,z]` (a literal
+point, since primitives don't exist yet as named objects other
+primitives can reference by id at build time) and `lens_mm`. Never
+give a camera primitive `"id": "camera"` -- that id is reserved for the
+choreography camera above and the two would collide.
 
 For cylinder/cone, `transform.scale` is read as [radius, radius, depth].
 For torus, [major_radius, minor_radius, unused]. For everything else,
@@ -241,7 +253,7 @@ def _material_for(mat_spec, cache):
     return cache[key]
 
 
-_PRIMITIVE_TYPES = frozenset({"cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "empty"})
+_PRIMITIVE_TYPES = frozenset({"cube", "sphere", "cylinder", "cone", "torus", "plane", "wedge", "hemisphere", "empty", "camera"})
 
 
 def build_primitive(spec, mat_cache):
@@ -280,6 +292,26 @@ def build_primitive(spec, mat_cache):
     elif prim_type == "empty":
         obj = empty(prim_id, location)
         obj.rotation_euler = rotation
+    elif prim_type == "camera":
+        # A real, named camera_grammar.json scene_object -- distinct
+        # from build_blueprint()'s own reserved CAMERA_ID scene-level
+        # camera (kept a sibling of root, excluded from geometry
+        # export). This one is built inside the primitives loop, so
+        # parent_to_root() below makes it a child of root like any
+        # other primitive -- exported with the rest of the geometry,
+        # findable later by tools/export_blender.py's scene_object
+        # lookup. See schemas/setspec.schema.json's cameras[] for the
+        # equivalent concept in tools/build_set.py's kitbash path.
+        cam_data = bpy.data.cameras.new(f"{prim_id}_data")
+        cam_data.lens = float(spec.get("lens_mm", 35))
+        obj = bpy.data.objects.new(prim_id, cam_data)
+        bpy.context.collection.objects.link(obj)
+        obj.location = location
+        aim_at = spec.get("aim_at")
+        if aim_at:
+            obj.rotation_euler = _look_at_rotation(location, tuple(_vec3(aim_at, (0.0, 0.0, 0.0))))
+        else:
+            obj.rotation_euler = rotation
     else:
         raise ValueError(f"Unknown primitive type: {prim_type!r} (id={prim_id!r})")
 
@@ -933,7 +965,8 @@ def main():
     for obj in bpy.context.scene.objects:
         if obj == root or obj.parent == root:
             obj.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=str(glb_output), export_format="GLB", use_selection=True)
+    bpy.ops.export_scene.gltf(filepath=str(glb_output), export_format="GLB",
+                              use_selection=True, export_cameras=True)
 
     bpy.ops.wm.save_as_mainfile(filepath=str(blend_output))
 

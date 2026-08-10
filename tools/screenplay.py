@@ -17,7 +17,9 @@ auto-detected:
 
 Output shape (parse()):
   {"acts": [...], "scenes": [ {
-      "slugline", "number" (markdown dialect), "location_raw",
+      "slugline", "number" (markdown dialect), "location_raw", "int_ext"
+      ("INT"|"EXT"|"INT/EXT", always present -- SLUG_RE/MD_SCENE_RE
+      require it to match a scene heading at all),
       "location_tag", "time_of_day",
       "sections": [ {"heading", "framing", "subject_raw",
                      "action": [para, ...], "dialogue": [(NAME, text), ...]} ]
@@ -136,7 +138,7 @@ def _parse_markdown(text, vocab):
                 tod = last_time
             last_time = tod
             scene = {"slugline": s.lstrip("# "), "number": number,
-                     "location_raw": loc_raw,
+                     "location_raw": loc_raw, "int_ext": inside,
                      "location_tag": _norm_tag(loc_raw),
                      "time_of_day": tod, "sections": []}
             scenes.append(scene)
@@ -239,6 +241,7 @@ def _parse_classic(text, vocab):
                 tod = last_time
             last_time = tod
             scene = {"slugline": s, "location_raw": loc_raw,
+                     "int_ext": sm.group(1).strip(),
                      "location_tag": _norm_tag(loc_raw), "time_of_day": tod,
                      "sections": []}
             scenes.append(scene)

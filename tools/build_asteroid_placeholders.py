@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import json
 import math
 import random
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,8 +14,10 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+import placeholder_blueprint as pb  # noqa: E402 -- SHOT_SCALE_CAMERAS, single source of truth
+
 OUT_DIR = PROJECT_ROOT / "assets" / "placeholders" / "asteroids"
 PREVIEW_DIR = OUT_DIR / "previews"
 FIELD_ID = "placeholder_location_asteroid_field_A"
@@ -22,11 +26,39 @@ FIELD_ID = "placeholder_location_asteroid_field_A"
 # with_location_marks convention) -- build_field() replaces that location's
 # only geometry, so it must keep providing them or every scene using this
 # location fails validate_spec.py's mark resolution (confirmed live 2026-08-09).
+#
+# Widened 2026-08-10 (docs/planning/CAMERA-SHOT-SCALE-PLAN.md) from the
+# original +-2/+-5m spread once real-world scale was applied: JB100 is
+# ~6.6m wide (radius ~3.3m, oeb.config.json's prop_jb100_A) and each
+# asteroid is targeted to ~10m wide (radius 5m, ASTEROID_LAYOUT below) --
+# marks stay on the y=z=0 travel line, deliberately kept clear of every
+# asteroid's registered position by more than the sum of both radii
+# (verified by the same math tools/motion_library.py's
+# clear_marks_for_mover() uses, not just eyeballed).
 FIELD_MARKS = {
-    "entry": (-5.0, 0.0, 0.0),
+    "entry": (-25.0, 0.0, 0.0),
     "center": (0.0, 0.0, 0.0),
-    "exit": (5.0, 0.0, 0.0),
+    "exit": (25.0, 0.0, 0.0),
 }
+
+# Real-world-scale asteroid placement (docs/planning/CAMERA-SHOT-SCALE-PLAN.md):
+# each asteroid's own scale factor is computed (in build_field()) to bring
+# its actual max dimension to ~10m, matching the story's stated scale.
+# Positions are pushed well off the y=z=0 entry-center-exit travel line so
+# JB100 can move to any of the three marks without its own ~3.3m radius
+# ever overlapping an asteroid's ~5m radius -- collision-checked, not
+# just spread out by eye (see the module docstring above FIELD_MARKS).
+ASTEROID_TARGET_DIAMETER_M = 10.0
+ASTEROID_LAYOUT = (
+    # (position, rotation_degrees) -- scale is computed per-spec from
+    # ASTEROID_TARGET_DIAMETER_M / that spec's own raw max dimension,
+    # not a fixed literal here (each raw mesh is a different size).
+    ((-22.0, 8.0, 9.0), (12, 18, -18)),
+    ((-11.0, -10.0, 7.0), (-18, 26, 14)),
+    ((0.0, 11.0, -8.0), (28, -12, 36)),
+    ((11.0, -9.0, -10.0), (-14, -22, -20)),
+    ((22.0, 10.0, -7.0), (20, 30, 8)),
+)
 
 
 @dataclass(frozen=True)
@@ -332,16 +364,14 @@ def build_individual(spec: AsteroidSpec) -> None:
     export_glb(asteroid, OUT_DIR / f"{spec.canonical_id}.glb")
 
 
-def build_field() -> None:
+def build_field() -> list[dict]:
+    """Returns the obstacle list actually built -- [{"label", "position",
+    "radius_m"}, ...] -- so main()/the retrofit caller can register it
+    into data/resolver_map.json without recomputing anything (single
+    source of truth: what got built IS what gets registered).
+    """
     clear_scene()
     material = make_asteroid_material()
-    layout = (
-        ((-3.05, 0.35, 1.25), 0.68, (12, 18, -18)),
-        ((-1.55, 0.75, -1.15), 0.56, (-18, 26, 14)),
-        ((0.00, -0.35, 0.20), 0.82, (28, -12, 36)),
-        ((1.55, 0.95, -1.18), 0.58, (-14, -22, -20)),
-        ((3.00, -0.65, 1.20), 0.64, (20, 30, 8)),
-    )
     root = bpy.data.objects.new(FIELD_ID, None)
     bpy.context.collection.objects.link(root)
     root["oeb_placeholder"] = True
@@ -355,24 +385,52 @@ def build_field() -> None:
         mark_obj.parent = root
         marks.append(mark_obj)
     asteroids = []
-    for spec, (location, scale, rotation) in zip(SPECS, layout):
+    obstacles = []
+    for spec, (location, rotation) in zip(SPECS, ASTEROID_LAYOUT):
         asteroid = build_asteroid(spec, material)
         asteroid.name = f"{spec.canonical_id}_instance"
+        raw_max_dim = max(asteroid.dimensions)
+        target_scale = ASTEROID_TARGET_DIAMETER_M / raw_max_dim
         asteroid.parent = root
         asteroid.location = location
-        asteroid.scale = (scale, scale, scale)
+        asteroid.scale = (target_scale, target_scale, target_scale)
         asteroid.rotation_euler = tuple(math.radians(value) for value in rotation)
         asteroids.append(asteroid)
+        obstacles.append({
+            "label": spec.canonical_id,
+            "position": list(location),
+            "radius_m": round(raw_max_dim * target_scale / 2, 3),
+        })
 
     camera = setup_preview_scene()
-    camera.location = (0.0, -13.0, 0.55)
-    camera.data.lens = 53
+    camera.location = (0.0, -60.0, 5.0)
+    camera.data.lens = 24
     look_at(camera, Vector((0, 0, 0)))
     scene = bpy.context.scene
     scene.render.resolution_x = 960
     scene.render.resolution_y = 540
     scene.render.filepath = str(PREVIEW_DIR / "asteroid_placeholder_set.png")
     bpy.ops.render.render(write_still=True)
+
+    # A real, named, EXPORTED camera_grammar.json scene_object -- distinct
+    # from the preview-only `camera` above (never exported, selection
+    # below excludes it). docs/planning/CAMERA-SHOT-SCALE-PLAN.md: this
+    # location previously had no such camera at all, so
+    # tools/export_blender.py fell back to a fixed generic position tuned
+    # for a small interior, producing extreme clipping when a full-size
+    # spacecraft was placed here. asteroid_field is "vast" shot_scale --
+    # same SHOT_SCALE_CAMERAS template every other vast placeholder
+    # location uses (tools/placeholder_blueprint.py), single source of
+    # truth via the pb import above, not duplicated numbers.
+    vast_cam_spec = pb.SHOT_SCALE_CAMERAS["vast"]
+    export_cam_data = bpy.data.cameras.new(f"{vast_cam_spec['scene_object']}_data")
+    export_cam_data.lens = vast_cam_spec["lens_mm"]
+    export_camera = bpy.data.objects.new(vast_cam_spec["scene_object"], export_cam_data)
+    bpy.context.collection.objects.link(export_camera)
+    export_camera.parent = root
+    export_camera.location = vast_cam_spec["position"]
+    look_at(export_camera, Vector(vast_cam_spec["aim_at"]))
+
     bpy.ops.wm.save_as_mainfile(filepath=str(OUT_DIR / f"{FIELD_ID}.blend"))
 
     bpy.ops.object.select_all(action="DESELECT")
@@ -381,6 +439,7 @@ def build_field() -> None:
         asteroid.select_set(True)
     for mark_obj in marks:
         mark_obj.select_set(True)
+    export_camera.select_set(True)
     bpy.context.view_layer.objects.active = root
     bpy.ops.export_scene.gltf(
         filepath=str(OUT_DIR.parent / f"{FIELD_ID}.glb"),
@@ -389,7 +448,25 @@ def build_field() -> None:
         export_apply=True,
         export_yup=True,
         export_materials="EXPORT",
+        export_cameras=True,
     )
+    return obstacles
+
+
+def register_field_collision_data(resolver_map_path: str, location_tag: str, obstacles: list[dict]) -> None:
+    """Merge *obstacles* and this field's own FIELD_MARKS positions into
+    data/resolver_map.json's *location_tag* entry -- additive, doesn't
+    touch marks/default_props/variants/etc. See
+    tools/motion_library.py's clear_marks_for_mover(), which is what
+    actually reads these two fields back.
+    """
+    rmap_data = json.loads(Path(resolver_map_path).read_text())
+    entry = rmap_data["locations"][location_tag]
+    entry["obstacles"] = obstacles
+    entry["mark_positions"] = {
+        f"{FIELD_ID}_{mark}": list(offset) for mark, offset in FIELD_MARKS.items()
+    }
+    Path(resolver_map_path).write_text(json.dumps(rmap_data, indent=2) + "\n")
 
 
 def validate_lit_material(obj: bpy.types.Object) -> None:
@@ -475,7 +552,9 @@ def main() -> None:
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     for spec in SPECS:
         build_individual(spec)
-    build_field()
+    obstacles = build_field()
+    register_field_collision_data(
+        str(PROJECT_ROOT / "data" / "resolver_map.json"), "asteroid_field", obstacles)
     validate_exports()
     print(f"Built {len(SPECS)} asteroid placeholders in {OUT_DIR}")
 

@@ -56,6 +56,60 @@ LOCATION_MARK_OFFSETS = {
     "exit": [2.0, 0.0, 0.0],
 }
 
+# A small, closed vocabulary (2 values, not one-per-location) of
+# camera distance/lens templates a placeholder location bakes into its
+# own .glb -- the fix for a real, live-verified bug: no camera object
+# named to match any data/camera_grammar.json entry existed in
+# placeholder locations at all, so tools/export_blender.py fell back
+# to a fixed generic camera position tuned for the sci-fi bar's small
+# room, producing extreme clipping for a full-size spacecraft in a
+# vast exterior. See docs/planning/CAMERA-SHOT-SCALE-PLAN.md.
+#
+# "intimate" reuses the SAME scene_object name the hand-built bar set
+# already uses (cam_establishing_wide) -- one camera_grammar.json
+# entry, many locations' own .glb files each carrying their own object
+# under that name, exactly like the bar already does; nothing new
+# needed in camera_grammar.json for this scale. "vast" is the one
+# genuinely new entry.
+SHOT_SCALE_CAMERAS = {
+    "intimate": {"scene_object": "cam_establishing_wide",
+                 "position": [0.0, -8.0, 3.0], "aim_at": [0.0, 0.0, 1.0],
+                 "lens_mm": 35},
+    "vast": {"scene_object": "cam_establishing_vast",
+             "position": [0.0, -40.0, 10.0], "aim_at": [0.0, 0.0, 0.0],
+             "lens_mm": 24},
+}
+
+# A lookup vocabulary, not free-text classification: EXT is "vast"
+# only when the location/action text names a cosmic/large-scale
+# setting; an ordinary outdoor exterior (a rooftop, a street) stays
+# "intimate". Extend only when real evidence demands it, same
+# discipline as tools/index_assets.py's TAG_VOCABULARY.
+VAST_SCALE_KEYWORDS = (
+    "space", "asteroid", "orbit", "orbital", "planet", "planetary",
+    "nebula", "galaxy", "cosmos", "starfield", "void", "deep space",
+)
+
+
+def classify_shot_scale(int_ext: str, *texts: str) -> str:
+    """Deterministic camera-scale classification from the script's own
+    slugline INT/EXT plus any descriptive text given (location_raw,
+    action prose, ...) -- same "deliberate author direction first"
+    principle as location/slugline resolution
+    (docs/planning/SCREENPLAY-SLUGLINE-ACTOR-PRESENCE-GAP.md), never an
+    LLM judgment call. INT is always "intimate" -- an interior is
+    confined regardless of what's inside it (docs/planning/
+    CAMERA-SHOT-SCALE-PLAN.md's own example: the JourneyBlaster
+    cockpit's close framing is already correct). EXT defaults to
+    "intimate" too unless the text names a vast-scale setting.
+    """
+    if (int_ext or "").upper().startswith("INT"):
+        return "intimate"
+    combined = " ".join(t for t in texts if t).lower()
+    if any(kw in combined for kw in VAST_SCALE_KEYWORDS):
+        return "vast"
+    return "intimate"
+
 
 def slugify_placeholder_id(query: str, kind: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", query.strip().lower()).strip("_")
@@ -68,6 +122,7 @@ def location_mark_name(canonical_id: str, mark: str) -> str:
 
 def default_placeholder_blueprint(
     canonical_id: str, kind: str, name: str, *, with_location_marks: bool = False,
+    shot_scale: str | None = None,
 ) -> dict:
     primitive = dict(_DEFAULT_PRIMITIVE_BY_KIND.get(kind, _DEFAULT_PRIMITIVE_FALLBACK))
     primitive["id"] = "body"
@@ -79,6 +134,19 @@ def default_placeholder_blueprint(
                 "type": "empty",
                 "transform": {"location": offset},
             })
+        # Bake a real, scale-appropriate camera into the location's own
+        # .glb -- without this, tools/export_blender.py's scene_object
+        # lookup finds nothing and falls back to a fixed generic
+        # camera position tuned for the sci-fi bar's small room. See
+        # SHOT_SCALE_CAMERAS above.
+        cam = SHOT_SCALE_CAMERAS[shot_scale if shot_scale in SHOT_SCALE_CAMERAS else "intimate"]
+        primitives.append({
+            "id": cam["scene_object"],
+            "type": "camera",
+            "transform": {"location": cam["position"]},
+            "aim_at": cam["aim_at"],
+            "lens_mm": cam["lens_mm"],
+        })
     return {
         "schema_version": "0.1.0",
         "canonical_id": canonical_id,
@@ -125,11 +193,16 @@ def _write_json(path: str, data: dict) -> None:
     Path(path).write_text(json.dumps(data, indent=2) + "\n")
 
 
-def register_placeholder_asset(config_path: str, canonical_id: str, kind: str, glb_relpath: str) -> None:
+def register_placeholder_asset(
+    config_path: str, canonical_id: str, kind: str, glb_relpath: str,
+    source: str = "producer --primitive-fallback",
+) -> None:
     """Add *canonical_id* to oeb.config.json's assets map, pointing at
     the freshly-built placeholder .glb -- node name is the Blueprint's
     own root object name, which tools/blueprint_interpreter.py's
-    parent_to_root() always names after canonical_id.
+    parent_to_root() always names after canonical_id. *source* records
+    which caller registered this (default matches the original,
+    still-accurate caller; tools/set_designer.py passes its own).
     """
     config = _load_json(config_path)
     assets = config.setdefault("assets", {})
@@ -138,12 +211,16 @@ def register_placeholder_asset(config_path: str, canonical_id: str, kind: str, g
         "node": canonical_id,
         "kind": kind,
         "placeholder": True,
-        "source": "producer --primitive-fallback",
+        "source": source,
     }
     _write_json(config_path, config)
 
 
-def register_placeholder_location(resolver_map_path: str, location_tag: str, canonical_id: str) -> None:
+def register_placeholder_location(
+    resolver_map_path: str, location_tag: str, canonical_id: str,
+    source: str = "producer --primitive-fallback",
+    shot_scale: str | None = None,
+) -> None:
     rmap = _load_json(resolver_map_path)
     locations = rmap.setdefault("locations", {})
     locations[location_tag] = {
@@ -158,7 +235,13 @@ def register_placeholder_location(resolver_map_path: str, location_tag: str, can
         "marks": [location_mark_name(canonical_id, mark) for mark in LOCATION_MARK_OFFSETS],
         "default_props": [],
         "placeholder": True,
-        "source": "producer --primitive-fallback",
+        "source": source,
+        # docs/planning/CAMERA-SHOT-SCALE-PLAN.md: which SHOT_SCALE_CAMERAS
+        # template tools/resolve_intent.py's R5 should match establishing/
+        # two_shot cameras against for this location. Missing/None reads
+        # as "intimate" downstream -- backward compatible with locations
+        # registered before this field existed.
+        "shot_scale": shot_scale or "intimate",
     }
     _write_json(resolver_map_path, rmap)
 

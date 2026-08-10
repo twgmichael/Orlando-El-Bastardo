@@ -134,6 +134,52 @@ def build_entrance_cues(actor_id: str, ent: dict, spawn_mark: str, shot_num: int
     return cues, t["idle_start"], 0.2
 
 
+def clear_marks_for_mover(location_entry: dict, mover_radius_m: float, margin_m: float = 1.0) -> list[str]:
+    """Which of *location_entry*'s registered marks are far enough from
+    every registered obstacle that an object of *mover_radius_m* could
+    occupy the mark without overlapping one -- the deterministic
+    geometric check behind Director's mid-scene move mechanism's
+    collision avoidance (docs/planning/CAMERA-SHOT-SCALE-PLAN.md).
+
+    Pure data, no bpy/geometry introspection: *location_entry* is a
+    resolver_map.json locations[...] entry carrying plain registered
+    `mark_positions` ({mark_name: [x,y,z]}) and `obstacles`
+    ([{"position": [x,y,z], "radius_m": r}, ...]) fields -- the same
+    "read facts, don't reason about geometry in an LLM prompt" split
+    already used for framing/blocking/move-mark grounding: Director
+    never sees an unsafe mark to begin with, so it never has to
+    reason about collision at all.
+
+    A mark with no registered position, or a location with no
+    registered obstacles at all, can't be checked -- treated as clear
+    (backward compatible with every location registered before these
+    fields existed, same default-permissive convention as
+    shot_scale's "intimate" default).
+    """
+    mark_positions = location_entry.get("mark_positions", {})
+    obstacles = location_entry.get("obstacles", [])
+    if not obstacles:
+        return list(location_entry.get("marks", []))
+
+    clear = []
+    for mark in location_entry.get("marks", []):
+        pos = mark_positions.get(mark)
+        if pos is None:
+            clear.append(mark)
+            continue
+        safe = True
+        for obs in obstacles:
+            ox, oy, oz = obs["position"]
+            dx, dy, dz = pos[0] - ox, pos[1] - oy, pos[2] - oz
+            dist = (dx * dx + dy * dy + dz * dz) ** 0.5
+            if dist < mover_radius_m + obs["radius_m"] + margin_m:
+                safe = False
+                break
+        if safe:
+            clear.append(mark)
+    return clear
+
+
 def build_departure_cues(actor_id: str, dep: dict, spawn_mark: str, shot_num: int, dep_time: dict) -> list[dict]:
     """The rise/exit(/idle_out) cues for one actor's walk-out departure
     (R14), given a departure_times() result as *dep_time*.

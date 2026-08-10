@@ -22,8 +22,10 @@ from app.services.asset_review import (
     resolve_review_asset,
 )
 from app.services.worker_updates import worker_can_claim_jobs
+from app.services.kitbash_review import mark_registered
 from app.schemas.job import (
     AssetReviewRenderRequest,
+    KitbashBuildRequest,
     JobCreateRequest,
     JobSummary,
     ClaimResponse,
@@ -106,6 +108,14 @@ async def _create_post_build_review_job(
     concrete_asset_path = _build_review_asset_path(asset_path, build_job.id)
     asset_name = str(review_config.get("asset_name") or asset_id)
     asset_kind = str(review_config.get("asset_kind") or "asset")
+    # Default "available" matches every existing caller (Studio Chat
+    # build jobs: auto-approved, no human gate). Kitbash-tier build jobs
+    # pass initial_status="kitbash_pending" instead -- see
+    # app/services/kitbash_review.py -- so a kitbashed set only becomes
+    # "available" once a human approves it AND kitbash.register actually
+    # writes the real file registry, not the moment renders exist.
+    initial_status = str(review_config.get("initial_status") or "available")
+    extra_metadata = review_config.get("extra_metadata") or {}
     existing_asset_result = await db.execute(select(Asset).where(Asset.canonical_id == asset_id))
     asset_record = existing_asset_result.scalar_one_or_none()
     if asset_record:
@@ -113,10 +123,11 @@ async def _create_post_build_review_job(
         asset_record.kind = asset_record.kind or asset_kind
         asset_record.file_path = concrete_asset_path
         asset_record.format = "glb"
-        asset_record.status = "available"
+        asset_record.status = initial_status
         asset_record.updated_at = now
         asset_record.asset_metadata = {
             **(asset_record.asset_metadata or {}),
+            **extra_metadata,
             "source_build_job_id": str(build_job.id),
             "gallery_url": review_config.get("gallery_url") or asset_review_gallery_url(asset_id),
         }
@@ -127,10 +138,14 @@ async def _create_post_build_review_job(
             kind=asset_kind,
             file_path=concrete_asset_path,
             format="glb",
-            status="available",
-            provenance={"source": "studio_chat_build_job", "job_id": str(build_job.id)},
-            tags=["studio-chat", "primitive-build"],
+            status=initial_status,
+            provenance={
+                "source": review_config.get("source") or "studio_chat_build_job",
+                "job_id": str(build_job.id),
+            },
+            tags=review_config.get("tags") or ["studio-chat", "primitive-build"],
             asset_metadata={
+                **extra_metadata,
                 "source_build_job_id": str(build_job.id),
                 "gallery_url": review_config.get("gallery_url") or asset_review_gallery_url(asset_id),
             },
@@ -205,6 +220,72 @@ async def create_asset_review_render_job(
         require_gpu_cycles=body.require_gpu_cycles,
         actor_id="admin",
     )
+    await db.commit()
+    await db.refresh(job)
+    return JobSummary.model_validate(job)
+
+
+@router.post("/kitbash-builds", response_model=JobSummary, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_admin)])
+async def create_kitbash_build_job(body: KitbashBuildRequest, db: AsyncSession = Depends(get_db)):
+    """Set designer kitbash tier (docs/planning/PRODUCTION-DESIGNER-PLAN.md):
+    dispatch tools/build_set.py against body.spec_path on a worker, with
+    post_build_review configured to auto-follow with turntable renders
+    and land the result as a kitbash_pending Asset row -- see
+    app/services/kitbash_review.py and _create_post_build_review_job's
+    initial_status/extra_metadata handling above. No new adapter: same
+    BlenderCLIAdapter script_file mode as tools/set_designer.py's job.
+    """
+    output_stem = f"assets/sets/{body.canonical_id}/{body.canonical_id}"
+    payload = {
+        "job_type": "kitbash.build_render",
+        "script_file": "{workspace_root}/tools/build_set.py",
+        "cwd": "{workspace_root}",
+        "script_args": ["--spec", body.spec_path, "--output", output_stem],
+        "output_path": "{workspace_root}/" + output_stem,
+        "artifact_paths": [
+            "{workspace_root}/" + output_stem + ".glb",
+            "{workspace_root}/" + output_stem + ".manifest.json",
+        ],
+        "post_build_review": {
+            "enabled": True,
+            "asset_id": body.canonical_id,
+            "asset_path": output_stem + ".glb",
+            "asset_name": body.name or body.canonical_id,
+            "asset_kind": "set",
+            "initial_status": "kitbash_pending",
+            "gallery_url": f"/review/kitbash/{body.canonical_id}",
+            "source": "set_designer_kitbash",
+            "tags": ["kitbash"],
+            "views": ["top", "bottom", "left", "right", "front", "back", "action"],
+            "quality": "preview",
+            "extra_metadata": {
+                "location_tag": body.location_tag,
+                "spec_path": body.spec_path,
+                "ticket_ref": body.ticket_ref,
+            },
+        },
+    }
+    job = Job(
+        title=f"Kitbash build {body.canonical_id}",
+        description=f"Assemble {body.canonical_id} from {body.spec_path} for review",
+        required_capabilities=["blender.command_line"],
+        policy="wait_for_preferred_worker" if body.preferred_worker_id else "run_anywhere",
+        preferred_worker_id=body.preferred_worker_id,
+        priority=body.priority,
+        payload=payload,
+        is_idempotent=True,
+    )
+    db.add(job)
+    await db.flush()
+    db.add(AuditEvent(
+        event_type="job.kitbash_build.created",
+        actor_type="user",
+        actor_id="admin",
+        resource_type="job",
+        resource_id=str(job.id),
+        details={"canonical_id": body.canonical_id, "spec_path": body.spec_path},
+    ))
     await db.commit()
     await db.refresh(job)
     return JobSummary.model_validate(job)
@@ -561,6 +642,22 @@ async def complete_job(
 
     job.status = "completed"
     job.updated_at = now
+    if (job.payload or {}).get("job_type") == "kitbash.register":
+        canonical_id = (job.payload or {}).get("canonical_id")
+        if canonical_id:
+            asset_result = await db.execute(select(Asset).where(Asset.canonical_id == canonical_id))
+            registered_asset = asset_result.scalar_one_or_none()
+            if registered_asset is not None:
+                metadata = registered_asset.asset_metadata or {}
+                mark_registered(registered_asset, location_tag=metadata.get("location_tag"))
+                db.add(AuditEvent(
+                    event_type="kitbash.registered",
+                    actor_type="worker",
+                    actor_id=token.worker_id,
+                    resource_type="asset",
+                    resource_id=canonical_id,
+                    details={"register_job_id": str(job_id)},
+                ))
     await _sync_studio_chat_asset_paths_from_artifacts(db, job)
     post_build_review_job = await _create_post_build_review_job(db, build_job=job, now=now)
     if post_build_review_job:
