@@ -534,3 +534,23 @@ def test_apply_operation_unknown_environment_preset_raises():
     interpreter = load_interpreter_module()
     with pytest.raises(ValueError, match="Unknown set_environment preset"):
         interpreter._apply_set_environment({"preset": "sunset_beach"}, {})
+
+
+def test_play_fx_cue_is_target_scoped_not_scene_level():
+    interpreter = load_interpreter_module()
+    assert "play_fx_cue" in interpreter.OPERATIONS
+    assert "play_fx_cue" not in interpreter.SCENE_LEVEL_OPERATIONS
+
+
+def test_play_fx_cue_missing_root_raises(monkeypatch):
+    interpreter = load_interpreter_module()
+    monkeypatch.setattr(
+        interpreter.bpy, "data",
+        types.SimpleNamespace(objects=types.SimpleNamespace(get=lambda name: None)),
+        raising=False,
+    )
+    with pytest.raises(ValueError, match="fx_root_id"):
+        interpreter._apply_play_fx_cue(
+            object(), {"frame": 1, "fx_root_id": "HYPERSPACE_EVENT_ROOT"},
+            {"fps": 24, "frame_start": 1, "frame_end": 100},
+        )

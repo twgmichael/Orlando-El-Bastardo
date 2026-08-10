@@ -109,20 +109,26 @@ Rationale for sphere approach:
 
 ## Implementation Spec
 
+**Live in `tools/oeb_blender/space_env.py`'s `setup_space_env(scene, **kwargs)`**
+since 2026-08-09 (see Status) -- every constant below is a keyword argument
+there, not a value to copy by hand. The values here match that function's
+current defaults exactly; if they ever drift apart, the code is authoritative.
+
 ### Star sphere
 
 ```python
 # ── star sphere ───────────────────────────────────────────────────────────────
-bpy.ops.mesh.primitive_uv_sphere_add(radius=800, segments=64, ring_count=32)
+bpy.ops.mesh.primitive_uv_sphere_add(radius=900, segments=64, ring_count=32)
 star_sphere = bpy.context.active_object
 star_sphere.name = "env_star_sphere"
-bpy.context.view_layer.objects.active = star_sphere
-bpy.ops.object.mode_set(mode='EDIT')
-bpy.ops.mesh.flip_normals()       # faces point inward; camera stays inside
-bpy.ops.object.mode_set(mode='OBJECT')
 
 star_mat = bpy.data.materials.new("mat_env_stars")
 star_mat.use_nodes = True
+# Faces point outward (default winding); disabling backface culling makes
+# the material visible from inside the sphere too, without an Edit Mode
+# mode_set() call (avoids a context dependency in headless/background
+# Blender that flip_normals() needs).
+star_mat.use_backface_culling = False
 snt = star_mat.node_tree
 for n in list(snt.nodes):
     snt.nodes.remove(n)
@@ -133,22 +139,22 @@ s_ramp  = snt.nodes.new("ShaderNodeValToRGB")
 s_noise = snt.nodes.new("ShaderNodeTexNoise")
 s_coord = snt.nodes.new("ShaderNodeTexCoord")
 
-s_noise.inputs["Scale"].default_value     = 300.0   # star dot size
-s_noise.inputs["Detail"].default_value    = 8.0
-s_noise.inputs["Roughness"].default_value = 0.6
+s_noise.inputs["Scale"].default_value     = 360.0   # star dot size
+s_noise.inputs["Detail"].default_value    = 10.0
+s_noise.inputs["Roughness"].default_value = 0.62
 
 s_ramp.color_ramp.interpolation        = 'CONSTANT'
 s_ramp.color_ramp.elements[0].position = 0.0
-s_ramp.color_ramp.elements[0].color    = (0.003, 0.003, 0.006, 1)  # space
-s_ramp.color_ramp.elements[1].position = 0.88    # density threshold
+s_ramp.color_ramp.elements[0].color    = (0.0, 0.0, 0.0, 1)   # true black, see note below
+s_ramp.color_ramp.elements[1].position = 0.70    # density threshold, see note below
 s_ramp.color_ramp.elements[1].color    = (1.0, 1.0, 1.0, 1)
 
-s_emit.inputs["Strength"].default_value = 2.0
+s_emit.inputs["Strength"].default_value = 8.0
 
-snt.links.new(s_coord.outputs["UV"],      s_noise.inputs["Vector"])
-snt.links.new(s_noise.outputs["Fac"],     s_ramp.inputs["Fac"])
-snt.links.new(s_ramp.outputs["Color"],    s_emit.inputs["Color"])
-snt.links.new(s_emit.outputs["Emission"], s_out.inputs["Surface"])
+snt.links.new(s_coord.outputs["Generated"], s_noise.inputs["Vector"])
+snt.links.new(s_noise.outputs["Fac"],       s_ramp.inputs["Fac"])
+snt.links.new(s_ramp.outputs["Color"],      s_emit.inputs["Color"])
+snt.links.new(s_emit.outputs["Emission"],   s_out.inputs["Surface"])
 star_sphere.data.materials.append(star_mat)
 
 # World: pure black (sphere provides the stars)
@@ -158,11 +164,27 @@ world.node_tree.nodes["Background"].inputs[0].default_value = (0.0, 0.0, 0.0, 1)
 scene.world = world
 ```
 
+**Two values above were changed from the original spec after live-rendered
+verification (2026-08-09, Blender 5.1.2, EEVEE and Cycles both checked):**
+
+- **Density threshold 0.88 → 0.70.** The original 0.88 (and the 0.775 an
+  earlier draft of this doc had) produced *zero* visible stars: this noise
+  texture's Fac output at Detail=10 rarely exceeds ~0.5, so a CONSTANT-ramp
+  cutoff that high never triggers, regardless of engine, resolution, or
+  sample count. Swept the actual cutoff-vs-visible-pixel curve on a control
+  plane with identical noise params: 0.66 → 7.6% bright, 0.70 → 0.53%,
+  0.72 → 0.08%. 0.70 is confirmed to render a real, visibly sparse starfield
+  on the actual star sphere, not just the control plane.
+- **Space color `(0.003, 0.003, 0.006)` → pure black `(0.0, 0.0, 0.0)`.**
+  User feedback against real approved 1999 reference renders: that faint
+  off-black, multiplied through the emission node at strength 8, rendered
+  as a visible blue/purple cast instead of the reference's true black.
+
 ### Sun disc
 
 ```python
 # ── sun disc (emissive sphere + EEVEE bloom = halo) ───────────────────────────
-bpy.ops.mesh.primitive_uv_sphere_add(radius=18, location=(300, 500, 250),
+bpy.ops.mesh.primitive_uv_sphere_add(radius=22, location=(-260, -520, 250),
                                       segments=32, ring_count=16)
 sun_obj = bpy.context.active_object
 sun_obj.name = "env_sun"
@@ -172,23 +194,43 @@ for n in list(sun_mat.node_tree.nodes):
     sun_mat.node_tree.nodes.remove(n)
 sun_emit = sun_mat.node_tree.nodes.new("ShaderNodeEmission")
 sun_out  = sun_mat.node_tree.nodes.new("ShaderNodeOutputMaterial")
-sun_emit.inputs["Color"].default_value    = (1.0, 0.78, 0.30, 1)
+sun_emit.inputs["Color"].default_value    = (1.0, 0.74, 0.30, 1)
 sun_emit.inputs["Strength"].default_value = 120.0
 sun_mat.node_tree.links.new(sun_emit.outputs["Emission"], sun_out.inputs["Surface"])
 sun_obj.data.materials.append(sun_mat)
 
 if hasattr(scene, 'eevee') and hasattr(scene.eevee, 'use_bloom'):
     scene.eevee.use_bloom       = True
-    scene.eevee.bloom_threshold = 0.6
+    scene.eevee.bloom_threshold = 0.55
     scene.eevee.bloom_intensity = 0.8
     scene.eevee.bloom_radius    = 6.0
 ```
 
+`use_bloom` doesn't exist at all on `scene.eevee` in Blender 5.1.2 (this
+guard's `hasattr` check is load-bearing, not defensive boilerplate) -- the
+sun currently renders as a hard-edged flat disc, no halo, until that
+Blender-version gap is separately addressed.
+
+### Lighting caveat: this environment provides no actual light source
+
+`env_sun` above is a purely emissive **mesh** (self-illuminating only), not
+a Blender Light -- it does not illuminate anything else in the scene. With
+a fully black world and no added light, every other object (ships, actors,
+asteroids, props) renders pure black and invisible, confirmed live
+2026-08-09 rendering the asteroid-field scenes. Callers must add at least
+one real light after calling `setup_space_env()`. `tools/render_blend.py`'s
+`setup_lighting()` does this for the review-render path: one SUN lamp aimed
+from `env_sun`'s direction, plus a second soft SUN lamp aimed from the
+camera's direction (a single hard light with zero ambient only lights
+whichever face happens to align with it, which can leave a prop's
+camera-facing side dark purely because of how it happens to be rotated).
+
 ### Usage in render scripts
 
-Add both blocks after engine selection, before camera/lighting setup. The scene
-key and fill lights (SUN lamps) remain separate so shot lighting is independent
-of the environment.
+Add both blocks after engine selection, before camera/lighting setup, then
+add at least one real light per the caveat above. The scene key and fill
+lights (SUN lamps) remain separate so shot lighting is independent of the
+environment.
 
 ## Planet Spec (when needed)
 
@@ -204,18 +246,38 @@ position can be art-directed per shot without changing the env function.
 
 ## Tuning Reference
 
-| Parameter | Conservative | Current spec | Pushed |
-|---|---|---|---|
-| Noise Scale | 600 | 1000 | 1400 |
-| Star cutoff | 0.97 | 0.985 | 0.993 |
-| Star brightness | 1.5 | 3.0 | 6.0 |
-| Sun emission | 60 | 120 | 200 |
-| Bloom threshold | 0.8 | 0.6 | 0.4 |
-| Bloom intensity | 0.4 | 0.8 | 1.2 |
+This table's previous Conservative/Current-spec/Pushed values were never
+live-rendered before 2026-08-09 and turned out not to match either the
+Implementation Spec code block above or any working render script -- the
+old "Current spec" cutoff (0.985) is even further into the "renders zero
+stars" range than the 0.88/0.775 already found broken (see note above the
+star sphere code block). Replaced with only what's actually been rendered
+and confirmed; no Conservative/Pushed alternatives have been tried yet, so
+none are listed rather than inventing untested numbers.
+
+| Parameter | Shipped default (live-verified 2026-08-09) |
+|---|---|
+| Noise Scale | 360 |
+| Star cutoff | 0.70 |
+| Star brightness | 8.0 |
+| Sun emission | 120 |
+| Bloom threshold | 0.55 (no-op in this Blender version, see caveat) |
+| Bloom intensity | 0.8 (no-op in this Blender version, see caveat) |
 
 ## Status
 
 - Decision locked: 2026-07-13
-- `setup_space_env()` spec written; not yet extracted into a shared module
-- First integration target: `tmp_jb100_flyby.py` and `tmp_jb100_flyaway.py`
-- Planet asset not yet built
+- `setup_space_env()` extracted to `tools/oeb_blender/space_env.py`
+  (2026-08-09) and wired into the deterministic pipeline: `tools/
+  export_blender.py` calls it when a SceneSpec's `set.environment` is
+  `"deep_space"`; `data/resolver_map.json`'s `deep_space` and
+  `asteroid_field` locations set that field.
+- Live-verified end-to-end 2026-08-09 against the real JourneyBlaster
+  teaser script: true-black starfield, lit sun disc, lit asteroid/actor/
+  ship placeholders, all 7 scenes rendered.
+- Two spec values fixed after that verification (star cutoff, space
+  color) -- see notes above the star sphere code block. Bloom does not
+  currently work at all in this project's Blender 5.1.2 (no `use_bloom`
+  attribute); sun renders as a flat disc, no halo.
+- Planet asset not yet built; NASA Blue Marble Earth texture pulled to
+  `assets/textures/planets/earth/` (2026-08-09) as a future source.

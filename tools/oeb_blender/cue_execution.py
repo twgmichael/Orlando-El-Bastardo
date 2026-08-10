@@ -149,3 +149,33 @@ def apply_nla_clip(
         action_frames = max(1.0, action.frame_range[1] - action.frame_range[0])
         available = available_frames if available_frames is not None else action_frames
         strip.repeat = max(1, math.ceil(available / action_frames))
+
+
+def apply_fx_cue(root_obj, target_obj, frame_num: int, fps: float) -> None:
+    """R13 (docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7
+    item 7): trigger a multi-object effect-rig asset -- several
+    separately-animated objects under one root (e.g. the Hyperspace
+    Effect: HYPERSPACE_EVENT_ROOT plus an ignition/engulfment/cloud/
+    residue stage each with their own scale/rotation action), not one
+    object with one action like apply_nla_clip() alone covers.
+
+    Parents *root_obj* to *target_obj* (the actor/ship it travels with)
+    at *target_obj*'s local origin, then walks every object in the
+    rig -- root plus all descendants -- looking for an action named
+    Blender's own default `f"{obj.name}Action"`. Objects with a match
+    get a fresh NLA strip via apply_nla_clip(), all anchored at the same
+    *frame_num* so the rig's stages stay in sync; objects with no match
+    are static geometry riding along with an animated parent (true for
+    most of a rig like this one) and are silently skipped -- not an
+    error, and not a hardcoded per-asset table of which objects to
+    expect.
+    """
+    root_obj.parent = target_obj
+    root_obj.location = (0.0, 0.0, 0.0)
+
+    for obj in [root_obj] + root_obj.children_recursive:
+        clip_id = f"{obj.name}Action"
+        try:
+            apply_nla_clip(obj, clip_id, clip_id, frame_num, fps)
+        except ValueError:
+            continue

@@ -26,6 +26,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from oeb_blender.cue_execution import apply_fx_cue  # noqa: E402
 from oeb_blender.cue_execution import apply_move as _shared_apply_move  # noqa: E402
 from oeb_blender.cue_execution import apply_nla_clip, to_frame  # noqa: E402
 from oeb_blender.space_env import setup_space_env  # noqa: E402
@@ -161,7 +162,7 @@ def _export(args):
     for shot in shots:
         for cue in shot.get('cues', []):
             ctype = cue.get('type', '')
-            if ctype not in ('animation', 'dialogue', 'move'):
+            if ctype not in ('animation', 'dialogue', 'move', 'fx'):
                 cue_id = cue.get('cue_id', '<no-id>')
                 _die(
                     f"unsupported cue type '{ctype}' in v0 "
@@ -186,6 +187,12 @@ def _export(args):
         aid = prop.get('asset_id', '')
         if aid in assets:
             file_set.add(assets[aid]['file'])
+    for shot in shots:
+        for cue in shot.get('cues', []):
+            if cue.get('type') == 'fx':
+                fxid = cue.get('fx_id', '')
+                if fxid in assets:
+                    file_set.add(assets[fxid]['file'])
 
     # Import each distinct GLB exactly once (sorted for determinism)
     for rel_file in sorted(file_set):
@@ -286,6 +293,25 @@ def _export(args):
         # prop_obj.location.z intentionally unchanged
         placement_obj_names.append(node_name)
 
+        # R6 (2026-08-09): props get no cue of their own -- unlike actors,
+        # nothing in a shot's cues ever names a prop_id -- so a prop's own
+        # baked ambient animation (e.g. the mining probe's beacon blink)
+        # would otherwise never play: R4 already cleared every imported
+        # object's animation_data, keeping only the underlying actions.
+        # Auto-trigger it here, looped for the whole scene, using the same
+        # naming-convention discovery apply_fx_cue() uses -- no per-prop
+        # authoring, and props with no matching action are silently
+        # unaffected (most have none).
+        for obj in [prop_obj] + prop_obj.children_recursive:
+            clip_id = f"{obj.name}Action"
+            try:
+                apply_nla_clip(
+                    obj, clip_id, clip_id, 1, fps,
+                    loop=True, available_frames=scene.frame_end,
+                )
+            except ValueError:
+                continue
+
     # Store sorted unique placement names in scene custom prop for introspect
     scene['_oeb_placements'] = json.dumps(
         sorted(set(placement_obj_names))
@@ -349,6 +375,35 @@ def _export(args):
                 )
             except ValueError as exc:
                 _die(str(exc), 2)
+
+    # ── R13: fx cues (multi-object effect rigs, e.g. Hyperspace Effect) ──────
+    for shot in shots:
+        shot_start = shot['start_time']
+        for cue in shot.get('cues', []):
+            if cue.get('type') != 'fx':
+                continue
+
+            cue_id = cue.get('cue_id', '')
+            fxid = cue['fx_id']
+            actor_id = cue['actor_id']
+            cue_start = cue.get('start_time', 0.0)
+
+            bo_name = actor_map.get(actor_id, {}).get('blender_object')
+            if not bo_name:
+                _die(f"actor '{actor_id}' has no blender_object binding (cue '{cue_id}')", 2)
+            target_obj = bpy.data.objects.get(bo_name)
+            if target_obj is None:
+                _die(f"actor object '{bo_name}' not found (cue '{cue_id}')", 2)
+
+            root_name = assets.get(fxid, {}).get('node')
+            if not root_name:
+                _die(f"fx asset '{fxid}' not found in oeb.config.json assets (cue '{cue_id}')", 2)
+            root_obj = bpy.data.objects.get(root_name)
+            if root_obj is None:
+                _die(f"fx asset root object '{root_name}' not found (cue '{cue_id}')", 2)
+
+            frame_num = to_frame(shot_start + cue_start, fps)
+            apply_fx_cue(root_obj, target_obj, frame_num, fps)
 
     # ── R9: shot markers with camera binding ──────────────────────────────────
     fallback_cam = {"obj": None}

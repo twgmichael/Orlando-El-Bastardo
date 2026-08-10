@@ -240,12 +240,14 @@
     "FXCue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "start_time", "fx_id"],
+      "required": ["type", "start_time", "fx_id", "actor_id"],
+      "description": "Trigger a multi-object effect-rig asset (e.g. the Hyperspace Effect: several separately-animated objects under one root, not one object/one clip like AnimationCue) parented to actor_id's object at start_time. The rig's own root-relative animation (travel, stage timing) plays as authored; exporters discover which of the rig's objects to animate by Blender's default action-naming convention (`{ObjectName}Action`, left unrenamed by the asset's author) rather than a hardcoded per-asset table -- see docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7 item 7.",
       "properties": {
         "type": { "const": "fx" },
         "cue_id": { "$ref": "#/$defs/logical_id" },
         "start_time": { "$ref": "#/$defs/seconds" },
         "fx_id": { "$ref": "#/$defs/logical_id" },
+        "actor_id": { "$ref": "#/$defs/logical_id" },
         "params": { "type": "object" }
       }
     },

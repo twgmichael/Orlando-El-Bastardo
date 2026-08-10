@@ -82,7 +82,13 @@
         "placeholder_location_asteroid_field_A_center",
         "placeholder_location_asteroid_field_A_exit"
       ],
-      "default_props": [],
+      "default_props": [
+        {
+          "prop_id": "mining_probe",
+          "asset_id": "prop_mining_probe_1999_A",
+          "at_mark": "placeholder_location_asteroid_field_A_exit"
+        }
+      ],
       "environment": "deep_space",
       "placeholder": true,
       "source": "producer --primitive-fallback"
@@ -178,7 +184,7 @@
       "source": "producer --primitive-fallback"
     },
     "journeyblaster": {
-      "character_id": "placeholder_vehicle_journeyblaster_A",
+      "character_id": "prop_jb100_A",
       "spawn_marks": {
         "asteroid_field": "placeholder_location_asteroid_field_A_center",
         "deep_space": "placeholder_location_deep_space_A_center",
@@ -207,8 +213,8 @@
           "rise_duration": 0.5
         }
       },
-      "placeholder": true,
-      "source": "producer --primitive-fallback"
+      "placeholder": false,
+      "source": "tier-1 real-asset stand-in: JB100 (prop_jb100_A) for the fictional JourneyBlaster 5000 -- marks/entrances are still tier-2 placeholder-location geometry, unrelated to the ship mesh itself"
     }
   },
   "defaults": {

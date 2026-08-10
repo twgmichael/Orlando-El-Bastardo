@@ -132,6 +132,11 @@ world.node_tree.nodes["Background"].inputs[1].default_value = .006
 scene.world = world
 
 shot_root = empty("HYPERSPACE_EVENT_ROOT")
+shot_root["canonical_id"] = "fx_hyperspace_effect_A"
+shot_root["display_name"] = "Hyperspace Effect"
+shot_root["asset_status"] = "hero_locked"
+shot_root["asset_version"] = "1.0.0"
+shot_root["asset_kind"] = "effect"
 shot_root["reference"] = "Scene Six NTSC - escape.mp4"
 shot_root["duration_frames"] = END
 shot_root["travel_axis"] = "world -Y away from aft camera"
@@ -223,6 +228,8 @@ white_mat = noisy_volume("WHITE_HYPERSPACE_CORE", (.94, .97, 1, 1),
 # layer from the backlit burst, so the ship is visibly engulfed rather than
 # remaining a persistent black cutout through the whole collapse.
 engulf_root = empty("FOREGROUND_ENGULFMENT", cloud_root)
+add_cloud_piece("ENGULFMENT_MAIN_MASS", engulf_root, white_mat,
+                (1.05, 3.05, .42), (2.15, 1.55, 1.42), 179)
 for i in range(12):
     a = math.tau * i / 12 + random.uniform(-.16, .16)
     r = random.uniform(.15, 1.25)

@@ -1,7 +1,7 @@
 ---
 title: Director Role Plan
 created: 2026-07-17T00:00:00-04:00
-updated: 2026-07-17T00:00:00-04:00
+updated: 2026-08-10T10:08:09-04:00
 doc_type: plan
 production_area: pipeline
 department: production
@@ -18,6 +18,18 @@ wiki_order: 24
 Recorded 2026-07-17 from review of `oeb-text-adventures.md` and follow-up
 discussion about the distinction between producer and director responsibilities
 inside `oeb-studio-harness`.
+
+**Updated 2026-08-10 — real code identified, DirectorPlan decided.** See
+"2026-08-10 discussion and discovery" below: `tools/producer.py`'s
+`build_intent()` turned out to already be making Director's calls
+(camera framing, blocking flags) via dumb deterministic heuristics with
+no LLM involved, exactly the role-conflation this document warned
+against when it was only speculative. **Decision: `DirectorPlan` is a
+genuinely separate artifact, as originally designed below — not folded
+into `SceneIntent`'s shape — but it *informs* `SceneIntent`'s existing
+`arrives`/`departs`/`framing`/`subject_actor_id` fields** rather than
+replacing them or introducing a parallel set of fields downstream has to
+learn. `resolve_intent.py`/`SceneSpec` do not change.
 
 ## Discovery
 
@@ -121,6 +133,83 @@ or decide that missing requirements are acceptable. If direction requires a
 camera setup, animation, lighting preset, prop, or set mark that does not exist,
 the director should express that requirement structurally so the producer and
 resolver can report it.
+
+## 2026-08-10 discussion and discovery
+
+**Finding:** `tools/producer.py`'s `build_intent()` already makes two of
+Director's calls, inline, via plain deterministic heuristics with no LLM
+involved anywhere:
+
+1. **Camera/shot framing choice** — `shot_intents[].framing` and
+   `subject_actor_id`. Selection is a static shot-heading dict lookup
+   (`data/standins.json`'s `shot_headings`) plus a hardcoded fallback:
+   if a close/medium shot's subject isn't a known cast member, silently
+   downgrade to `establishing`. That fallback is a judgment call, made
+   today with no judgment behind it.
+2. **Blocking flags** — `actors[].arrives`/`departs`, sourced from
+   `tools/screenplay.py`'s `detect_arrivals()`/`detect_departures()`
+   (keyword-based prose detection, e.g. "walks in"/"exits").
+
+Both populate exactly the `SceneIntent` fields this document already
+expected a director layer to inform. Same shape of finding as the
+production-designer review the same day: a role this document had
+already scoped out got absorbed into Producer's deterministic code
+before the role existed to claim it, because showing rendered progress
+came first. `resolve_intent.py`/`SceneSpec` are unaffected either way —
+they only ever consume `SceneIntent`, which already carries these
+fields; only who decides their values changes.
+
+**What's genuinely new, not a relocation** — the concrete gap a real
+example exposed ("JB100 flies into asteroid field," from the production-
+designer discussion): nothing today translates free-form motion prose
+into an actual move cue. `resolve_intent.py`'s entrance/departure
+handling only covers scene-start/scene-end walk-in/walk-out, from each
+role's single fixed `entrance` mark pair. Mid-scene motion described in
+action text ("dives," "breaks free of the debris cloud," "flies into")
+has no mechanism at all. This is the real, unbuilt core of `DirectorPlan`
+beats' `action`/`from`/`to`/`timing` fields already sketched below — the
+schema anticipated this correctly in 2026-07-17; nothing was ever built
+against it.
+
+**Decision: `DirectorPlan` is a genuinely separate artifact, as
+originally designed — it informs, not replaces.** `SceneIntent` keeps
+its current shape (`actors[].arrives`/`departs`,
+`shot_intents[].framing`/`subject_actor_id`); `DirectorPlan` is what
+*decides* those field values with real reasoning (LLM-assisted, per
+"what Director needs to run standalone" below) instead of the
+heuristics above, plus produces the new mid-scene move-beat data
+`resolve_intent.py` doesn't consume yet. `resolve_intent.py` and
+`SceneSpec` do not change shape for this. Where exactly `DirectorPlan`'s
+richer beat data (the "flies into asteroid field" case) enters
+`SceneSpec` — a new cue path, or additional `SceneIntent` fields
+resolve_intent.py learns to read — is not decided here; that is the
+schema/build work "Near-Term Work" below still needs to do.
+
+**What Director needs to run standalone:**
+
+- Factual scene data — the parsed screenplay sections/action/dialogue,
+  already produced deterministically today; no change needed there.
+- The *resolved* location's marks, from whatever Production Designer
+  and Producer have already registered — blocking can't choose a `to`
+  mark without knowing what marks exist. For rough blocking, every
+  location today only has `entry`/`center`/`exit`, a small, naturally
+  LLM-friendly vocabulary to select from without inventing new marks.
+- `data/camera_grammar.json`, for camera_intent → literal camera
+  lookup. Director picks the framing purpose; the resolver still does
+  the literal camera-object match, unchanged.
+- A constrained local-LLM call point with its own schema
+  (`directorplan.schema.json`, sketched below, never drafted for real)
+  and its own vetting matrix — the same discipline Producer's existing
+  `llm_review()` step already uses (schemas/scenereview.schema.json),
+  not a new pattern.
+- A pipeline slot: after Production Designer resolves assets for a
+  scene, before `resolve_intent.py`'s `SceneSpec` resolution — matching
+  this document's own "Recommended shape" below. "Near-Term Work"'s
+  "decide where the director step runs in `tools/producer.py`" is now
+  answered: immediately after the production-designer loop's
+  continuation trigger (`tools/producer.py --scenes N`), before
+  `build_intent()` runs — `build_intent()` itself is what loses the two
+  heuristics above once `DirectorPlan` exists to inform them instead.
 
 ## Proposed Pipeline Position
 
@@ -254,6 +343,14 @@ Open schema work:
   directly author target files.
 - Missing director requirements should become structured requirements that the
   producer/resolver can surface as NEEDED work.
+- **2026-08-10: `DirectorPlan` is a genuinely separate artifact (not
+  folded into `SceneIntent`'s shape) that informs `SceneIntent`'s
+  existing `arrives`/`departs`/`framing`/`subject_actor_id` fields**,
+  rather than resolve_intent.py/SceneSpec learning a second shape.
+  `tools/producer.py`'s `build_intent()` currently sets those same
+  fields via plain heuristics with no LLM involved (shot-heading dict
+  lookup, keyword-based arrival/departure detection) — that is the code
+  `DirectorPlan` replaces, not new scope.
 - The recommended architecture is:
 
 ```text
@@ -274,8 +371,11 @@ script scene
 - Draft a minimal `directorplan.schema.json` with conservative vocabularies.
 - Create one fixture from the pilot or bar scene showing factual extraction,
   director plan, and resolved scene spec side by side.
-- Decide where the director step runs in `tools/producer.py` once the schema is
-  real.
+- **Answered 2026-08-10**: the director step runs in `tools/producer.py`
+  immediately after the production-designer loop's continuation trigger,
+  before `build_intent()` — see "2026-08-10 discussion and discovery"
+  above. `build_intent()` loses its framing/arrival-departure heuristics
+  once `DirectorPlan` exists to inform those fields instead.
 - Add a qualification drill: one in-library scene should produce useful staged
   direction; one scene needing an unavailable camera, mark, or clip should
   produce a clean NEEDED path rather than a hidden substitution.

@@ -7,6 +7,19 @@
       "node": "set_bar_small_A",
       "kind": "set"
     },
+    "prop_mining_probe_1999_A": {
+      "file": "props/mining_probe_1999_v1.0.0/mining_probe_1999_v1.0.0.glb",
+      "node": "prop_mining_probe_1999_A",
+      "kind": "prop",
+      "version": "1.0.0"
+    },
+    "fx_hyperspace_effect_A": {
+      "file": "effects/hyperspace_effect_v1.1.0/hyperspace_effect_v1.1.0.glb",
+      "node": "HYPERSPACE_EVENT_ROOT",
+      "kind": "effect",
+      "version": "1.1.0",
+      "source": "assets/effects/hyperspace_effect_v1.1.0/attach_ship.py --primitive"
+    },
     "char_hero_v1": {
       "file": "characters/char_hero_v1.glb",
       "node": "char_hero_v1",

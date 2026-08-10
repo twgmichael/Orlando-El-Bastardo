@@ -194,6 +194,7 @@ from oeb_blender.recipes import (  # noqa: E402
     orientation_standard,
 )
 from oeb_blender import cue_execution  # noqa: E402
+from oeb_blender.space_env import setup_space_env  # noqa: E402
 
 SCHEMA_VERSION = "0.1.0"
 
@@ -633,77 +634,47 @@ def _apply_set_shape_detail(obj, params, ctx):
 
 def _apply_set_environment(params, ctx):
     """Scene-level lighting/environment preset. v0.1 has exactly one
-    preset, "deep_space" -- the star-sphere + emissive-sun-sphere + EEVEE
-    bloom setup already proven working in two real render scripts
-    (tools/tmp_jb100_space_action.py; docs/world-building/SPACESCAPE.md),
-    adapted here rather than redesigned. Additional presets get added the
-    same way OPERATIONS entries are: one at a time, when an actual scene
-    needs them -- not built speculatively ahead of that need.
+    preset, "deep_space" -- delegates to oeb_blender.space_env.
+    setup_space_env(), the same recipe tools/export_blender.py's R5 step
+    uses for SceneSpec.set.environment, rather than a second copy of it.
+    This function used to carry its own inline copy of the star-sphere/
+    sun-sphere/bloom setup with the ORIGINAL, since-disproven defaults
+    (0.75 star threshold -- renders zero visible stars; off-black space
+    color -- renders a visible blue/purple cast); delegating means this
+    class of drift (docs/world-building/SPACESCAPE.md had the same stale
+    values, fixed 2026-08-09) can't happen again -- there's only one
+    place left to be right. Additional presets get added the same way
+    OPERATIONS entries are: one at a time, when an actual scene needs
+    them -- not built speculatively ahead of that need.
     """
     preset = str(params.get("preset", "deep_space")).strip().lower()
     if preset != "deep_space":
         raise ValueError(f"Unknown set_environment preset: {preset!r} (supported: ['deep_space'])")
 
     scene = bpy.context.scene
-    world = bpy.data.worlds.new("blueprint_space_env")
-    world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.0, 0.0, 0.0, 1.0)
-    scene.world = world
+    kwargs = {}
+    if "star_radius" in params:
+        kwargs["star_sphere_radius"] = float(params["star_radius"])
+    if "star_threshold" in params:
+        kwargs["star_density_cutoff"] = float(params["star_threshold"])
+    if "star_strength" in params:
+        kwargs["star_emission_strength"] = float(params["star_strength"])
+    if "sun_location" in params:
+        kwargs["sun_location"] = _vec3(params.get("sun_location"), (-260.0, -520.0, 250.0))
+    if "sun_radius" in params:
+        kwargs["sun_radius"] = float(params["sun_radius"])
+    if "sun_color" in params:
+        kwargs["sun_color"] = _vec3(params.get("sun_color"), (1.0, 0.74, 0.30)) + (1.0,)
+    if "sun_strength" in params:
+        kwargs["sun_emission_strength"] = float(params["sun_strength"])
+    if "bloom_threshold" in params:
+        kwargs["bloom_threshold"] = float(params["bloom_threshold"])
+    if "bloom_intensity" in params:
+        kwargs["bloom_intensity"] = float(params["bloom_intensity"])
+    if "bloom_radius" in params:
+        kwargs["bloom_radius"] = float(params["bloom_radius"])
 
-    star_radius = float(params.get("star_radius", 800.0))
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=star_radius, segments=64, ring_count=32)
-    star_sphere = bpy.context.active_object
-    star_sphere.name = "env_star_sphere"
-    star_sphere.visible_shadow = False
-
-    star_mat = bpy.data.materials.new("mat_env_stars")
-    star_mat.use_nodes = True
-    star_mat.use_backface_culling = False
-    snt = star_mat.node_tree
-    for node in list(snt.nodes):
-        snt.nodes.remove(node)
-    s_out = snt.nodes.new("ShaderNodeOutputMaterial")
-    s_emit = snt.nodes.new("ShaderNodeEmission")
-    s_ramp = snt.nodes.new("ShaderNodeValToRGB")
-    s_noise = snt.nodes.new("ShaderNodeTexNoise")
-    s_coord = snt.nodes.new("ShaderNodeTexCoord")
-    s_noise.inputs["Scale"].default_value = 300.0
-    s_noise.inputs["Detail"].default_value = 8.0
-    s_noise.inputs["Roughness"].default_value = 0.6
-    s_ramp.color_ramp.interpolation = "CONSTANT"
-    s_ramp.color_ramp.elements[0].position = 0.0
-    s_ramp.color_ramp.elements[0].color = (0.003, 0.003, 0.006, 1)
-    s_ramp.color_ramp.elements[1].position = float(params.get("star_threshold", 0.75))
-    s_ramp.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1)
-    s_emit.inputs["Strength"].default_value = float(params.get("star_strength", 8.0))
-    snt.links.new(s_coord.outputs["Generated"], s_noise.inputs["Vector"])
-    snt.links.new(s_noise.outputs["Fac"], s_ramp.inputs["Fac"])
-    snt.links.new(s_ramp.outputs["Color"], s_emit.inputs["Color"])
-    snt.links.new(s_emit.outputs["Emission"], s_out.inputs["Surface"])
-    star_sphere.data.materials.append(star_mat)
-
-    sun_location = _vec3(params.get("sun_location"), (300.0, 500.0, 250.0))
-    bpy.ops.mesh.primitive_uv_sphere_add(radius=float(params.get("sun_radius", 18.0)),
-                                          location=sun_location, segments=32, ring_count=16)
-    sun_obj = bpy.context.active_object
-    sun_obj.name = "env_sun"
-    sun_mat = bpy.data.materials.new("mat_env_sun")
-    sun_mat.use_nodes = True
-    for node in list(sun_mat.node_tree.nodes):
-        sun_mat.node_tree.nodes.remove(node)
-    sun_emit = sun_mat.node_tree.nodes.new("ShaderNodeEmission")
-    sun_out = sun_mat.node_tree.nodes.new("ShaderNodeOutputMaterial")
-    sun_color = _vec3(params.get("sun_color"), (1.0, 0.78, 0.30))
-    sun_emit.inputs["Color"].default_value = sun_color + (1.0,)
-    sun_emit.inputs["Strength"].default_value = float(params.get("sun_strength", 120.0))
-    sun_mat.node_tree.links.new(sun_emit.outputs["Emission"], sun_out.inputs["Surface"])
-    sun_obj.data.materials.append(sun_mat)
-
-    if hasattr(scene, "eevee") and hasattr(scene.eevee, "use_bloom"):
-        scene.eevee.use_bloom = True
-        scene.eevee.bloom_threshold = float(params.get("bloom_threshold", 0.6))
-        scene.eevee.bloom_intensity = float(params.get("bloom_intensity", 0.8))
-        scene.eevee.bloom_radius = float(params.get("bloom_radius", 6.0))
+    setup_space_env(scene, **kwargs)
 
 
 def _apply_play_move_cue(obj, params, ctx):
@@ -794,6 +765,31 @@ def _apply_set_active_camera(params, ctx):
     marker.camera = cam_obj
 
 
+def _apply_play_fx_cue(obj, params, ctx):
+    """Trigger a multi-object effect-rig asset (docs/planning/UNIFIED-
+    BLUEPRINT-PIPELINE-PLAN.md section 7 item 7 -- e.g. the Hyperspace
+    Effect: several separately-animated objects under one root, not one
+    object/one clip like play_move_cue/play_animation_cue cover) parented
+    to *obj* at *frame*. `fx_root_id` names the effect's root object,
+    already present in the scene via an earlier `type: import` primitive
+    (same convention set_active_camera's camera_object uses) -- not
+    resolved from oeb.config.json directly here, since a Blueprint scene
+    only ever gets geometry through its own `primitives` list. Delegates
+    to oeb_blender.cue_execution.apply_fx_cue() -- the exact machinery
+    export_blender.py's SceneSpec `fx` cues use, not a second
+    implementation.
+    """
+    frame = _validate_frame(params["frame"], ctx)
+    fx_root_id = params["fx_root_id"]
+    fx_root = bpy.data.objects.get(fx_root_id)
+    if fx_root is None:
+        raise ValueError(
+            f"play_fx_cue references fx_root_id {fx_root_id!r}, not found in the scene "
+            f"-- its type=import primitive must appear earlier in `primitives`"
+        )
+    cue_execution.apply_fx_cue(fx_root, obj, frame, ctx["fps"])
+
+
 OPERATIONS = {
     "bevel": _apply_bevel,
     "mirror": _apply_mirror,
@@ -808,6 +804,7 @@ OPERATIONS = {
     "play_move_cue": _apply_play_move_cue,
     "play_animation_cue": _apply_play_animation_cue,
     "play_dialogue_cue": _apply_play_dialogue_cue,
+    "play_fx_cue": _apply_play_fx_cue,
     "set_active_camera": _apply_set_active_camera,
 }
 
