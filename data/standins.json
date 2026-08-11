@@ -8,7 +8,12 @@
     "casey": "casey",
     "orlando": "orlando",
     "journeyblaster": "journeyblaster",
-    "nothing": "nothing"
+    "nothing": "nothing",
+    "station control": "station_control",
+    "quill": "quill",
+    "colonist voice": "colonist_voice",
+    "second voice": "second_voice",
+    "third voice": "third_voice"
   },
   "location_standins": {
     "neighborhood_bar": "small_bar_interior",

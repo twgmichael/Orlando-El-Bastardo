@@ -244,6 +244,41 @@
       "kind": "vehicle",
       "placeholder": true,
       "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_station_control_A": {
+      "file": "placeholders/placeholder_character_station_control_A.glb",
+      "node": "placeholder_character_station_control_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_quill_A": {
+      "file": "placeholders/placeholder_character_quill_A.glb",
+      "node": "placeholder_character_quill_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_colonist_voice_A": {
+      "file": "placeholders/placeholder_character_colonist_voice_A.glb",
+      "node": "placeholder_character_colonist_voice_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_second_voice_A": {
+      "file": "placeholders/placeholder_character_second_voice_A.glb",
+      "node": "placeholder_character_second_voice_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_third_voice_A": {
+      "file": "placeholders/placeholder_character_third_voice_A.glb",
+      "node": "placeholder_character_third_voice_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     }
   }
 }

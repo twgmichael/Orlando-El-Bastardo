@@ -302,12 +302,105 @@
     "nothing": {
       "character_id": "placeholder_vehicle_nothing_A",
       "spawn_marks": {
-        "test_set_designer_location_alpha": "placeholder_location_test_set_designer_location_alpha_A_center"
+        "test_set_designer_location_alpha": "placeholder_location_test_set_designer_location_alpha_A_center",
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
       },
       "entrances": {
         "test_set_designer_location_alpha": {
           "from_mark": "placeholder_location_test_set_designer_location_alpha_A_entry",
           "approach_mark": "placeholder_location_test_set_designer_location_alpha_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "station_control": {
+      "character_id": "placeholder_character_station_control_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "quill": {
+      "character_id": "placeholder_character_quill_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "colonist_voice": {
+      "character_id": "placeholder_character_colonist_voice_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "second_voice": {
+      "character_id": "placeholder_character_second_voice_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "third_voice": {
+      "character_id": "placeholder_character_third_voice_A",
+      "spawn_marks": {
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
