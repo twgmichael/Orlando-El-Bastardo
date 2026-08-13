@@ -237,9 +237,22 @@ def resolve_role(
 def trigger_continuation(script: str, episode: str, scene_number: int, *, extra_args: list[str] | None = None) -> int:
     """Re-invoke producer.py for just the now-unblocked scene, same
     convention as tools/set_designer.py's own trigger_continuation().
+
+    Always passes --no-render (fixed 2026-08-13): nothing threads the
+    original triage run's render intent through the job payload, and
+    without it producer.py's default is to actually render (real
+    headless-Blender video, tens of minutes) as a side effect of a
+    worker job whose only purpose is to unblock casting. This job's
+    role is registration/continuation only -- rendering stays an
+    explicit, separate pass, never an implicit side effect of a
+    background job completing. Found live: a duplicate-job dispatch
+    bug (producer.py doesn't dedupe already-pending/running jobs for
+    the same blocker across repeated runs) meant this fired repeatedly
+    for the same scene, stacking up multiple concurrent real renders
+    of the same output file for nearly an hour before being caught.
     """
     cmd = [VENV_PY, "tools/producer.py", "--script", script,
-           "--primitive-fallback", "--scenes", str(scene_number)]
+           "--primitive-fallback", "--scenes", str(scene_number), "--no-render"]
     if extra_args:
         cmd.extend(extra_args)
     result = subprocess.run(cmd)

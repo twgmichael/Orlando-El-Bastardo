@@ -1040,7 +1040,9 @@
       "spawn_marks": {
         "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
         "starbase_eighty_six_corridor": "placeholder_location_starbase_eighty_six_corridor_A_center",
-        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center"
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+        "journeyblaster_cockpit_hyperspace": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
@@ -1063,6 +1065,20 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit_hyperspace": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -1073,7 +1089,8 @@
       "spawn_marks": {
         "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
         "starbase_eighty_six_commercial_promenade": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
-        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center"
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+        "journeyblaster_cockpit_hyperspace": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
@@ -1096,6 +1113,13 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit_hyperspace": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -1109,7 +1133,29 @@
         "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
         "starbase_eighty_six_commercial_promenade": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
         "starbase_eighty_six_corridor": "placeholder_location_starbase_eighty_six_corridor_A_center",
-        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center"
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+        "starbase_eighty_six_chase": "placeholder_location_starbase_eighty_six_chase_A_center",
+        "journeyblaster_cockpit_hyperspace": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+        "starbase_mckinley_burger_counter": "placeholder_location_starbase_mckinley_burger_counter_A_center",
+        "starbase_mckinley_fleet_intelligence_reception": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_center",
+        "admiral_farring_s_office": "placeholder_location_admiral_farring_s_office_A_center",
+        "starbase_mckinley_corridor": "placeholder_location_starbase_mckinley_corridor_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center",
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center",
+        "research_outpost_corridor": "placeholder_location_research_outpost_corridor_A_center",
+        "wipomonte_sky": "placeholder_location_wipomonte_sky_A_center",
+        "wipomonte_low_altitude": "placeholder_location_wipomonte_low_altitude_A_center",
+        "ventradi_pirate_flyer": "placeholder_location_ventradi_pirate_flyer_A_center",
+        "wipomonte_aerial_battle": "placeholder_location_wipomonte_aerial_battle_A_center",
+        "wipomonte_battle": "placeholder_location_wipomonte_battle_A_center",
+        "wipomonte_orbital_battle": "placeholder_location_wipomonte_orbital_battle_A_center",
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+        "colgen_colony": "placeholder_location_colgen_colony_A_center",
+        "union_cruiser_bridge": "placeholder_location_union_cruiser_bridge_A_center",
+        "colgen_colony_between_buildings": "placeholder_location_colgen_colony_between_buildings_A_center",
+        "colgen_colony_journeyblaster": "placeholder_location_colgen_colony_journeyblaster_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
@@ -1153,6 +1199,160 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "starbase_eighty_six_chase": {
+          "from_mark": "placeholder_location_starbase_eighty_six_chase_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_chase_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit_hyperspace": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_mckinley_burger_counter": {
+          "from_mark": "placeholder_location_starbase_mckinley_burger_counter_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_burger_counter_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_mckinley_fleet_intelligence_reception": {
+          "from_mark": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "admiral_farring_s_office": {
+          "from_mark": "placeholder_location_admiral_farring_s_office_A_entry",
+          "approach_mark": "placeholder_location_admiral_farring_s_office_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_mckinley_corridor": {
+          "from_mark": "placeholder_location_starbase_mckinley_corridor_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_testing_facility": {
+          "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_corridor": {
+          "from_mark": "placeholder_location_research_outpost_corridor_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_sky": {
+          "from_mark": "placeholder_location_wipomonte_sky_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_sky_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_low_altitude": {
+          "from_mark": "placeholder_location_wipomonte_low_altitude_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_low_altitude_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "ventradi_pirate_flyer": {
+          "from_mark": "placeholder_location_ventradi_pirate_flyer_A_entry",
+          "approach_mark": "placeholder_location_ventradi_pirate_flyer_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_aerial_battle": {
+          "from_mark": "placeholder_location_wipomonte_aerial_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_aerial_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_battle": {
+          "from_mark": "placeholder_location_wipomonte_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_orbital_battle": {
+          "from_mark": "placeholder_location_wipomonte_orbital_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_orbital_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_administration_building_interrogation_room": {
+          "from_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
+          "approach_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony": {
+          "from_mark": "placeholder_location_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "union_cruiser_bridge": {
+          "from_mark": "placeholder_location_union_cruiser_bridge_A_entry",
+          "approach_mark": "placeholder_location_union_cruiser_bridge_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_between_buildings": {
+          "from_mark": "placeholder_location_colgen_colony_between_buildings_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_between_buildings_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_journeyblaster": {
+          "from_mark": "placeholder_location_colgen_colony_journeyblaster_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_journeyblaster_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -1165,7 +1365,23 @@
         "deep_space": "placeholder_location_deep_space_A_center",
         "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
         "starbase_eighty_six": "placeholder_location_starbase_eighty_six_A_center",
-        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center"
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+        "starbase_eighty_six_hangar_control": "placeholder_location_starbase_eighty_six_hangar_control_A_center",
+        "starbase_eighty_six_chase": "placeholder_location_starbase_eighty_six_chase_A_center",
+        "starbase_mckinley_space": "placeholder_location_starbase_mckinley_space_A_center",
+        "classified_asteroid_system": "placeholder_location_classified_asteroid_system_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center",
+        "research_outpost": "placeholder_location_research_outpost_A_center",
+        "wipomonte_orbit": "placeholder_location_wipomonte_orbit_A_center",
+        "wipomonte_upper_atmosphere": "placeholder_location_wipomonte_upper_atmosphere_A_center",
+        "wipomonte_sky": "placeholder_location_wipomonte_sky_A_center",
+        "wipomonte_low_altitude": "placeholder_location_wipomonte_low_altitude_A_center",
+        "wipomonte_aerial_battle": "placeholder_location_wipomonte_aerial_battle_A_center",
+        "wipomonte_battle": "placeholder_location_wipomonte_battle_A_center",
+        "wipomonte_orbital_battle": "placeholder_location_wipomonte_orbital_battle_A_center",
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "colgen_colony_journeyblaster": "placeholder_location_colgen_colony_journeyblaster_A_center",
+        "research_outpost_asteroid": "placeholder_location_research_outpost_asteroid_A_center"
       },
       "entrances": {
         "asteroid_field": {
@@ -1202,6 +1418,118 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_control": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_chase": {
+          "from_mark": "placeholder_location_starbase_eighty_six_chase_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_chase_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_mckinley_space": {
+          "from_mark": "placeholder_location_starbase_mckinley_space_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_space_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "classified_asteroid_system": {
+          "from_mark": "placeholder_location_classified_asteroid_system_A_entry",
+          "approach_mark": "placeholder_location_classified_asteroid_system_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost": {
+          "from_mark": "placeholder_location_research_outpost_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_orbit": {
+          "from_mark": "placeholder_location_wipomonte_orbit_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_orbit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_upper_atmosphere": {
+          "from_mark": "placeholder_location_wipomonte_upper_atmosphere_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_upper_atmosphere_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_sky": {
+          "from_mark": "placeholder_location_wipomonte_sky_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_sky_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_low_altitude": {
+          "from_mark": "placeholder_location_wipomonte_low_altitude_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_low_altitude_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_aerial_battle": {
+          "from_mark": "placeholder_location_wipomonte_aerial_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_aerial_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_battle": {
+          "from_mark": "placeholder_location_wipomonte_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_orbital_battle": {
+          "from_mark": "placeholder_location_wipomonte_orbital_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_orbital_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_journeyblaster": {
+          "from_mark": "placeholder_location_colgen_colony_journeyblaster_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_journeyblaster_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_asteroid": {
+          "from_mark": "placeholder_location_research_outpost_asteroid_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_asteroid_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -1211,7 +1539,8 @@
       "character_id": "placeholder_vehicle_nothing_A",
       "spawn_marks": {
         "test_set_designer_location_alpha": "placeholder_location_test_set_designer_location_alpha_A_center",
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "wipomonte_battle": "placeholder_location_wipomonte_battle_A_center"
       },
       "entrances": {
         "test_set_designer_location_alpha": {
@@ -1227,6 +1556,13 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "wipomonte_battle": {
+          "from_mark": "placeholder_location_wipomonte_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -1235,12 +1571,20 @@
     "station_control": {
       "character_id": "placeholder_character_station_control_A",
       "spawn_marks": {
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "starbase_eighty_six_hangar_control": "placeholder_location_starbase_eighty_six_hangar_control_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_control": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1252,12 +1596,100 @@
     "quill": {
       "character_id": "placeholder_character_quill_A",
       "spawn_marks": {
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center",
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center",
+        "research_outpost_corridor": "placeholder_location_research_outpost_corridor_A_center",
+        "wipomonte_orbit": "placeholder_location_wipomonte_orbit_A_center",
+        "wipomonte_aerial_battle": "placeholder_location_wipomonte_aerial_battle_A_center",
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+        "colgen_colony": "placeholder_location_colgen_colony_A_center",
+        "union_cruiser_bridge": "placeholder_location_union_cruiser_bridge_A_center",
+        "colgen_colony_between_buildings": "placeholder_location_colgen_colony_between_buildings_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_testing_facility": {
+          "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_corridor": {
+          "from_mark": "placeholder_location_research_outpost_corridor_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_orbit": {
+          "from_mark": "placeholder_location_wipomonte_orbit_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_orbit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_aerial_battle": {
+          "from_mark": "placeholder_location_wipomonte_aerial_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_aerial_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_administration_building_interrogation_room": {
+          "from_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
+          "approach_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony": {
+          "from_mark": "placeholder_location_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "union_cruiser_bridge": {
+          "from_mark": "placeholder_location_union_cruiser_bridge_A_entry",
+          "approach_mark": "placeholder_location_union_cruiser_bridge_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_between_buildings": {
+          "from_mark": "placeholder_location_colgen_colony_between_buildings_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_between_buildings_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1440,7 +1872,9 @@
       "character_id": "placeholder_character_background_A",
       "spawn_marks": {
         "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center",
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center"
       },
       "entrances": {
         "starbase_eighty_six_service_passage": {
@@ -1453,6 +1887,20 @@
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1590,12 +2038,28 @@
     "technician": {
       "character_id": "placeholder_character_background_A",
       "spawn_marks": {
-        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center"
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center",
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "colgen_colony": "placeholder_location_colgen_colony_A_center"
       },
       "entrances": {
         "research_outpost_testing_facility": {
           "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
           "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony": {
+          "from_mark": "placeholder_location_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1607,12 +2071,68 @@
     "pirate": {
       "character_id": "placeholder_vehicle_pirate_A",
       "spawn_marks": {
-        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center"
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "wipomonte_upper_atmosphere": "placeholder_location_wipomonte_upper_atmosphere_A_center",
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "wipomonte_sky": "placeholder_location_wipomonte_sky_A_center",
+        "wipomonte_low_altitude": "placeholder_location_wipomonte_low_altitude_A_center",
+        "wipomonte_aerial_battle": "placeholder_location_wipomonte_aerial_battle_A_center",
+        "wipomonte_orbital_battle": "placeholder_location_wipomonte_orbital_battle_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center"
       },
       "entrances": {
         "wipomonte_colgen_colony": {
           "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
           "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_upper_atmosphere": {
+          "from_mark": "placeholder_location_wipomonte_upper_atmosphere_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_upper_atmosphere_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_sky": {
+          "from_mark": "placeholder_location_wipomonte_sky_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_sky_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_low_altitude": {
+          "from_mark": "placeholder_location_wipomonte_low_altitude_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_low_altitude_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_aerial_battle": {
+          "from_mark": "placeholder_location_wipomonte_aerial_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_aerial_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_orbital_battle": {
+          "from_mark": "placeholder_location_wipomonte_orbital_battle_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_orbital_battle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1625,7 +2145,9 @@
       "character_id": "placeholder_character_rogers_A",
       "spawn_marks": {
         "colgen_defense_bunker": "placeholder_location_colgen_defense_bunker_A_center",
-        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center"
+        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+        "colgen_colony": "placeholder_location_colgen_colony_A_center",
+        "colgen_colony_between_buildings": "placeholder_location_colgen_colony_between_buildings_A_center"
       },
       "entrances": {
         "colgen_defense_bunker": {
@@ -1638,6 +2160,20 @@
         "colgen_administration_building_interrogation_room": {
           "from_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
           "approach_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony": {
+          "from_mark": "placeholder_location_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_between_buildings": {
+          "from_mark": "placeholder_location_colgen_colony_between_buildings_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_between_buildings_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1768,7 +2304,8 @@
       "spawn_marks": {
         "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center",
         "ventradi_controlled_lab": "placeholder_location_ventradi_controlled_lab_A_center",
-        "horous_s_shuttle": "placeholder_location_horous_s_shuttle_A_center"
+        "horous_s_shuttle": "placeholder_location_horous_s_shuttle_A_center",
+        "admiral_farring_s_office": "placeholder_location_admiral_farring_s_office_A_center"
       },
       "entrances": {
         "research_outpost_hangar": {
@@ -1788,6 +2325,13 @@
         "horous_s_shuttle": {
           "from_mark": "placeholder_location_horous_s_shuttle_A_entry",
           "approach_mark": "placeholder_location_horous_s_shuttle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "admiral_farring_s_office": {
+          "from_mark": "placeholder_location_admiral_farring_s_office_A_entry",
+          "approach_mark": "placeholder_location_admiral_farring_s_office_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -1850,12 +2394,20 @@
     "controller": {
       "character_id": "placeholder_character_background_A",
       "spawn_marks": {
-        "omega_pi_station_traffic_control": "placeholder_location_omega_pi_station_traffic_control_A_center"
+        "omega_pi_station_traffic_control": "placeholder_location_omega_pi_station_traffic_control_A_center",
+        "starbase_eighty_six_hangar_control": "placeholder_location_starbase_eighty_six_hangar_control_A_center"
       },
       "entrances": {
         "omega_pi_station_traffic_control": {
           "from_mark": "placeholder_location_omega_pi_station_traffic_control_A_entry",
           "approach_mark": "placeholder_location_omega_pi_station_traffic_control_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_control": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_control_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5

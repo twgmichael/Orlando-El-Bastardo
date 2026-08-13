@@ -327,6 +327,53 @@ def _role_tag_for(speaker_name):
     return re.sub(r"[^a-z0-9]+", "_", speaker_name.strip().lower()).strip("_") or "actor"
 
 
+def _find_existing_job(harness_url, admin_token, title, scene_number=None):
+    """Best-effort lookup: is there already a pending or running job
+    with this exact *title* on the queue? Found live 2026-08-13: with
+    no dedup check, three repeated triage runs over the same still-
+    blocked scenes piled up dozens of duplicate jobs per blocker (one
+    role hit 34) -- each duplicate independently re-triggers
+    trigger_continuation() once resolved, which was stacking up
+    multiple concurrent real renders of the same scene. Checks
+    "pending" and "running" only (not "completed"/"failed") --
+    job_status has no OR filter server-side, so this is two GETs, not
+    one.
+
+    *scene_number*, when given, also requires the candidate's own
+    `--scene-number` script arg to match: a casting-director title is
+    keyed on speaker_name alone (`casting-director: waitress`), but the
+    same speaker can legitimately need a fresh job for a *different*
+    scene/location (register_placeholder_role() there just extends
+    that role's spawn_marks) -- title-only matching would wrongly
+    suppress that. set-designer jobs don't pass this: a location tag
+    resolves once, globally, regardless of which scene asked first.
+
+    Returns the first match's summary dict, or None (also on any
+    lookup failure -- this must never block enqueueing outright; a
+    failed dedup check just means an occasional duplicate, the
+    original failure mode, not a lost job).
+    """
+    for status in ("pending", "running"):
+        req = urllib.request.Request(
+            harness_url.rstrip("/") + f"/api/v1/jobs?job_status={status}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                jobs = json.loads(resp.read())
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+        for job in jobs:
+            if job.get("title") != title:
+                continue
+            if scene_number is not None:
+                args = (job.get("payload") or {}).get("script_args") or []
+                if str(scene_number) not in args:
+                    continue
+            return job
+    return None
+
+
 def enqueue_set_designer_job(location_name, script, episode, scene_number, int_ext=None):
     """Best-effort: POST a job to the harness worker queue
     (docs/planning/WORKER-AGENT-PLAN.md) for tools/set_designer.py to
@@ -343,8 +390,15 @@ def enqueue_set_designer_job(location_name, script, episode, scene_number, int_e
     if not harness_url or not admin_token:
         return None
 
+    title = f"set-designer: {location_name}"
+    existing = _find_existing_job(harness_url, admin_token, title)
+    if existing:
+        print(f"[producer]    set-designer job already {existing.get('status')} "
+              f"(id={existing.get('id')}) for location '{location_name}'; not re-enqueuing")
+        return existing
+
     payload = {
-        "title": f"set-designer: {location_name}",
+        "title": title,
         "description": (
             f"Resolve unmapped location '{location_name}' for "
             f"{episode} scene {scene_number} (stand-in match, else "
@@ -398,8 +452,16 @@ def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
     if not harness_url or not admin_token:
         return None
 
+    title = f"casting-director: {speaker_name}"
+    existing = _find_existing_job(harness_url, admin_token, title, scene_number=scene_number)
+    if existing:
+        print(f"[producer]    casting-director job already {existing.get('status')} "
+              f"(id={existing.get('id')}) for role '{speaker_name}' scene {scene_number}; "
+              f"not re-enqueuing")
+        return existing
+
     payload = {
-        "title": f"casting-director: {speaker_name}",
+        "title": title,
         "description": (
             f"Resolve unmapped speaking role '{speaker_name}' for "
             f"{episode} scene {scene_number} (principal or shared "

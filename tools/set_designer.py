@@ -121,9 +121,16 @@ def trigger_continuation(script: str, episode: str, scene_number: int, *, extra_
     "continues the production process" half of this role, per the
     PRODUCTION-DESIGNER-PLAN.md automatic-loop design. Does not re-run
     anything already delivered.
+
+    Always passes --no-render (fixed 2026-08-13, found via
+    tools/casting_director.py's own trigger_continuation() sharing
+    this exact bug): without it, producer.py's default is to actually
+    render (real headless-Blender video) as a side effect of a worker
+    job whose only purpose is to unblock a location. Rendering stays
+    an explicit, separate pass.
     """
     cmd = [VENV_PY, "tools/producer.py", "--script", script,
-           "--primitive-fallback", "--scenes", str(scene_number)]
+           "--primitive-fallback", "--scenes", str(scene_number), "--no-render"]
     if extra_args:
         cmd.extend(extra_args)
     result = subprocess.run(cmd)
