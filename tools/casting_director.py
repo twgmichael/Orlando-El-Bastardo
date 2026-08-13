@@ -124,9 +124,15 @@ def ensure_background_character(
     config_path: str = CONFIG_PATH,
     placeholder_assets_root: str = PLACEHOLDER_ASSETS_ROOT,
 ) -> None:
-    """Build the one shared background placeholder character, if it
-    doesn't already exist on disk/in the registry. Idempotent -- safe
-    to call once per background name resolved, only ever builds once.
+    """Build the one shared background placeholder MESH, if it doesn't
+    already exist on disk/in the registry. Idempotent -- safe to call
+    once per background name resolved, only ever builds once.
+
+    This registers BACKGROUND_CHARACTER_ID itself as the underlying
+    built asset -- but per-role casting now registers its OWN
+    character_id against this same file/node (see
+    ensure_background_role_asset()) rather than using
+    BACKGROUND_CHARACTER_ID directly as a role's character_id.
     """
     config = _load_json(config_path)
     if BACKGROUND_CHARACTER_ID in config.get("assets", {}):
@@ -140,6 +146,45 @@ def ensure_background_character(
     placeholder_blueprint.register_placeholder_asset(
         config_path, BACKGROUND_CHARACTER_ID, "character",
         f"placeholders/{BACKGROUND_CHARACTER_ID}.glb", source="casting_director")
+
+
+def _is_background_character_id(character_id: str) -> bool:
+    return character_id == BACKGROUND_CHARACTER_ID \
+        or character_id.startswith(BACKGROUND_CHARACTER_ID + "__")
+
+
+def ensure_background_role_asset(
+    role_tag: str,
+    config_path: str = CONFIG_PATH,
+    placeholder_assets_root: str = PLACEHOLDER_ASSETS_ROOT,
+) -> str:
+    """Register (idempotently) a background role's OWN character_id,
+    pointing at the one shared built mesh -- fixed 2026-08-13:
+    tools/resolve_intent.py's R3 rule rejects two actors in the same
+    scene resolving to the identical character_id (E_DUPLICATE_CHARACTER),
+    which every background role sharing the literal
+    BACKGROUND_CHARACTER_ID always eventually triggered once a scene
+    had two or more background speakers (e.g. 'first_guard' and
+    'second_guard' both present). The plan doc's own intent was never
+    to collapse every background role into one interchangeable
+    identity -- "sharing the asset is not the same as sharing a
+    position, and two background characters can appear in the same
+    scene at once" -- just to avoid rebuilding a mesh per name. So:
+    one build (ensure_background_character(), unchanged, zero extra
+    Blender cost), one registry entry per role_tag, same underlying
+    file+node.
+
+    Returns the per-role character_id to use for this role.
+    """
+    ensure_background_character(config_path, placeholder_assets_root)
+    per_role_id = f"{BACKGROUND_CHARACTER_ID}__{role_tag}"
+    config = _load_json(config_path)
+    if per_role_id not in config.get("assets", {}):
+        placeholder_blueprint.register_placeholder_asset(
+            config_path, per_role_id, "character",
+            f"placeholders/{BACKGROUND_CHARACTER_ID}.glb",
+            source="casting_director", node=BACKGROUND_CHARACTER_ID)
+    return per_role_id
 
 
 def resolve_role(
@@ -204,14 +249,13 @@ def resolve_role(
                         "error": f"role '{existing_role_tag}' has no character_id registered"}
             placeholder_blueprint.register_placeholder_role(
                 resolver_map_path, existing_role_tag, character_id, resolved_location_tag, location_set_id)
-            tier = "background" if character_id == BACKGROUND_CHARACTER_ID else "principal"
+            tier = "background" if _is_background_character_id(character_id) else "principal"
             return {"tier": tier, "role_tag": existing_role_tag, "error": None}
 
         tier = classify_cast(speaker_name)
         role_tag = _role_tag_for(speaker_name)
         if tier == "background":
-            ensure_background_character(config_path, placeholder_assets_root)
-            character_id = BACKGROUND_CHARACTER_ID
+            character_id = ensure_background_role_asset(role_tag, config_path, placeholder_assets_root)
         else:
             canonical_id = placeholder_blueprint.slugify_placeholder_id(speaker_name, "character")
             bp = placeholder_blueprint.default_placeholder_blueprint(

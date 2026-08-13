@@ -420,12 +420,24 @@ def _run_checks(spec, config, grammar, scenespec_schema, asset_root):
         aid_label = actor.get('actor_id', f'actor_{i}')
 
         bo = bindings.get('blender_object')
-        if bo is not None and bo not in lib_nodes:
+        # bo is target_bindings.blender_object == the actor's character_id
+        # (tools/resolve_intent.py sets it directly), only ever a literal
+        # GLB node name when the registry's own "node" field defaults to
+        # canonical_id (register_placeholder_asset()'s default). A role
+        # sharing another asset's build (docs/bug-fix/
+        # E-DUPLICATE-CHARACTER-CORRECTION.md) registers its own
+        # character_id with node pointing at the asset that's ACTUALLY in
+        # the GLB, so resolve through the registry before checking
+        # lib_nodes -- same fix as tools/export_blender.py's actor
+        # placement loop, which hits this identical mismatch at export
+        # time.
+        real_node = config.get('assets', {}).get(bo, {}).get('node', bo) if bo else bo
+        if bo is not None and real_node not in lib_nodes:
             errors.append({
                 "code": "binding_unresolved",
                 "message": (
                     f"actor '{aid_label}' blender_object '{bo}' "
-                    f"not found in GLB library nodes"
+                    f"(resolves to '{real_node}') not found in GLB library nodes"
                 ),
                 "path": f"/actors/{i}",
             })

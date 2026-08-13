@@ -646,13 +646,31 @@ def main():
         notes = []          # non-blocking ticket entries (vocab backlog)
         standins_used = []
 
-        # Location: direct match or blocked. Stand-in matching and
-        # primitive-placeholder building both moved to tools/set_designer.py
-        # (docs/planning/PRODUCTION-DESIGNER-PLAN.md, 2026-08-10 discovery)
-        # -- Producer's job is strictly to notice the gap and ticket it,
-        # never to resolve it itself, per PRODUCER-PLAN.md's own charter.
+        # Location: direct match, stand-in match, or blocked. Stand-in
+        # matching and primitive-placeholder building both moved to
+        # tools/set_designer.py (docs/planning/PRODUCTION-DESIGNER-PLAN.md,
+        # 2026-08-10 discovery) -- Producer's job is strictly to notice
+        # the gap and ticket it, never to resolve it itself, per
+        # PRODUCER-PLAN.md's own charter. A tier-1 stand-in match
+        # (set_designer.py's resolve_location()) deliberately never
+        # writes a resolver_map.json locations[] entry under the raw
+        # scripted tag -- only tier-2 (a fresh primitive build) does
+        # that. Without checking data/standins.json's location_standins
+        # here too (fixed 2026-08-13 -- casting_director.py's
+        # resolve_role() already had this same fix), any location that
+        # only ever resolves via a pre-existing stand-in match was
+        # permanently stuck: every pass re-blocked it, set_designer.py's
+        # tier-1 branch is a no-op against an already-satisfied mapping,
+        # so nothing on disk ever changed and the scene could never
+        # deliver. loc stays the raw tag for enqueue_casting_director_job
+        # below (it resolves the stand-in internally); only
+        # *location_tag*, used for everything else downstream, needs
+        # the resolved value.
         loc = scene["location_tag"]
-        if loc in rmap.get("locations", {}):
+        standin = vocab.get("location_standins", {}).get(loc)
+        if standin and standin in rmap.get("locations", {}):
+            location_tag = standin
+        elif loc in rmap.get("locations", {}):
             location_tag = loc
         else:
             location_tag = None
@@ -895,19 +913,48 @@ def main():
         if cut:
             print(f"[producer] episode cut → {cut}")
 
+    # Merge into any existing report rather than overwrite it outright
+    # (fixed 2026-08-13): a --scenes-scoped continuation run
+    # (trigger_continuation() in casting_director.py/set_designer.py,
+    # re-invoking producer.py for just the one now-unblocked scene)
+    # only ever populates `outcomes` for that single scene -- writing
+    # a report built from `outcomes` alone was clobbering the whole
+    # episode's report down to one scene every time a single blocker
+    # resolved. Found live: a full 81-scene run's report (66 delivered)
+    # got reduced to "delivered: 1" by the very next casting job that
+    # completed.
+    rpath = os.path.join(edir, "production_report.json")
+    scenes = {}
+    vocabulary = {}
+    existing_cut = None
+    if os.path.exists(rpath):
+        try:
+            with open(rpath) as f:
+                existing = json.load(f)
+            scenes = existing.get("scenes", {})
+            vocabulary = existing.get("vocabulary", {})
+            existing_cut = existing.get("episode_cut")
+        except (OSError, ValueError):
+            pass
+    scenes.update({sid: {"status": st, "render": r}
+                   for sid, (st, r) in outcomes.items()})
+    vocabulary.update(vocab_findings)
+
     n = {"DELIVERED": 0, "NEEDS_ASSETS": 0, "FAILED": 0, "ROUGH_DRAFT": 0}
-    for st, _ in outcomes.values():
-        n[st] += 1
+    for entry in scenes.values():
+        n[entry["status"]] += 1
     report = {
         "episode": episode, "script": args.script,
-        "scenes": {sid: {"status": st, "render": r}
-                   for sid, (st, r) in outcomes.items()},
-        "vocabulary": vocab_findings,
+        "scenes": scenes,
+        "vocabulary": vocabulary,
         "delivered": n["DELIVERED"], "blocked": n["NEEDS_ASSETS"],
         "failed": n["FAILED"], "rough_draft": n["ROUGH_DRAFT"],
-        "episode_cut": cut,
+        # A --scenes-scoped run never produces a real cut (it's always
+        # --no-render, per trigger_continuation()'s own fix) -- keep
+        # whatever cut an earlier full run already made instead of
+        # blanking it out.
+        "episode_cut": cut or existing_cut,
     }
-    rpath = os.path.join(edir, "production_report.json")
     with open(rpath, "w") as f:
         json.dump(report, f, indent=2)
         f.write("\n")

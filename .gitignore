@@ -17,3 +17,4 @@ docs/local/
 .secrets/
 .env.local
 **/.env.local
+**/.env.local.*

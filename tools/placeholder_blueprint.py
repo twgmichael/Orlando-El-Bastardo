@@ -195,20 +195,31 @@ def _write_json(path: str, data: dict) -> None:
 
 def register_placeholder_asset(
     config_path: str, canonical_id: str, kind: str, glb_relpath: str,
-    source: str = "producer --primitive-fallback",
+    source: str = "producer --primitive-fallback", node: str | None = None,
 ) -> None:
     """Add *canonical_id* to oeb.config.json's assets map, pointing at
-    the freshly-built placeholder .glb -- node name is the Blueprint's
-    own root object name, which tools/blueprint_interpreter.py's
+    the freshly-built placeholder .glb -- node name defaults to the
+    Blueprint's own root object name, which tools/blueprint_interpreter.py's
     parent_to_root() always names after canonical_id. *source* records
     which caller registered this (default matches the original,
     still-accurate caller; tools/set_designer.py passes its own).
+
+    *node* lets a caller register a NEW canonical_id against an
+    ALREADY-BUILT glb's existing root object instead of assuming a
+    fresh one-to-one build -- tools/casting_director.py's shared
+    background placeholder uses this (fixed 2026-08-13): every
+    background role needs its own registry-distinct character_id (so
+    tools/resolve_intent.py's E_DUPLICATE_CHARACTER check doesn't
+    reject two background roles in one scene), but they all still
+    share the one actually-built mesh/file -- no extra Blender build
+    per name, same crude-oblong look, just a different registry key
+    pointing at the same underlying object.
     """
     config = _load_json(config_path)
     assets = config.setdefault("assets", {})
     assets[canonical_id] = {
         "file": glb_relpath,
-        "node": canonical_id,
+        "node": node or canonical_id,
         "kind": kind,
         "placeholder": True,
         "source": source,

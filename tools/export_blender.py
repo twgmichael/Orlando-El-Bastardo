@@ -241,16 +241,56 @@ def _export(args):
     placement_obj_names = []
 
     # ── R6: actor placements ─────────────────────────────────────────────────
+    # An actual imported node shared by 2+ actors in this scene (e.g.
+    # Casting Director's shared background placeholder -- see docs/bug-fix/
+    # E-DUPLICATE-CHARACTER-CORRECTION.md) can't just be moved once per
+    # actor: bpy.data.objects.get(real_node) always returns the SAME
+    # object, so the second actor's placement silently clobbers the
+    # first's, with no error. Collection Instancing (the pattern already
+    # proven in tools/jb100_hyberspace_swarm_draft.py's fleet swarm) fixes
+    # this: the shared object's geometry moves into its own hidden
+    # collection once, and every actor that needs it gets its own
+    # lightweight Empty instance pointed at that collection. An actor
+    # whose node is unique to it (the common case) is untouched -- same
+    # direct move as before, zero behavior change for every scene that
+    # already delivers correctly today.
+    #
+    # Sharing must be detected on the REAL resolved node, not the raw
+    # blender_object/character_id: the E_DUPLICATE_CHARACTER registry
+    # fix gives every background role its OWN character_id precisely so
+    # they're registry-distinct, which means two actors can perfectly
+    # legitimately have different character_ids that both resolve
+    # (via assets[...]['node']) to the identical real imported object.
+    # Counting raw character_ids here would never see that collision.
+    node_counts = {}
+    for actor in spec['actors']:
+        bo_name = actor.get('target_bindings', {}).get('blender_object')
+        if bo_name:
+            real_node = assets.get(bo_name, {}).get('node', bo_name)
+            node_counts[real_node] = node_counts.get(real_node, 0) + 1
+    shared_nodes = {node for node, n in node_counts.items() if n > 1}
+    instance_collections = {}   # real_node -> its hidden source Collection
+
     for actor in spec['actors']:
         bo_name = actor.get('target_bindings', {}).get('blender_object')
         spawn_mark = actor.get('spawn_mark')
         if not bo_name:
             continue
-        obj = bpy.data.objects.get(bo_name)
+        # bo_name is target_bindings.blender_object == the actor's
+        # character_id (tools/resolve_intent.py sets it directly). That's
+        # only ever a real imported object name when the registry's own
+        # "node" field defaults to canonical_id (register_placeholder_asset()'s
+        # default) -- a role sharing another asset's build (the
+        # E_DUPLICATE_CHARACTER fix) registers its OWN character_id with
+        # node pointing at the asset that was ACTUALLY imported, so
+        # resolve through it here, same as the props loop below already
+        # does via assets[asset_id]['node'].
+        real_node = assets.get(bo_name, {}).get('node', bo_name)
+        obj = bpy.data.objects.get(real_node)
         if obj is None:
             _die(
-                f"actor object '{bo_name}' not found in scene after import "
-                f"(actor '{actor['actor_id']}')",
+                f"actor object '{real_node}' (blender_object='{bo_name}') "
+                f"not found in scene after import (actor '{actor['actor_id']}')",
                 2,
             )
         mark_obj = bpy.data.objects.get(spawn_mark)
@@ -260,8 +300,34 @@ def _export(args):
                 f"(actor '{actor['actor_id']}')",
                 2,
             )
-        obj.location = mark_obj.location.copy()
-        placement_obj_names.append(bo_name)
+
+        if real_node in shared_nodes:
+            src_col = instance_collections.get(real_node)
+            if src_col is None:
+                # First actor to need this shared asset: move its
+                # imported geometry into a dedicated hidden collection,
+                # once -- it becomes a template, never rendered itself.
+                src_col = bpy.data.collections.new(f"{real_node}_SRC")
+                for col in list(obj.users_collection):
+                    col.objects.unlink(obj)
+                src_col.objects.link(obj)
+                obj.hide_render = True
+                obj.hide_viewport = True
+                instance_collections[real_node] = src_col
+            inst_name = f"{real_node}__{actor['actor_id']}"
+            inst = bpy.data.objects.new(inst_name, None)
+            scene.collection.objects.link(inst)
+            inst.instance_type = 'COLLECTION'
+            inst.instance_collection = src_col
+            inst.location = mark_obj.location.copy()
+            # Downstream cue application (move/animation/fx, R7/R8/R13)
+            # looks actors up by actor_map[...]['blender_object'] -- point
+            # it at this actor's own instance, not the shared template.
+            actor_map[actor['actor_id']]['blender_object'] = inst_name
+            placement_obj_names.append(inst_name)
+        else:
+            obj.location = mark_obj.location.copy()
+            placement_obj_names.append(bo_name)
 
     # ── R6: prop placements ──────────────────────────────────────────────────
     for prop in spec['set'].get('props', []):

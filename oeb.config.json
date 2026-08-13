@@ -706,6 +706,41 @@
       "kind": "location",
       "placeholder": true,
       "source": "set_designer"
+    },
+    "placeholder_character_background_A__computer": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__male_technician": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__first_guard": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__second_guard": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__controller": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
     }
   }
 }
