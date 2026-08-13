@@ -327,105 +327,6 @@ def _role_tag_for(speaker_name):
     return re.sub(r"[^a-z0-9]+", "_", speaker_name.strip().lower()).strip("_") or "actor"
 
 
-def primitive_fallback(blocking, rmap, cast, location_tag):
-    """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7 /
-    docs/planning/PRODUCTION-DESIGNER-PLAN.md's 2026-08-10 discovery:
-    for each missing role this scene's vocabulary sweep found, register
-    a crude primitive placeholder -- deterministically and offline (no
-    live harness needed, unlike --studio-chat-fallback). Mutates the
-    real oeb.config.json / data/resolver_map.json / data/standins.json
-    on disk (tagged "placeholder": true -- the same registry every
-    other tool already reads, per section 7's "no separate placeholder-
-    specific store" decision, not a parallel one) AND the in-memory
-    *rmap*/*cast* dicts this same run already holds, so the scene can
-    immediately continue through the deterministic pipeline using what
-    was just registered, without re-reading files.
-
-    Location handling moved to tools/set_designer.py (2026-08-10) --
-    this function only ever anchors role/role_location marks to a
-    location that's *already* resolved (real, or previously set-
-    designed); it never builds a location placeholder itself. A scene
-    whose location is still blocked leaves any role blockers in the
-    same batch blocked too (no location_set_id to anchor marks
-    against) -- they resolve on the re-run set_designer.py triggers
-    once the location exists.
-
-    Returns `(still_blocking, resolved_location_tag)` -- entries still
-    genuinely unresolved (a role blocker with no location, real or
-    already set-designed, to anchor marks against), and location_tag
-    unchanged (this function no longer changes it). A failure here is
-    never fatal to the run -- an unresolved entry just leaves the scene
-    NEEDS_ASSETS, same as without this flag.
-    """
-    still_blocking = []
-    resolved_location_tag = location_tag
-
-    # Location blockers pass straight through unresolved -- this
-    # function no longer handles them at all; tools/set_designer.py
-    # does, via the NEEDED ticket Producer already wrote.
-    still_blocking.extend(item for item in blocking if item["kind"] == "location")
-
-    location_set_id = rmap.get("locations", {}).get(location_tag, {}).get("set_id") \
-        if location_tag is not None else None
-
-    for item in blocking:
-        if item["kind"] != "role":
-            continue
-        if location_set_id is None:
-            print(f"[producer]    primitive-fallback: no location to anchor role "
-                  f"'{item['name']}' marks against; still blocked")
-            still_blocking.append(item)
-            continue
-        try:
-            role_tag = _role_tag_for(item["name"])
-            canonical_id = placeholder_blueprint.slugify_placeholder_id(item["name"], "character")
-            bp = placeholder_blueprint.default_placeholder_blueprint(canonical_id, "character", item["name"])
-            placeholder_blueprint.build_placeholder_glb(
-                bp, f"{PLACEHOLDER_ASSETS_ROOT}/{canonical_id}.glb",
-                f"out/blueprint_builds/{canonical_id}.blend",
-                f"out/blueprint_builds/{canonical_id}.manifest.json")
-            placeholder_blueprint.register_placeholder_asset(
-                CONFIG_PATH, canonical_id, "character", f"placeholders/{canonical_id}.glb")
-            placeholder_blueprint.register_placeholder_role(
-                RESOLVER_MAP_PATH, role_tag, canonical_id, resolved_location_tag, location_set_id)
-            placeholder_blueprint.register_placeholder_cast(STANDINS_PATH, item["name"], role_tag)
-            rmap["roles"][role_tag] = json.load(open(RESOLVER_MAP_PATH))["roles"][role_tag]
-            cast[item["name"]] = role_tag
-            print(f"[producer]    primitive-fallback: registered placeholder role "
-                  f"'{item['name']}' -> {canonical_id}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[producer]    primitive-fallback: FAILED building role "
-                  f"'{item['name']}' ({exc}); still blocked")
-            still_blocking.append(item)
-
-    for item in blocking:
-        if item["kind"] != "role_location":
-            continue
-        if location_set_id is None:
-            print(f"[producer]    primitive-fallback: no location to anchor "
-                  f"role '{item['name']}' marks against; still blocked")
-            still_blocking.append(item)
-            continue
-        try:
-            # Already cast and already has a built asset -- just extend the
-            # existing role with a spawn_mark for this new location, no
-            # rebuild/re-registration needed.
-            placeholder_blueprint.register_placeholder_role(
-                RESOLVER_MAP_PATH, item["role_tag"], item["character_id"],
-                resolved_location_tag, location_set_id)
-            rmap["roles"][item["role_tag"]] = json.load(
-                open(RESOLVER_MAP_PATH))["roles"][item["role_tag"]]
-            print(f"[producer]    primitive-fallback: extended placeholder "
-                  f"role '{item['role_tag']}' to location "
-                  f"'{resolved_location_tag}'")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[producer]    primitive-fallback: FAILED extending role "
-                  f"'{item['role_tag']}' ({exc}); still blocked")
-            still_blocking.append(item)
-
-    return still_blocking, resolved_location_tag
-
-
 def enqueue_set_designer_job(location_name, script, episode, scene_number, int_ext=None):
     """Best-effort: POST a job to the harness worker queue
     (docs/planning/WORKER-AGENT-PLAN.md) for tools/set_designer.py to
@@ -473,6 +374,64 @@ def enqueue_set_designer_job(location_name, script, episode, scene_number, int_e
             return json.loads(resp.read())
     except (urllib.error.URLError, OSError, ValueError) as exc:
         print(f"[producer]    set-designer job enqueue FAILED ({exc}); "
+              f"ticket written, no auto-follow-up")
+        return None
+
+
+def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
+                                 scene_number, depends_on_job_id=None):
+    """Best-effort: POST a job to the harness worker queue for
+    tools/casting_director.py to pick up, same convention as
+    enqueue_set_designer_job() -- dispatched through the *existing*
+    BlenderCLIAdapter, no new adapter, silently skipped if the harness
+    isn't configured (ticket is always written regardless).
+
+    *depends_on_job_id*, when given (a location job just enqueued for
+    this same scene), is set on the created job so the harness never
+    offers it to a worker until that location job's status is
+    "completed" -- docs/planning/CASTING-DIRECTOR-PLAN.md Open
+    Question #1: casting can't anchor a spawn_mark until the location
+    this scene names actually exists.
+    """
+    harness_url = os.environ.get(HARNESS_URL_ENV)
+    admin_token = os.environ.get(HARNESS_ADMIN_TOKEN_ENV)
+    if not harness_url or not admin_token:
+        return None
+
+    payload = {
+        "title": f"casting-director: {speaker_name}",
+        "description": (
+            f"Resolve unmapped speaking role '{speaker_name}' for "
+            f"{episode} scene {scene_number} (principal or shared "
+            f"background placeholder), then continue production."
+        ),
+        "required_capabilities": ["blender.command_line"],
+        "payload": {
+            "script_file": "tools/casting_director.py",
+            "cwd": "{workspace_root}",
+            "script_args": [
+                "--speaker-name", speaker_name,
+                "--location-tag", location_tag,
+                "--script", script,
+                "--episode", episode,
+                "--scene-number", str(scene_number),
+            ],
+        },
+    }
+    if depends_on_job_id:
+        payload["depends_on_job_id"] = depends_on_job_id
+    req = urllib.request.Request(
+        harness_url.rstrip("/") + "/api/v1/jobs",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {admin_token}",
+                 "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        print(f"[producer]    casting-director job enqueue FAILED ({exc}); "
               f"ticket written, no auto-follow-up")
         return None
 
@@ -733,28 +692,37 @@ def main():
         else:
             tickets.clear_ticket(episode, f"{scene_id}_vocab")
 
-        if blocking and args.primitive_fallback:
-            resolved_count = len(blocking)
-            blocking, location_tag = primitive_fallback(blocking, rmap, cast, location_tag)
-            resolved_count -= len(blocking)
-            if resolved_count:
-                print(f"[producer]    primitive-fallback: resolved "
-                      f"{resolved_count}/{resolved_count + len(blocking)} blocker(s)")
-
         if blocking:
             tpath = tickets.write_ticket(episode, scene_id, blocking,
                                          script_ref=args.script)
             tickets.update_report(episode, scene_id, "NEEDS_ASSETS",
                                   ticket=os.path.basename(tpath))
+            # Location dispatch first so a same-scene role blocker can
+            # depend on it (docs/planning/CASTING-DIRECTOR-PLAN.md Open
+            # Question #1) -- casting can't anchor a spawn_mark until
+            # the location this scene names actually exists.
+            location_job_id = None
             for item in blocking:
                 if item["kind"] == "location":
                     job = enqueue_set_designer_job(
                         item["name"], args.script, episode, number,
                         int_ext=scene.get("int_ext"))
                     if job:
+                        location_job_id = job.get("id")
                         print(f"[producer]    set-designer job enqueued "
                               f"(id={job.get('id')}) for location "
                               f"'{item['name']}'")
+            for item in blocking:
+                if item["kind"] in ("role", "role_location"):
+                    job = enqueue_casting_director_job(
+                        item["name"], loc, args.script, episode, number,
+                        depends_on_job_id=location_job_id)
+                    if job:
+                        dep_note = f" (depends on location job {location_job_id})" \
+                            if location_job_id else ""
+                        print(f"[producer]    casting-director job enqueued "
+                              f"(id={job.get('id')}) for role "
+                              f"'{item['name']}'{dep_note}")
             outcomes[scene_id] = ("NEEDS_ASSETS", None)
             print(f"[producer]    BLOCKED — {len(blocking)} missing; "
                   f"ticket written; continuing")

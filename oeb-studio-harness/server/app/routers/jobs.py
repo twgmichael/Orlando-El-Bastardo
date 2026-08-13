@@ -305,6 +305,7 @@ async def create_job(body: JobCreateRequest, db: AsyncSession = Depends(get_db))
         priority=body.priority,
         payload=body.payload,
         is_idempotent=body.is_idempotent,
+        depends_on_job_id=body.depends_on_job_id,
     )
     db.add(job)
     db.add(AuditEvent(
@@ -404,12 +405,27 @@ async def list_eligible_jobs(
     )
     pending = jobs_result.scalars().all()
 
+    # docs/planning/CASTING-DIRECTOR-PLAN.md Open Question #1: a job
+    # with depends_on_job_id set is never offered to a worker until the
+    # referenced job's status is "completed" -- same "never offer an
+    # unsafe/premature option" discipline as the collision-avoidance
+    # mark filter (tools/motion_library.py's clear_marks_for_mover()).
+    depends_on_ids = {j.depends_on_job_id for j in pending if j.depends_on_job_id}
+    dependency_status: dict = {}
+    if depends_on_ids:
+        dep_result = await db.execute(
+            select(Job.id, Job.status).where(Job.id.in_(depends_on_ids))
+        )
+        dependency_status = dict(dep_result.all())
+
     def is_eligible(j: Job) -> bool:
         if not all(cap in worker_caps for cap in (j.required_capabilities or [])):
             return False
         # wait_for_preferred_worker: only the preferred worker may claim it
         if j.policy == "wait_for_preferred_worker" and j.preferred_worker_id:
             return j.preferred_worker_id == token.worker_id
+        if j.depends_on_job_id and dependency_status.get(j.depends_on_job_id) != "completed":
+            return False
         return True
 
     eligible = [j for j in pending if is_eligible(j)]
@@ -723,8 +739,19 @@ async def fail_job(
 
     # Return ordinary idempotent jobs to the queue. Review renders have a strict
     # upload contract, so artifact failures must remain visible as failed jobs.
+    # A job that fails the same way every attempt (e.g. casting_director.py's
+    # 2026-08-12 stand-in-location bug) would otherwise requeue forever --
+    # no backoff, no cap -- since is_eligible(j) offers a pending job back
+    # to a worker again within one poll interval. Cap idempotent requeues at
+    # settings.job_max_idempotent_attempts; beyond that it's a genuine
+    # terminal failure, same as a non-idempotent job, so the depends_on_job_id
+    # cascade below can fire and the scene stays a visible NEEDS_ASSETS
+    # ticket instead of silently burning worker time forever.
+    settings = get_settings()
     is_asset_review = (job.payload or {}).get("job_type") == "asset.review_render"
-    if job.is_idempotent and not is_asset_review:
+    attempts_exhausted = bool(attempt) and attempt.attempt_number >= settings.job_max_idempotent_attempts
+    requeued = job.is_idempotent and not is_asset_review and not attempts_exhausted
+    if requeued:
         job.status = "pending"
         job.assigned_worker_id = None
     else:
@@ -737,8 +764,33 @@ async def fail_job(
         actor_id=token.worker_id,
         resource_type="job",
         resource_id=str(job_id),
-        details={"reason": body.reason, "requeued": job.is_idempotent and not is_asset_review},
+        details={
+            "reason": body.reason,
+            "requeued": requeued,
+            "attempt_number": attempt.attempt_number if attempt else None,
+            "attempts_exhausted": attempts_exhausted,
+        },
     ))
+
+    # docs/planning/CASTING-DIRECTOR-PLAN.md Open Question #1: cascades.
+    # A dependent job (depends_on_job_id pointing here) only ever makes
+    # sense once this job genuinely, terminally failed -- not on an
+    # idempotent requeue above, which is still expected to complete.
+    if job.status == "failed":
+        dependents_result = await db.execute(
+            select(Job).where(Job.depends_on_job_id == job.id, Job.status == "pending")
+        )
+        for dependent in dependents_result.scalars().all():
+            dependent.status = "failed"
+            dependent.updated_at = now
+            db.add(AuditEvent(
+                event_type="job.failed_by_dependency",
+                actor_type="system",
+                actor_id="harness",
+                resource_type="job",
+                resource_id=str(dependent.id),
+                details={"depends_on_job_id": str(job.id), "upstream_reason": body.reason},
+            ))
 
     await db.commit()
     await db.refresh(job)

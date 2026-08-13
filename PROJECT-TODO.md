@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-08-10T19:35:00-04:00
+updated: 2026-08-10T21:10:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -711,8 +711,29 @@ Rough tier (primitive/stand-in, no human step) BUILT and live-verified
   pipeline-verifier gate (steps 4-5 under PRODUCTION-DESIGNER-PLAN.md's
   "Build order"); `data/camera_grammar.json` registration for
   kitbash-authored cameras (known limitation, not silently skipped).
-- [ ] Open: where casting (role/role_location blockers) lands relative
-  to Producer/Set Designer — not decided.
+- [x] Open question ANSWERED 2026-08-10: casting gets its own role,
+  **Casting Director** — BUILT 2026-08-10, uncommitted, live-tested but
+  not yet reviewed/merged (see "Build status" in
+  `docs/planning/CASTING-DIRECTOR-PLAN.md`). Triggered by the full
+  81-scene pilot triage (below): 159 of 216 blocking findings (74%)
+  were unmapped speaking roles, by far the largest blocker. Real
+  ordering bug found, not just a missing role: role placeholder-casting
+  needs a resolved location to anchor marks against, so a scene missing
+  *both* can't be role-cast until its location resolves first — this is
+  why role-blocking so heavily outnumbers location-blocking. Casting
+  doesn't fit Set Designer's stand-in/primitive shape (character
+  identity doesn't share the way a set does); built instead around a
+  **principal vs. background** split matching the real industry's
+  principal-cast/day-player distinction, classified deterministically
+  by a pure per-name keyword check (`FUNCTIONAL_LABEL_KEYWORDS` in
+  `tools/casting_director.py`) — not the whole-episode recurrence tally
+  originally sketched, superseded once recurrence-based auto-promotion
+  was decided against. `depends_on_job_id` job-dependency infrastructure
+  (migration + eligibility gating + fail-cascade) built in
+  `oeb-studio-harness/server` to solve the ordering bug; `producer.py`
+  now enqueues casting jobs via `enqueue_casting_director_job()`. Not
+  yet committed; no full-episode re-run yet to confirm the 159 role
+  blockers actually clear.
 
 **Director** — plan: `docs/planning/DIRECTOR-ROLE-PLAN.md`. Camera
 framing/subject + actor blocking BUILT and live-verified 2026-08-10.

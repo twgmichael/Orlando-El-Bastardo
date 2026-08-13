@@ -26,6 +26,15 @@ class Job(Base):
     sibling_job_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
     )
+    # docs/planning/CASTING-DIRECTOR-PLAN.md Open Question #1: a
+    # directional, eligibility-gating dependency -- unlike
+    # sibling_job_id (bidirectional, purely informational), a job with
+    # this set is excluded from list_eligible_jobs() until the
+    # referenced job's status is "completed", and cascade-fails if the
+    # referenced job fails. See app/routers/jobs.py.
+    depends_on_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True
     )

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     worker_heartbeat_seconds: int = Field(default=20, alias="WORKER_HEARTBEAT_SECONDS")
     worker_timeout_seconds: int = Field(default=75, alias="WORKER_TIMEOUT_SECONDS")
     job_lease_seconds: int = Field(default=120, alias="JOB_LEASE_SECONDS")
+    job_max_idempotent_attempts: int = Field(default=3, alias="JOB_MAX_IDEMPOTENT_ATTEMPTS")
     review_render_retention_days: int = Field(default=7, alias="REVIEW_RENDER_RETENTION_DAYS")
     review_render_prune_interval_seconds: int = Field(
         default=86400,

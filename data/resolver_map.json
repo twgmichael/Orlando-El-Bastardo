@@ -175,6 +175,834 @@
       "default_props": [],
       "placeholder": true,
       "source": "set_designer"
+    },
+    "testforge_nebula_outpost": {
+      "set_id": "placeholder_location_testforge_nebula_outpost_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_testforge_nebula_outpost_A_entry",
+        "placeholder_location_testforge_nebula_outpost_A_center",
+        "placeholder_location_testforge_nebula_outpost_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "dep_test_location_alpha": {
+      "set_id": "placeholder_location_dep_test_location_alpha_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_dep_test_location_alpha_A_entry",
+        "placeholder_location_dep_test_location_alpha_A_center",
+        "placeholder_location_dep_test_location_alpha_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "dep_test_location_beta": {
+      "set_id": "placeholder_location_dep_test_location_beta_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_dep_test_location_beta_A_entry",
+        "placeholder_location_dep_test_location_beta_A_center",
+        "placeholder_location_dep_test_location_beta_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "seti_oragami_seven_space": {
+      "set_id": "placeholder_location_seti_oragami_seven_space_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_seti_oragami_seven_space_A_entry",
+        "placeholder_location_seti_oragami_seven_space_A_center",
+        "placeholder_location_seti_oragami_seven_space_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "starbase_eighty_six": {
+      "set_id": "placeholder_location_starbase_eighty_six_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_A_entry",
+        "placeholder_location_starbase_eighty_six_A_center",
+        "placeholder_location_starbase_eighty_six_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_hangar_93": {
+      "set_id": "placeholder_location_starbase_eighty_six_hangar_93_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_hangar_93_A_entry",
+        "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+        "placeholder_location_starbase_eighty_six_hangar_93_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_commercial_promenade": {
+      "set_id": "placeholder_location_starbase_eighty_six_commercial_promenade_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_commercial_promenade_A_entry",
+        "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+        "placeholder_location_starbase_eighty_six_commercial_promenade_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_corridor": {
+      "set_id": "placeholder_location_starbase_eighty_six_corridor_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_corridor_A_entry",
+        "placeholder_location_starbase_eighty_six_corridor_A_center",
+        "placeholder_location_starbase_eighty_six_corridor_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_service_passage": {
+      "set_id": "placeholder_location_starbase_eighty_six_service_passage_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_service_passage_A_entry",
+        "placeholder_location_starbase_eighty_six_service_passage_A_center",
+        "placeholder_location_starbase_eighty_six_service_passage_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_hangar_control": {
+      "set_id": "placeholder_location_starbase_eighty_six_hangar_control_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_hangar_control_A_entry",
+        "placeholder_location_starbase_eighty_six_hangar_control_A_center",
+        "placeholder_location_starbase_eighty_six_hangar_control_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_eighty_six_chase": {
+      "set_id": "placeholder_location_starbase_eighty_six_chase_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_eighty_six_chase_A_entry",
+        "placeholder_location_starbase_eighty_six_chase_A_center",
+        "placeholder_location_starbase_eighty_six_chase_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "journeyblaster_cockpit_hyperspace": {
+      "set_id": "placeholder_location_journeyblaster_cockpit_hyperspace_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_journeyblaster_cockpit_hyperspace_A_entry",
+        "placeholder_location_journeyblaster_cockpit_hyperspace_A_center",
+        "placeholder_location_journeyblaster_cockpit_hyperspace_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_mckinley_space": {
+      "set_id": "placeholder_location_starbase_mckinley_space_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_mckinley_space_A_entry",
+        "placeholder_location_starbase_mckinley_space_A_center",
+        "placeholder_location_starbase_mckinley_space_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "starbase_mckinley_burger_counter": {
+      "set_id": "placeholder_location_starbase_mckinley_burger_counter_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_mckinley_burger_counter_A_entry",
+        "placeholder_location_starbase_mckinley_burger_counter_A_center",
+        "placeholder_location_starbase_mckinley_burger_counter_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_mckinley_fleet_intelligence_reception": {
+      "set_id": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_entry",
+        "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_center",
+        "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "admiral_farring_s_office": {
+      "set_id": "placeholder_location_admiral_farring_s_office_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_admiral_farring_s_office_A_entry",
+        "placeholder_location_admiral_farring_s_office_A_center",
+        "placeholder_location_admiral_farring_s_office_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "starbase_mckinley_corridor": {
+      "set_id": "placeholder_location_starbase_mckinley_corridor_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_starbase_mckinley_corridor_A_entry",
+        "placeholder_location_starbase_mckinley_corridor_A_center",
+        "placeholder_location_starbase_mckinley_corridor_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "classified_asteroid_system": {
+      "set_id": "placeholder_location_classified_asteroid_system_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_classified_asteroid_system_A_entry",
+        "placeholder_location_classified_asteroid_system_A_center",
+        "placeholder_location_classified_asteroid_system_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "research_outpost_hangar": {
+      "set_id": "placeholder_location_research_outpost_hangar_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_hangar_A_entry",
+        "placeholder_location_research_outpost_hangar_A_center",
+        "placeholder_location_research_outpost_hangar_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost_security_checkpoint": {
+      "set_id": "placeholder_location_research_outpost_security_checkpoint_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_security_checkpoint_A_entry",
+        "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "placeholder_location_research_outpost_security_checkpoint_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost_testing_facility": {
+      "set_id": "placeholder_location_research_outpost_testing_facility_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_testing_facility_A_entry",
+        "placeholder_location_research_outpost_testing_facility_A_center",
+        "placeholder_location_research_outpost_testing_facility_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost_corridor": {
+      "set_id": "placeholder_location_research_outpost_corridor_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_corridor_A_entry",
+        "placeholder_location_research_outpost_corridor_A_center",
+        "placeholder_location_research_outpost_corridor_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost": {
+      "set_id": "placeholder_location_research_outpost_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_A_entry",
+        "placeholder_location_research_outpost_A_center",
+        "placeholder_location_research_outpost_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_colgen_colony": {
+      "set_id": "placeholder_location_wipomonte_colgen_colony_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_colgen_colony_A_entry",
+        "placeholder_location_wipomonte_colgen_colony_A_center",
+        "placeholder_location_wipomonte_colgen_colony_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "colgen_defense_bunker": {
+      "set_id": "placeholder_location_colgen_defense_bunker_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_colgen_defense_bunker_A_entry",
+        "placeholder_location_colgen_defense_bunker_A_center",
+        "placeholder_location_colgen_defense_bunker_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_orbit": {
+      "set_id": "placeholder_location_wipomonte_orbit_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_orbit_A_entry",
+        "placeholder_location_wipomonte_orbit_A_center",
+        "placeholder_location_wipomonte_orbit_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "wipomonte_upper_atmosphere": {
+      "set_id": "placeholder_location_wipomonte_upper_atmosphere_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_upper_atmosphere_A_entry",
+        "placeholder_location_wipomonte_upper_atmosphere_A_center",
+        "placeholder_location_wipomonte_upper_atmosphere_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_sky": {
+      "set_id": "placeholder_location_wipomonte_sky_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_sky_A_entry",
+        "placeholder_location_wipomonte_sky_A_center",
+        "placeholder_location_wipomonte_sky_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_low_altitude": {
+      "set_id": "placeholder_location_wipomonte_low_altitude_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_low_altitude_A_entry",
+        "placeholder_location_wipomonte_low_altitude_A_center",
+        "placeholder_location_wipomonte_low_altitude_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "ventradi_pirate_flyer": {
+      "set_id": "placeholder_location_ventradi_pirate_flyer_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_ventradi_pirate_flyer_A_entry",
+        "placeholder_location_ventradi_pirate_flyer_A_center",
+        "placeholder_location_ventradi_pirate_flyer_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_aerial_battle": {
+      "set_id": "placeholder_location_wipomonte_aerial_battle_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_aerial_battle_A_entry",
+        "placeholder_location_wipomonte_aerial_battle_A_center",
+        "placeholder_location_wipomonte_aerial_battle_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_battle": {
+      "set_id": "placeholder_location_wipomonte_battle_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_battle_A_entry",
+        "placeholder_location_wipomonte_battle_A_center",
+        "placeholder_location_wipomonte_battle_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "wipomonte_orbital_battle": {
+      "set_id": "placeholder_location_wipomonte_orbital_battle_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_wipomonte_orbital_battle_A_entry",
+        "placeholder_location_wipomonte_orbital_battle_A_center",
+        "placeholder_location_wipomonte_orbital_battle_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "colgen_administration_building_interrogation_room": {
+      "set_id": "placeholder_location_colgen_administration_building_interrogation_room_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
+        "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+        "placeholder_location_colgen_administration_building_interrogation_room_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "colgen_colony": {
+      "set_id": "placeholder_location_colgen_colony_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_colgen_colony_A_entry",
+        "placeholder_location_colgen_colony_A_center",
+        "placeholder_location_colgen_colony_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "union_cruiser_bridge": {
+      "set_id": "placeholder_location_union_cruiser_bridge_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_union_cruiser_bridge_A_entry",
+        "placeholder_location_union_cruiser_bridge_A_center",
+        "placeholder_location_union_cruiser_bridge_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "colgen_colony_between_buildings": {
+      "set_id": "placeholder_location_colgen_colony_between_buildings_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_colgen_colony_between_buildings_A_entry",
+        "placeholder_location_colgen_colony_between_buildings_A_center",
+        "placeholder_location_colgen_colony_between_buildings_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "colgen_colony_journeyblaster": {
+      "set_id": "placeholder_location_colgen_colony_journeyblaster_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_colgen_colony_journeyblaster_A_entry",
+        "placeholder_location_colgen_colony_journeyblaster_A_center",
+        "placeholder_location_colgen_colony_journeyblaster_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost_asteroid": {
+      "set_id": "placeholder_location_research_outpost_asteroid_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_asteroid_A_entry",
+        "placeholder_location_research_outpost_asteroid_A_center",
+        "placeholder_location_research_outpost_asteroid_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "vast"
+    },
+    "research_outpost_maintenance_closet": {
+      "set_id": "placeholder_location_research_outpost_maintenance_closet_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_maintenance_closet_A_entry",
+        "placeholder_location_research_outpost_maintenance_closet_A_center",
+        "placeholder_location_research_outpost_maintenance_closet_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "ventradi_controlled_lab": {
+      "set_id": "placeholder_location_ventradi_controlled_lab_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_ventradi_controlled_lab_A_entry",
+        "placeholder_location_ventradi_controlled_lab_A_center",
+        "placeholder_location_ventradi_controlled_lab_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "horous_s_shuttle": {
+      "set_id": "placeholder_location_horous_s_shuttle_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_horous_s_shuttle_A_entry",
+        "placeholder_location_horous_s_shuttle_A_center",
+        "placeholder_location_horous_s_shuttle_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "research_outpost_debris_field": {
+      "set_id": "placeholder_location_research_outpost_debris_field_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_research_outpost_debris_field_A_entry",
+        "placeholder_location_research_outpost_debris_field_A_center",
+        "placeholder_location_research_outpost_debris_field_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "journeyblaster_cockpit_unmanned": {
+      "set_id": "placeholder_location_journeyblaster_cockpit_unmanned_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_journeyblaster_cockpit_unmanned_A_entry",
+        "placeholder_location_journeyblaster_cockpit_unmanned_A_center",
+        "placeholder_location_journeyblaster_cockpit_unmanned_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "omega_pi_station_traffic_control": {
+      "set_id": "placeholder_location_omega_pi_station_traffic_control_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_omega_pi_station_traffic_control_A_entry",
+        "placeholder_location_omega_pi_station_traffic_control_A_center",
+        "placeholder_location_omega_pi_station_traffic_control_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
+    },
+    "omega_pi_station": {
+      "set_id": "placeholder_location_omega_pi_station_A",
+      "variants": {
+        "morning": "placeholder",
+        "day": "placeholder",
+        "evening": "placeholder",
+        "night": "placeholder"
+      },
+      "marks": [
+        "placeholder_location_omega_pi_station_A_entry",
+        "placeholder_location_omega_pi_station_A_center",
+        "placeholder_location_omega_pi_station_A_exit"
+      ],
+      "default_props": [],
+      "placeholder": true,
+      "source": "set_designer",
+      "shot_scale": "intimate"
     }
   },
   "roles": {
@@ -210,12 +1038,28 @@
     "ship_ai": {
       "character_id": "placeholder_character_ship_ai_A",
       "spawn_marks": {
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "starbase_eighty_six_corridor": "placeholder_location_starbase_eighty_six_corridor_A_center",
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_corridor": {
+          "from_mark": "placeholder_location_starbase_eighty_six_corridor_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_93": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -227,12 +1071,28 @@
     "casey": {
       "character_id": "placeholder_character_casey_A",
       "spawn_marks": {
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "starbase_eighty_six_commercial_promenade": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_commercial_promenade": {
+          "from_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_service_passage": {
+          "from_mark": "placeholder_location_starbase_eighty_six_service_passage_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_service_passage_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -245,7 +1105,11 @@
       "character_id": "placeholder_character_orlando_A",
       "spawn_marks": {
         "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
-        "deep_space": "placeholder_location_deep_space_A_center"
+        "deep_space": "placeholder_location_deep_space_A_center",
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+        "starbase_eighty_six_commercial_promenade": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+        "starbase_eighty_six_corridor": "placeholder_location_starbase_eighty_six_corridor_A_center",
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center"
       },
       "entrances": {
         "journeyblaster_cockpit": {
@@ -261,6 +1125,34 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_93": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_commercial_promenade": {
+          "from_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_corridor": {
+          "from_mark": "placeholder_location_starbase_eighty_six_corridor_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_service_passage": {
+          "from_mark": "placeholder_location_starbase_eighty_six_service_passage_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
       "placeholder": true,
@@ -271,7 +1163,9 @@
       "spawn_marks": {
         "asteroid_field": "placeholder_location_asteroid_field_A_center",
         "deep_space": "placeholder_location_deep_space_A_center",
-        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "starbase_eighty_six": "placeholder_location_starbase_eighty_six_A_center",
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center"
       },
       "entrances": {
         "asteroid_field": {
@@ -294,10 +1188,24 @@
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
+        },
+        "starbase_eighty_six": {
+          "from_mark": "placeholder_location_starbase_eighty_six_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_eighty_six_hangar_93": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
         }
       },
-      "placeholder": false,
-      "source": "tier-1 real-asset stand-in: JB100 (prop_jb100_A) for the fictional JourneyBlaster 5000 -- marks/entrances are still tier-2 placeholder-location geometry, unrelated to the ship mesh itself"
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
     },
     "nothing": {
       "character_id": "placeholder_vehicle_nothing_A",
@@ -401,6 +1309,570 @@
         "journeyblaster_cockpit": {
           "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
           "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "zandra": {
+      "character_id": "placeholder_character_zandra_A",
+      "spawn_marks": {
+        "testforge_nebula_outpost": "placeholder_location_testforge_nebula_outpost_A_center"
+      },
+      "entrances": {
+        "testforge_nebula_outpost": {
+          "from_mark": "placeholder_location_testforge_nebula_outpost_A_entry",
+          "approach_mark": "placeholder_location_testforge_nebula_outpost_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "testperson": {
+      "character_id": "placeholder_character_testperson_A",
+      "spawn_marks": {
+        "dep_test_location_alpha": "placeholder_location_dep_test_location_alpha_A_center"
+      },
+      "entrances": {
+        "dep_test_location_alpha": {
+          "from_mark": "placeholder_location_dep_test_location_alpha_A_entry",
+          "approach_mark": "placeholder_location_dep_test_location_alpha_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "testpersonbeta": {
+      "character_id": "placeholder_character_testpersonbeta_A",
+      "spawn_marks": {
+        "dep_test_location_beta": "placeholder_location_dep_test_location_beta_A_center"
+      },
+      "entrances": {
+        "dep_test_location_beta": {
+          "from_mark": "placeholder_location_dep_test_location_beta_A_entry",
+          "approach_mark": "placeholder_location_dep_test_location_beta_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "nobody": {
+      "character_id": "placeholder_vehicle_nobody_A",
+      "spawn_marks": {
+        "seti_oragami_seven_space": "placeholder_location_seti_oragami_seven_space_A_center"
+      },
+      "entrances": {
+        "seti_oragami_seven_space": {
+          "from_mark": "placeholder_location_seti_oragami_seven_space_A_entry",
+          "approach_mark": "placeholder_location_seti_oragami_seven_space_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "dock_official": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "starbase_eighty_six_hangar_93": "placeholder_location_starbase_eighty_six_hangar_93_A_center"
+      },
+      "entrances": {
+        "starbase_eighty_six_hangar_93": {
+          "from_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_hangar_93_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "station_announcer": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "starbase_eighty_six_commercial_promenade": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center"
+      },
+      "entrances": {
+        "starbase_eighty_six_commercial_promenade": {
+          "from_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_commercial_promenade_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "waitress": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "red_dragon_inn_orlando_s_booth": "set_bar_small_A_center"
+      },
+      "entrances": {
+        "red_dragon_inn_orlando_s_booth": {
+          "from_mark": "set_bar_small_A_entry",
+          "approach_mark": "set_bar_small_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "voice": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center"
+      },
+      "entrances": {
+        "starbase_eighty_six_service_passage": {
+          "from_mark": "placeholder_location_starbase_eighty_six_service_passage_A_entry",
+          "approach_mark": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "security_officer": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "starbase_mckinley_burger_counter": "placeholder_location_starbase_mckinley_burger_counter_A_center"
+      },
+      "entrances": {
+        "starbase_mckinley_burger_counter": {
+          "from_mark": "placeholder_location_starbase_mckinley_burger_counter_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_burger_counter_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "deranti_secretary": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "starbase_mckinley_fleet_intelligence_reception": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_center",
+        "starbase_mckinley_corridor": "placeholder_location_starbase_mckinley_corridor_A_center"
+      },
+      "entrances": {
+        "starbase_mckinley_fleet_intelligence_reception": {
+          "from_mark": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_fleet_intelligence_reception_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "starbase_mckinley_corridor": {
+          "from_mark": "placeholder_location_starbase_mckinley_corridor_A_entry",
+          "approach_mark": "placeholder_location_starbase_mckinley_corridor_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "farring": {
+      "character_id": "placeholder_character_farring_A",
+      "spawn_marks": {
+        "admiral_farring_s_office": "placeholder_location_admiral_farring_s_office_A_center"
+      },
+      "entrances": {
+        "admiral_farring_s_office": {
+          "from_mark": "placeholder_location_admiral_farring_s_office_A_entry",
+          "approach_mark": "placeholder_location_admiral_farring_s_office_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "computer": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center",
+        "union_cruiser_bridge": "placeholder_location_union_cruiser_bridge_A_center"
+      },
+      "entrances": {
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "union_cruiser_bridge": {
+          "from_mark": "placeholder_location_union_cruiser_bridge_A_entry",
+          "approach_mark": "placeholder_location_union_cruiser_bridge_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "male_technician": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center"
+      },
+      "entrances": {
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "penn": {
+      "character_id": "placeholder_character_penn_A",
+      "spawn_marks": {
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center",
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center"
+      },
+      "entrances": {
+        "research_outpost_testing_facility": {
+          "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "technician": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center"
+      },
+      "entrances": {
+        "research_outpost_testing_facility": {
+          "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "pirate": {
+      "character_id": "placeholder_vehicle_pirate_A",
+      "spawn_marks": {
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center"
+      },
+      "entrances": {
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "rogers": {
+      "character_id": "placeholder_character_rogers_A",
+      "spawn_marks": {
+        "colgen_defense_bunker": "placeholder_location_colgen_defense_bunker_A_center",
+        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center"
+      },
+      "entrances": {
+        "colgen_defense_bunker": {
+          "from_mark": "placeholder_location_colgen_defense_bunker_A_entry",
+          "approach_mark": "placeholder_location_colgen_defense_bunker_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_administration_building_interrogation_room": {
+          "from_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
+          "approach_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "matthews": {
+      "character_id": "placeholder_character_matthews_A",
+      "spawn_marks": {
+        "colgen_defense_bunker": "placeholder_location_colgen_defense_bunker_A_center"
+      },
+      "entrances": {
+        "colgen_defense_bunker": {
+          "from_mark": "placeholder_location_colgen_defense_bunker_A_entry",
+          "approach_mark": "placeholder_location_colgen_defense_bunker_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "orion_pilot": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "ventradi_pirate_flyer": "placeholder_location_ventradi_pirate_flyer_A_center"
+      },
+      "entrances": {
+        "ventradi_pirate_flyer": {
+          "from_mark": "placeholder_location_ventradi_pirate_flyer_A_entry",
+          "approach_mark": "placeholder_location_ventradi_pirate_flyer_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "collins": {
+      "character_id": "placeholder_character_collins_A",
+      "spawn_marks": {
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "colgen_colony_between_buildings": "placeholder_location_colgen_colony_between_buildings_A_center"
+      },
+      "entrances": {
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_between_buildings": {
+          "from_mark": "placeholder_location_colgen_colony_between_buildings_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_between_buildings_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "marqui": {
+      "character_id": "placeholder_character_marqui_A",
+      "spawn_marks": {
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "colgen_administration_building_interrogation_room": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+        "colgen_colony": "placeholder_location_colgen_colony_A_center",
+        "colgen_colony_journeyblaster": "placeholder_location_colgen_colony_journeyblaster_A_center"
+      },
+      "entrances": {
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_administration_building_interrogation_room": {
+          "from_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_entry",
+          "approach_mark": "placeholder_location_colgen_administration_building_interrogation_room_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony": {
+          "from_mark": "placeholder_location_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "colgen_colony_journeyblaster": {
+          "from_mark": "placeholder_location_colgen_colony_journeyblaster_A_entry",
+          "approach_mark": "placeholder_location_colgen_colony_journeyblaster_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "communications_officer": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "union_cruiser_bridge": "placeholder_location_union_cruiser_bridge_A_center"
+      },
+      "entrances": {
+        "union_cruiser_bridge": {
+          "from_mark": "placeholder_location_union_cruiser_bridge_A_entry",
+          "approach_mark": "placeholder_location_union_cruiser_bridge_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "horous": {
+      "character_id": "placeholder_character_horous_A",
+      "spawn_marks": {
+        "research_outpost_hangar": "placeholder_location_research_outpost_hangar_A_center",
+        "ventradi_controlled_lab": "placeholder_location_ventradi_controlled_lab_A_center",
+        "horous_s_shuttle": "placeholder_location_horous_s_shuttle_A_center"
+      },
+      "entrances": {
+        "research_outpost_hangar": {
+          "from_mark": "placeholder_location_research_outpost_hangar_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_hangar_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "ventradi_controlled_lab": {
+          "from_mark": "placeholder_location_ventradi_controlled_lab_A_entry",
+          "approach_mark": "placeholder_location_ventradi_controlled_lab_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "horous_s_shuttle": {
+          "from_mark": "placeholder_location_horous_s_shuttle_A_entry",
+          "approach_mark": "placeholder_location_horous_s_shuttle_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "first_guard": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "research_outpost_maintenance_closet": "placeholder_location_research_outpost_maintenance_closet_A_center"
+      },
+      "entrances": {
+        "research_outpost_maintenance_closet": {
+          "from_mark": "placeholder_location_research_outpost_maintenance_closet_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_maintenance_closet_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "second_guard": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "research_outpost_maintenance_closet": "placeholder_location_research_outpost_maintenance_closet_A_center"
+      },
+      "entrances": {
+        "research_outpost_maintenance_closet": {
+          "from_mark": "placeholder_location_research_outpost_maintenance_closet_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_maintenance_closet_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "orion_lieutenant": {
+      "character_id": "placeholder_character_orion_lieutenant_A",
+      "spawn_marks": {
+        "ventradi_controlled_lab": "placeholder_location_ventradi_controlled_lab_A_center"
+      },
+      "entrances": {
+        "ventradi_controlled_lab": {
+          "from_mark": "placeholder_location_ventradi_controlled_lab_A_entry",
+          "approach_mark": "placeholder_location_ventradi_controlled_lab_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "controller": {
+      "character_id": "placeholder_character_background_A",
+      "spawn_marks": {
+        "omega_pi_station_traffic_control": "placeholder_location_omega_pi_station_traffic_control_A_center"
+      },
+      "entrances": {
+        "omega_pi_station_traffic_control": {
+          "from_mark": "placeholder_location_omega_pi_station_traffic_control_A_entry",
+          "approach_mark": "placeholder_location_omega_pi_station_traffic_control_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        }
+      },
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "hudson": {
+      "character_id": "placeholder_character_hudson_A",
+      "spawn_marks": {
+        "omega_pi_station_traffic_control": "placeholder_location_omega_pi_station_traffic_control_A_center"
+      },
+      "entrances": {
+        "omega_pi_station_traffic_control": {
+          "from_mark": "placeholder_location_omega_pi_station_traffic_control_A_entry",
+          "approach_mark": "placeholder_location_omega_pi_station_traffic_control_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5

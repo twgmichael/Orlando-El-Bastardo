@@ -15,6 +15,7 @@ class JobCreateRequest(BaseModel):
     priority: int = 0
     payload: dict = {}
     is_idempotent: bool = True
+    depends_on_job_id: Optional[uuid.UUID] = None
 
 
 ASSET_REVIEW_VIEWS = {"top", "bottom", "left", "right", "front", "back", "action"}
@@ -86,6 +87,7 @@ class JobSummary(BaseModel):
     payload: dict = {}
     is_idempotent: bool
     sibling_job_id: Optional[uuid.UUID]
+    depends_on_job_id: Optional[uuid.UUID] = None
     created_at: datetime
     updated_at: datetime
 
