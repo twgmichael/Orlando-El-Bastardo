@@ -41,6 +41,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import placeholder_blueprint  # noqa: E402
+import llm_asset_match  # noqa: E402
 
 CONFIG_PATH = "oeb.config.json"
 RESOLVER_MAP_PATH = "data/resolver_map.json"
@@ -53,10 +54,38 @@ def _load_json(path: str) -> dict:
     return json.loads(Path(path).read_text())
 
 
+def _write_json(path: str, data: dict) -> None:
+    Path(path).write_text(json.dumps(data, indent=2) + "\n")
+
+
+def _real_location_candidates(rmap: dict) -> list[dict]:
+    """Non-placeholder resolver_map.json locations -- the real,
+    already-built library tier-1.5 checks against. No authored
+    free-text description field exists on a location entry today, so
+    the candidate description is synthesized from its actual marks/
+    default_props ids -- honest signal (real names in the real asset),
+    just thinner than hand-written prose would be.
+    """
+    out = []
+    for tag, entry in rmap.get("locations", {}).items():
+        if entry.get("placeholder"):
+            continue
+        marks = ", ".join(entry.get("marks", [])[:6])
+        props = ", ".join(p.get("asset_id", "") for p in entry.get("default_props", [])[:6])
+        desc_parts = []
+        if marks:
+            desc_parts.append(f"marks: {marks}")
+        if props:
+            desc_parts.append(f"props: {props}")
+        out.append({"id": tag, "display_name": tag, "description": "; ".join(desc_parts)})
+    return out
+
+
 def resolve_location(
     location_name: str,
     *,
     int_ext: str | None = None,
+    scene_evidence: str | None = None,
     config_path: str = CONFIG_PATH,
     resolver_map_path: str = RESOLVER_MAP_PATH,
     standins_path: str = STANDINS_PATH,
@@ -66,9 +95,12 @@ def resolve_location(
     could not match directly against `data/resolver_map.json`'s
     `locations` map. Tier-1 stand-in match first (approved sets/
     locations, per the "Set Designer" feedback: read the deliberate
-    author direction first); tier-2 primitive placeholder build only
-    when no stand-in exists. Mutates the real registries on disk, same
-    ones Producer/export_blender.py already read -- no separate store.
+    author direction first); tier-1.5 LLM match against the real
+    library (docs/planning/LLM-ASSET-MATCHING-PLAN.md) when *scene_evidence*
+    is given and tier-1 misses; tier-2 primitive placeholder build only
+    when nothing else resolves it. Mutates the real registries on disk,
+    same ones Producer/export_blender.py already read -- no separate
+    store.
 
     *int_ext* ("INT"/"EXT"/"INT/EXT", from tools/screenplay.py's own
     scene parse) drives docs/planning/CAMERA-SHOT-SCALE-PLAN.md's
@@ -77,8 +109,13 @@ def resolve_location(
     CLI call with no scene context) degrades to "intimate", the same
     default every location had before this field existed.
 
-    Returns {"tier": "stand_in"|"primitive"|None, "resolved_tag": str|None,
-    "error": str|None}.
+    *scene_evidence* is the scripted slugline/action text tier-1.5
+    grounds a match against -- optional so every existing caller
+    (direct CLI testing, anything not yet passing it) degrades to the
+    original tier-1 -> tier-2 behavior unchanged.
+
+    Returns {"tier": "stand_in"|"llm_stand_in"|"primitive"|None,
+    "resolved_tag": str|None, "error": str|None}.
     """
     rmap = _load_json(resolver_map_path)
     standins = _load_json(standins_path)
@@ -90,6 +127,24 @@ def resolve_location(
     standin = standins.get("location_standins", {}).get(location_name)
     if standin and standin in rmap.get("locations", {}):
         return {"tier": "stand_in", "resolved_tag": location_name, "error": None}
+
+    # Tier 1.5 (docs/planning/LLM-ASSET-MATCHING-PLAN.md): does this
+    # scripted tag actually refer to a real, already-built location the
+    # exact-match stand-in table just doesn't know about yet? Only
+    # tried when scene_evidence is available and there's at least one
+    # real candidate to check against; any failure (no match, no
+    # evidence, model unavailable) falls straight through to tier-2
+    # unchanged -- never blocks resolution.
+    if scene_evidence:
+        candidates = _real_location_candidates(rmap)
+        if candidates:
+            result = llm_asset_match.match_existing_asset(
+                location_name, scene_evidence, candidates, "location")
+            if result["matched_id"] and llm_asset_match.grounded(
+                    result["evidence"], scene_evidence):
+                standins.setdefault("location_standins", {})[location_name] = result["matched_id"]
+                _write_json(standins_path, standins)
+                return {"tier": "llm_stand_in", "resolved_tag": location_name, "error": None}
 
     # Tier 2: no approved match -- build a crude primitive placeholder,
     # registered under location_name itself (so tier-1's direct-match
@@ -155,6 +210,11 @@ def main() -> int:
     p.add_argument("--int-ext", default=None,
                    help="INT/EXT/INT-EXT from the scene's own slugline, "
                         "for shot_scale classification (default: intimate)")
+    p.add_argument("--location-context", default=None,
+                   help="Scripted slugline/action text for this scene "
+                        "(docs/planning/LLM-ASSET-MATCHING-PLAN.md tier-1.5 "
+                        "grounding); omitted means tier-1.5 is skipped, "
+                        "same tier-1 -> tier-2 behavior as before it existed")
     p.add_argument("--config", default=CONFIG_PATH)
     p.add_argument("--resolver-map", default=RESOLVER_MAP_PATH)
     p.add_argument("--standins", default=STANDINS_PATH)
@@ -166,6 +226,7 @@ def main() -> int:
     result = resolve_location(
         args.location_name,
         int_ext=args.int_ext,
+        scene_evidence=args.location_context,
         config_path=args.config,
         resolver_map_path=args.resolver_map,
         standins_path=args.standins,

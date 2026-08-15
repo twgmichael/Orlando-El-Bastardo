@@ -10,8 +10,8 @@ Run from Orlando-El-Bastardo.src:
 
     blender --background --factory-startup \
       --python tools/build_earth_starfighter.py -- \
-      --output assets/ships/earth_starfighter_hero_v0.0.3/earth_starfighter_hero_v0.0.3 \
-      --review-dir assets/ships/earth_starfighter_hero_v0.0.3/review
+      --output assets/ships/earth_starfighter_hero_v0.0.8/earth_starfighter_hero_v0.0.8 \
+      --review-dir assets/ships/earth_starfighter_hero_v0.0.8/review
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from mathutils import Vector
 
 ASSET_ID = "ship_earth_starfighter_hero_A"
 DISPLAY_NAME = "Earth Starfighter Hero"
-VERSION = "0.0.3"
+VERSION = "0.0.8"
 DIMENSIONS_M = (14.0, 12.0, 3.0)
 
 
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="build_earth_starfighter")
     parser.add_argument(
         "--output",
-        default="assets/ships/earth_starfighter_hero_v0.0.3/earth_starfighter_hero_v0.0.3",
+        default="assets/ships/earth_starfighter_hero_v0.0.8/earth_starfighter_hero_v0.0.8",
         help="Output stem for .blend, .glb, and .manifest.json",
     )
     parser.add_argument("--review-dir", default=None)
@@ -140,23 +140,23 @@ def add_uv_ellipsoid(
     return obj
 
 
-def add_upper_hemisphere(
+def add_upper_hemi_ellipsoid(
     name: str,
     material: bpy.types.Material,
-    radius: float,
+    radii: tuple[float, float, float],
     base_z: float,
     center_xy: tuple[float, float],
     *,
     segments: int = 32,
     rings: int = 16,
 ) -> bpy.types.Object:
-    """Create a true sealed half sphere with its flat base at ``base_z``."""
+    """Create a sealed upper half ellipsoid with its base at ``base_z``."""
     bm = bmesh.new()
     result = bmesh.ops.create_uvsphere(
         bm,
         u_segments=segments,
         v_segments=rings,
-        radius=radius,
+        radius=1.0,
     )
     lower = [vertex for vertex in result["verts"] if vertex.co.z < -1e-6]
     bmesh.ops.delete(bm, geom=lower, context="VERTS")
@@ -164,7 +164,11 @@ def add_upper_hemisphere(
     if boundary:
         bmesh.ops.holes_fill(bm, edges=boundary)
     for vertex in bm.verts:
-        vertex.co += Vector((center_xy[0], center_xy[1], base_z))
+        vertex.co = Vector((
+            vertex.co.x * radii[0] + center_xy[0],
+            vertex.co.y * radii[1] + center_xy[1],
+            vertex.co.z * radii[2] + base_z,
+        ))
     obj = object_from_bmesh(name, bm, material)
     smooth(obj)
     return obj
@@ -412,14 +416,14 @@ def build_ship() -> tuple[bpy.types.Object, list[bpy.types.Object]]:
     root["asset_id"] = ASSET_ID
     root["display_name"] = DISPLAY_NAME
     root["version"] = VERSION
-    root["previous_version"] = "0.0.2"
+    root["previous_version"] = "0.0.7"
     root["production_role"] = "hero"
     root["asset_family"] = "vehicle.ship.starfighter"
     root["style"] = "simple smooth 1999 CGI"
     root["dimensions_m"] = list(DIMENSIONS_M)
     root["front_axis"] = "+X"
     root["up_axis"] = "+Z"
-    root["origin_policy"] = "vehicle centerline at body midpoint; lowest geometry Z=0"
+    root["origin_policy"] = "vehicle centerline at body midpoint; nominal construction frame retained across versions"
 
     parts: list[bpy.types.Object] = []
 
@@ -452,7 +456,8 @@ def build_ship() -> tuple[bpy.types.Object, list[bpy.types.Object]]:
     parts.append(add_prism("earth_starfighter_left_ivory_panel", ivory, left_cap, 1.245, 1.285, bevel_width=0.018))
     parts.append(add_prism("earth_starfighter_right_ivory_panel", ivory, right_cap, 1.245, 1.285, bevel_width=0.018))
 
-    parts.append(add_fuselage("earth_starfighter_primary_hull", navy))
+    primary_hull = add_fuselage("earth_starfighter_primary_hull", navy)
+    parts.append(primary_hull)
     parts.append(add_uv_ellipsoid("earth_starfighter_orange_nose", orange, (1.10, 1.36, 0.63), (5.90, 0.0, 1.05), segments=28, rings=14))
 
     # A cream dorsal stripe and raised equipment spine echo the approved plate.
@@ -460,16 +465,16 @@ def build_ship() -> tuple[bpy.types.Object, list[bpy.types.Object]]:
     parts.append(add_rounded_box("earth_starfighter_equipment_spine", navy_light, (3.10, 1.35, 0.66), (-1.42, 0.0, 1.72), bevel_width=0.22))
     parts.append(add_rounded_box("earth_starfighter_spine_orange_band", orange, (0.22, 1.39, 0.70), (-2.20, 0.0, 1.72), bevel_width=0.035))
 
-    # True circular half-sphere canopy. Its sealed base sits below the local
-    # deck surface, so the bubble and matching circular rim cannot reveal a
-    # gap even at grazing angles. The upper pole remains exactly Z=3 m.
-    parts.append(add_upper_hemisphere(
-        "earth_starfighter_canopy", glass, 1.42, 1.58, (1.43, 0.0),
+    # Jet-style half-ellipsoid canopy: the original fore-aft egg proportion,
+    # now with a sealed flat base buried below the deck so no grazing-angle
+    # gap can appear. The upper pole remains exactly Z=3 m.
+    parts.append(add_upper_hemi_ellipsoid(
+        "earth_starfighter_canopy", glass, (1.72, 1.16, 1.42), 1.58, (1.43, 0.0),
         segments=32, rings=16,
     ))
     parts.append(add_torus(
-        "earth_starfighter_canopy_ivory_rim", ivory, 1.31, 0.085,
-        (1.0, 1.0), (1.43, 0.0, 1.67),
+        "earth_starfighter_canopy_ivory_rim", ivory, 1.0, 0.085,
+        (1.70, 1.14), (1.43, 0.0, 1.67),
     ))
 
     # Twin exposed primitive engines: blue cans, metallic collars, orange tails.
@@ -482,11 +487,25 @@ def build_ship() -> tuple[bpy.types.Object, list[bpy.types.Object]]:
         parts.append(add_cylinder_x(f"earth_starfighter_engine_{side}_orange_exhaust", orange, 0.69, 0.80, (-6.60, y, 2.02), bevel_width=0.0))
         parts.append(add_cylinder_x(f"earth_starfighter_engine_{side}_hot_core", yellow, 0.31, 0.025, (-6.9875, y, 2.02), vertices=20, bevel_width=0.0))
 
-    # Four recessed-looking maneuver discs touch Z=0 but remain inside the hull.
+    # Four flush-mounted landing pads project exactly 10 cm below the local
+    # belly at their center points. Their upper portions remain hidden inside
+    # the hull up to Z=0.52, guaranteeing attachment without visible stalks.
+    # Articulated landing gear is deliberately deferred.
     for x in (-1.55, 2.65):
         for side, y in (("left", -2.30), ("right", 2.30)):
-            parts.append(add_cylinder_z(f"earth_starfighter_belly_disc_{x:+.2f}_{side}", dark_metal, 0.43, 0.16, (x, y, 0.08), vertices=20))
-            parts.append(add_cylinder_z(f"earth_starfighter_belly_disc_core_{x:+.2f}_{side}", ivory, 0.20, 0.025, (x, y, 0.165), vertices=16))
+            hit, location, _normal, _index = primary_hull.ray_cast(
+                Vector((x, y, -1.0)), Vector((0.0, 0.0, 1.0))
+            )
+            belly_z = location.z if hit else 0.40
+            pad_bottom = belly_z - 0.10
+            pad_top = 0.52
+            pad_depth = pad_top - pad_bottom
+            pad_center = (pad_top + pad_bottom) * 0.5
+            parts.append(add_cylinder_z(
+                f"earth_starfighter_belly_disc_{x:+.2f}_{side}",
+                dark_metal, 0.43, pad_depth, (x, y, pad_center), vertices=20,
+            ))
+            parts.append(add_cylinder_z(f"earth_starfighter_belly_disc_core_{x:+.2f}_{side}", ivory, 0.20, 0.025, (x, y, 0.525), vertices=16))
 
     # Yellow navigation blocks at the shoulder tips.
     for side, y in (("left", -5.38), ("right", 5.38)):
@@ -571,9 +590,10 @@ def render_reviews(review_dir: Path, parts: list[bpy.types.Object]) -> None:
         "top": ((0.0, 0.0, 24.0), "ORTHO", 17.0),
         "bottom": ((0.0, 0.0, -24.0), "ORTHO", 17.0),
         "action": ((18.0, -18.0, 11.0), "PERSP", 52.0),
+        "action_bottom": ((18.0, -18.0, -8.0), "PERSP", 52.0),
     }
     for view, (position, camera_type, value) in views.items():
-        underside_data.energy = 1050.0 if view == "bottom" else 0.0
+        underside_data.energy = 1050.0 if view in {"bottom", "action_bottom"} else 0.0
         camera.location = position
         camera_data.type = camera_type
         if camera_type == "ORTHO":
@@ -604,6 +624,7 @@ def main() -> None:
 
     minimum, maximum = evaluated_bounds(parts)
     dimensions = maximum - minimum
+    root["evaluated_dimensions_m"] = [float(value) for value in dimensions]
     used_materials = sorted({
         material.name
         for part in parts
@@ -636,14 +657,19 @@ def main() -> None:
         "asset_id": ASSET_ID,
         "display_name": DISPLAY_NAME,
         "version": VERSION,
-        "previous_version": "0.0.2",
+        "previous_version": "0.0.7",
         "production_role": "hero",
         "maturity": "first_pass",
-        "change_summary": "Cockpit bubble replaced by a sealed true half sphere intersecting the hull, with a slightly reflective charcoal-black finish; all other elements unchanged.",
+        "change_summary": "Fixed landing-pad pucks increased to 10 cm visible projection below the local belly while retaining hidden internal overlap; articulated landing gear remains deferred.",
         "style": "simple smooth 1999 CGI",
         "source_concept": "assets/concepts/earth_starfighter_primitive_v1.png",
         "files": {"blend": blend_path.name, "glb": glb_path.name},
-        "dimensions_m": {"length_x": 14.0, "width_y": 12.0, "height_z": 3.0},
+        "nominal_dimensions_m": {"length_x": 14.0, "width_y": 12.0, "height_z": 3.0},
+        "dimensions_m": {
+            "length_x": round(dimensions.x, 6),
+            "width_y": round(dimensions.y, 6),
+            "height_z": round(dimensions.z, 6),
+        },
         "evaluated_bounds": {
             "min": [round(value, 6) for value in minimum],
             "max": [round(value, 6) for value in maximum],
@@ -656,7 +682,7 @@ def main() -> None:
             "right_axis": "+Y",
             "up_axis": "+Z",
             "down_axis": "-Z",
-            "origin_policy": "vehicle centerline at body midpoint; lowest geometry Z=0",
+            "origin_policy": "vehicle centerline at body midpoint; nominal construction frame retained across versions",
         },
         "construction": {
             "root_node": ASSET_ID,

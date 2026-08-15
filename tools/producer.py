@@ -46,6 +46,7 @@ from script_desk import find_ffmpeg, find_slate_font, slate_drawtext  # noqa: E4
 from producer_studio_chat_client import build_scene_via_studio_chat  # noqa: E402
 import placeholder_blueprint  # noqa: E402
 from screenplay_entity_resolution import extract_entity_candidates  # noqa: E402
+import llm_asset_match  # noqa: E402
 
 CONFIG_PATH = "oeb.config.json"
 RESOLVER_MAP_PATH = "data/resolver_map.json"
@@ -374,7 +375,8 @@ def _find_existing_job(harness_url, admin_token, title, scene_number=None):
     return None
 
 
-def enqueue_set_designer_job(location_name, script, episode, scene_number, int_ext=None):
+def enqueue_set_designer_job(location_name, script, episode, scene_number, int_ext=None,
+                             location_context=None):
     """Best-effort: POST a job to the harness worker queue
     (docs/planning/WORKER-AGENT-PLAN.md) for tools/set_designer.py to
     pick up via the *existing* BlenderCLIAdapter's script_file payload
@@ -384,6 +386,12 @@ def enqueue_set_designer_job(location_name, script, episode, scene_number, int_e
     API_ADMIN_TOKEN unset) -- Producer stays usable standalone; the
     NEEDED ticket this accompanies is always written regardless and
     remains the source of truth for what's blocked.
+
+    *location_context* (docs/planning/LLM-ASSET-MATCHING-PLAN.md) is
+    the scene's own action text, threaded through to
+    set_designer.py's tier-1.5 LLM match as grounding evidence -- None
+    just means tier-1.5 is skipped for this job, same tier-1 -> tier-2
+    behavior as before it existed.
     """
     harness_url = os.environ.get(HARNESS_URL_ENV)
     admin_token = os.environ.get(HARNESS_ADMIN_TOKEN_ENV)
@@ -413,7 +421,8 @@ def enqueue_set_designer_job(location_name, script, episode, scene_number, int_e
                 "--script", script,
                 "--episode", episode,
                 "--scene-number", str(scene_number),
-            ] + (["--int-ext", int_ext] if int_ext else []),
+            ] + (["--int-ext", int_ext] if int_ext else [])
+              + (["--location-context", location_context] if location_context else []),
         },
     }
     req = urllib.request.Request(
@@ -433,7 +442,8 @@ def enqueue_set_designer_job(location_name, script, episode, scene_number, int_e
 
 
 def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
-                                 scene_number, depends_on_job_id=None):
+                                 scene_number, depends_on_job_id=None,
+                                 scene_context=None):
     """Best-effort: POST a job to the harness worker queue for
     tools/casting_director.py to pick up, same convention as
     enqueue_set_designer_job() -- dispatched through the *existing*
@@ -446,6 +456,12 @@ def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
     "completed" -- docs/planning/CASTING-DIRECTOR-PLAN.md Open
     Question #1: casting can't anchor a spawn_mark until the location
     this scene names actually exists.
+
+    *scene_context* (docs/planning/LLM-ASSET-MATCHING-PLAN.md) is the
+    scene's own dialogue/action text, threaded through to
+    casting_director.py's tier-1.5 alias/real-asset matching as
+    grounding evidence -- None just means tier-1.5 is skipped for this
+    job, same exact-match-or-build behavior as before it existed.
     """
     harness_url = os.environ.get(HARNESS_URL_ENV)
     admin_token = os.environ.get(HARNESS_ADMIN_TOKEN_ENV)
@@ -477,7 +493,7 @@ def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
                 "--script", script,
                 "--episode", episode,
                 "--scene-number", str(scene_number),
-            ],
+            ] + (["--scene-context", scene_context] if scene_context else []),
         },
     }
     if depends_on_job_id:
@@ -498,6 +514,44 @@ def enqueue_casting_director_job(speaker_name, location_tag, script, episode,
         return None
 
 
+# A small, closed vocabulary of common vehicle nouns -- same "reuse
+# existing rails, no new judgment-call vocabulary" discipline as
+# tools/casting_director.py's FUNCTIONAL_LABEL_KEYWORDS. Only used to
+# find a subject already present in a scene's own action text (see
+# _generic_vehicle_subject()) -- never invented, never written into
+# the scene.
+VEHICLE_NOUN_KEYWORDS = (
+    "ship", "probe", "shuttle", "fighter", "cruiser", "vessel", "craft",
+    "freighter", "transport", "station", "drone", "satellite", "pod",
+    "fleet", "carrier", "frigate",
+)
+
+
+def _generic_vehicle_subject(text):
+    """A common vehicle noun literally present in *text* -- fixed
+    2026-08-13 after an invented generic name ("unnamed vehicle")
+    silently failed present_actors()'s own requirement that a cast
+    member's name actually appear in the scene text (names_in()'s
+    word-boundary regex): registering the role succeeded, but the
+    scene's actors list stayed empty anyway since nothing in the text
+    ever matched the made-up name. Picks the earliest VEHICLE_NOUN_KEYWORDS
+    match by text position (deterministic) so the result is guaranteed
+    to be a real substring of the scene. None if nothing matches --
+    caller leaves the scene FAILED rather than inventing an ungrounded
+    subject.
+    """
+    lowered = text.lower()
+    matches = []
+    for kw in VEHICLE_NOUN_KEYWORDS:
+        m = re.search(rf"\b{kw}\b", lowered)
+        if m:
+            matches.append((m.start(), kw))
+    if not matches:
+        return None
+    matches.sort()
+    return matches[0][1]
+
+
 def register_vehicle_placeholder(scene, cast, rmap, location_tag):
     """docs/planning/UNIFIED-BLUEPRINT-PIPELINE-PLAN.md section 7 item
     7's second known blocker: a pure ship/vehicle shot with no on-camera
@@ -513,24 +567,39 @@ def register_vehicle_placeholder(scene, cast, rmap, location_tag):
     (tools/placeholder_blueprint.py's _DEFAULT_PRIMITIVE_BY_KIND)
     instead of person-shaped.
 
+    Fixed 2026-08-13: some actor-less shots never name their vehicle at
+    all ("the red ship breaks free...") -- no proper noun anywhere, so
+    extract_entity_candidates() found nothing and the scene just stayed
+    FAILED on the schema's non-empty-actors check forever. Falls back to
+    a common vehicle noun already present in the scene's own text
+    (_generic_vehicle_subject()) in that case, rather than giving up.
+    Must be an actual substring of the scene -- present_actors() (below,
+    via names_in()) only includes a cast member whose name literally
+    appears in the scene text; an earlier attempt at this fix used an
+    invented name ("unnamed vehicle") that registered fine but never
+    satisfied that check, so the scene stayed FAILED anyway.
+
     Returns the registered speaker-name key (already added to *cast*
-    in place) or None if no candidate phrase was found at all -- never
+    in place) or None if no location was available to anchor marks
+    against, or no candidate/vehicle noun was found at all -- never
     fatal, the scene just stays FAILED on the empty-actors schema error
     exactly as it did before this existed.
     """
     text = scene_action_text(scene)
+    # No "already in cast" pre-filter here (removed 2026-08-13, see
+    # docs/planning/VEHICLE-DISCOVERY-PLAN.md Discovery 4's second bug):
+    # this function only ever runs when not present_actors(scene, cast),
+    # and present_actors() checks every cast member's name against this
+    # exact same scene_action_text(scene) via names_in() -- so a cast
+    # member actually named in this scene's text would already have
+    # been caught there, making the caller skip this function entirely.
+    # Filtering candidates against *cast* here was therefore dead code
+    # for its apparent protective intent, and its only live effect was
+    # silently dropping an already-cast VEHICLE's name before the
+    # already-cast branch below ever got a chance to extend it --
+    # falling through to the generic-noun fallback instead, as if the
+    # scene had never named it at all.
     candidates = extract_entity_candidates(text)
-    candidates = [c for c in candidates if c.lower() not in cast]
-    if not candidates:
-        return None
-    # Prefer the most-repeated candidate, not just the first-seen one:
-    # a genuine recurring subject (e.g. a ship named throughout the
-    # scene) gets mentioned more than once; a one-off capitalized
-    # scene-opener word ("Black.", describing the void before the
-    # stars appear) doesn't. Confirmed live 2026-08-09 -- first-seen
-    # alone picked "Black" over "JourneyBlaster" for exactly this scene.
-    lowered = text.lower()
-    candidates.sort(key=lambda c: lowered.count(c.lower()), reverse=True)
 
     location_set_id = rmap.get("locations", {}).get(location_tag or "", {}).get("set_id")
     if location_set_id is None:
@@ -538,8 +607,46 @@ def register_vehicle_placeholder(scene, cast, rmap, location_tag):
               "placeholder marks against; skipping")
         return None
 
-    subject = candidates[0]
+    if candidates:
+        # Prefer the most-repeated candidate, not just the first-seen
+        # one: a genuine recurring subject (e.g. a ship named throughout
+        # the scene) gets mentioned more than once; a one-off
+        # capitalized scene-opener word ("Black.", describing the void
+        # before the stars appear) doesn't. Confirmed live 2026-08-09 --
+        # first-seen alone picked "Black" over "JourneyBlaster" for
+        # exactly this scene.
+        lowered = text.lower()
+        candidates.sort(key=lambda c: lowered.count(c.lower()), reverse=True)
+        subject = candidates[0]
+    else:
+        subject = _generic_vehicle_subject(text)
+        if subject is None:
+            return None
+
     speaker_name = subject.lower()
+
+    if speaker_name in cast:
+        # Already registered -- from an earlier scene's fallback (the
+        # shared generic subject), or resolved some other way. Just
+        # extend it to this location, same merge behavior every other
+        # already-cast role relies on.
+        role_tag = cast[speaker_name]
+        canonical_id = rmap.get("roles", {}).get(role_tag, {}).get("character_id")
+        if not canonical_id:
+            return None
+        try:
+            placeholder_blueprint.register_placeholder_role(
+                RESOLVER_MAP_PATH, role_tag, canonical_id, location_tag, location_set_id)
+            rmap["roles"][role_tag] = json.load(open(RESOLVER_MAP_PATH))["roles"][role_tag]
+            cast[speaker_name] = role_tag
+            print(f"[producer]    primitive-fallback: extended vehicle placeholder "
+                  f"'{subject}' -> {canonical_id} to location '{location_tag}'")
+            return speaker_name
+        except Exception as exc:  # noqa: BLE001 -- must not crash the run
+            print(f"[producer]    primitive-fallback: FAILED extending vehicle "
+                  f"'{subject}' ({exc}); scene stays as-is")
+            return None
+
     try:
         role_tag = _role_tag_for(subject)
         canonical_id = placeholder_blueprint.slugify_placeholder_id(subject, "vehicle")
@@ -626,6 +733,17 @@ def main():
         | {w.lower() for k in vocab.get("location_standins", {})
            for w in k.split("_")}
     audio_kw = {k.lower() for k in vocab.get("audio_keywords", [])}
+    # docs/planning/LLM-ASSET-MATCHING-PLAN.md: real (non-placeholder)
+    # props already in the library -- built once, not per scene, since
+    # config doesn't change during a run. Checked against an "unknown
+    # item" before it becomes a ticket note, so a real prop the script
+    # describes differently than its registered name doesn't generate
+    # an avoidable note every single time it's mentioned.
+    real_props = [
+        {"id": aid, "display_name": aid, "description": ""}
+        for aid, a in config.get("assets", {}).items()
+        if a.get("kind") == "prop" and not a.get("placeholder")
+    ]
 
     only = None
     if args.scenes:
@@ -750,7 +868,24 @@ def main():
                 words = set(re.split(r"[^a-z0-9]+", norm)) - {""}
                 if not words or words & known_items or words & audio_kw:
                     continue
-                unknown_items.append(item.strip())
+                # Tier 1.5 (docs/planning/LLM-ASSET-MATCHING-PLAN.md):
+                # does this "unknown" item actually match a real prop
+                # already in the library under a different name?
+                # Reuses this scene's own review as grounding evidence
+                # -- no extra LLM call beyond the match itself.
+                matched = False
+                if real_props:
+                    scene_evidence = scene_action_text(scene)
+                    match_result = llm_asset_match.match_existing_asset(
+                        item.strip(), scene_evidence, real_props, "prop")
+                    if match_result["matched_id"] and llm_asset_match.grounded(
+                            match_result["evidence"], scene_evidence):
+                        known_items.add(norm)
+                        vocab.setdefault("known_items", []).append(item.strip())
+                        placeholder_blueprint._write_json(STANDINS_PATH, vocab)
+                        matched = True
+                if not matched:
+                    unknown_items.append(item.strip())
         for item in sorted(set(unknown_items)):
             notes.append({"kind": "prop", "name": item,
                           "source": "producer llm review",
@@ -786,7 +921,8 @@ def main():
                 if item["kind"] == "location":
                     job = enqueue_set_designer_job(
                         item["name"], args.script, episode, number,
-                        int_ext=scene.get("int_ext"))
+                        int_ext=scene.get("int_ext"),
+                        location_context=f"{scene['slugline']}\n{scene_action_text(scene)}")
                     if job:
                         location_job_id = job.get("id")
                         print(f"[producer]    set-designer job enqueued "
@@ -796,7 +932,8 @@ def main():
                 if item["kind"] in ("role", "role_location"):
                     job = enqueue_casting_director_job(
                         item["name"], loc, args.script, episode, number,
-                        depends_on_job_id=location_job_id)
+                        depends_on_job_id=location_job_id,
+                        scene_context=f"{scene['slugline']}\n{scene_action_text(scene)}")
                     if job:
                         dep_note = f" (depends on location job {location_job_id})" \
                             if location_job_id else ""
@@ -936,8 +1073,26 @@ def main():
             existing_cut = existing.get("episode_cut")
         except (OSError, ValueError):
             pass
-    scenes.update({sid: {"status": st, "render": r}
-                   for sid, (st, r) in outcomes.items()})
+    # Never regress an already-DELIVERED scene (fixed 2026-08-14, found
+    # live): a long full-episode pass holds its per-scene outcomes in
+    # memory for its *entire* run -- tens of minutes once LLM-matching
+    # tier-1.5 calls (docs/planning/LLM-ASSET-MATCHING-PLAN.md) stack on
+    # top of the existing per-scene LLM calls. A concurrent worker-run
+    # continuation (trigger_continuation()) can resolve and DELIVER that
+    # same scene, and write its own fresher report, *while* the long
+    # pass is still working through later scenes -- when the long pass
+    # finally finishes and writes its own outcome for that scene (still
+    # NEEDS_ASSETS, from when *it* evaluated that scene, possibly an
+    # hour earlier), an unconditional overwrite silently clobbers the
+    # fresher DELIVERED status back to blocked. A scene delivering is
+    # never a worse outcome than "this run's own possibly-stale read
+    # didn't know that yet" -- so a DELIVERED already on disk always
+    # wins over anything this run's own outcomes dict says for the same
+    # scene, regardless of which write happens last.
+    for sid, (st, r) in outcomes.items():
+        if scenes.get(sid, {}).get("status") == "DELIVERED" and st != "DELIVERED":
+            continue
+        scenes[sid] = {"status": st, "render": r}
     vocabulary.update(vocab_findings)
 
     n = {"DELIVERED": 0, "NEEDS_ASSETS": 0, "FAILED": 0, "ROUGH_DRAFT": 0}

@@ -71,6 +71,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import placeholder_blueprint  # noqa: E402
+import llm_asset_match  # noqa: E402
 
 CONFIG_PATH = "oeb.config.json"
 RESOLVER_MAP_PATH = "data/resolver_map.json"
@@ -104,6 +105,10 @@ FUNCTIONAL_LABEL_KEYWORDS = (
 
 def _load_json(path: str) -> dict:
     return json.loads(Path(path).read_text())
+
+
+def _write_json(path: str, data: dict) -> None:
+    Path(path).write_text(json.dumps(data, indent=2) + "\n")
 
 
 def classify_cast(speaker_name: str) -> str:
@@ -191,6 +196,7 @@ def resolve_role(
     speaker_name: str,
     location_tag: str,
     *,
+    scene_evidence: str | None = None,
     config_path: str = CONFIG_PATH,
     resolver_map_path: str = RESOLVER_MAP_PATH,
     standins_path: str = STANDINS_PATH,
@@ -205,6 +211,16 @@ def resolve_role(
     *location_tag* must already be a real resolver_map.json
     locations[] entry (guaranteed by the depends_on_job_id dependency
     this job was enqueued with, see module docstring).
+
+    *scene_evidence* (docs/planning/LLM-ASSET-MATCHING-PLAN.md) is the
+    scene's own dialogue/action text -- when given and the exact-match
+    "already cast" lookup misses, grounds two LLM-assisted checks
+    before falling to brand-new placeholder registration: is
+    *speaker_name* actually an alias/nickname of someone already cast
+    this episode, and (for a genuinely new principal) does it match a
+    real, already-built character asset. Optional so every existing
+    caller degrades to the original exact-match-or-build behavior
+    unchanged.
 
     Returns {"tier": "principal"|"background"|None, "role_tag": str|None,
     "error": str|None}.
@@ -237,6 +253,40 @@ def resolve_role(
     lname = speaker_name.strip().lower()
     existing_role_tag = standins.get("cast", {}).get(lname)
 
+    # Tier 1.5a (docs/planning/LLM-ASSET-MATCHING-PLAN.md): is this
+    # actually an alias/nickname of someone already cast this episode
+    # ("Cap"/"the captain"/"Captain Reyes"), rather than a genuinely
+    # new speaker? Only checked against THIS episode's own cast (not
+    # the whole library) -- cross-episode aliasing isn't a real risk
+    # worth the candidate-set noise. A confirmed match is persisted as
+    # a new cast[] entry so the next occurrence hits tier-1 directly.
+    #
+    # Guarded to principal-shaped names on BOTH sides (fixed
+    # 2026-08-14, found live): classify_cast() already reliably tells
+    # a specific name apart from a generic functional label
+    # (FUNCTIONAL_LABEL_KEYWORDS) -- aliasing a generic label ("voice")
+    # to an unrelated specific named principal ("casey") is never
+    # correct, but the model did exactly that once, unguarded,
+    # reintroducing E_DUPLICATE_CHARACTER through a brand-new path the
+    # very first time this ran live. Never offer or accept a
+    # background-tier name on either side of an alias match.
+    if not existing_role_tag and scene_evidence and classify_cast(speaker_name) == "principal":
+        already_cast = standins.get("cast", {})
+        alias_candidates = [
+            {"id": name, "display_name": name, "description": f"already cast as role '{tag}'"}
+            for name, tag in already_cast.items()
+            if not _is_background_character_id(
+                rmap.get("roles", {}).get(tag, {}).get("character_id", ""))
+        ]
+        if alias_candidates:
+            alias_result = llm_asset_match.match_existing_asset(
+                speaker_name, scene_evidence, alias_candidates, "character")
+            if alias_result["matched_id"] and llm_asset_match.grounded(
+                    alias_result["evidence"], scene_evidence):
+                existing_role_tag = already_cast[alias_result["matched_id"]]
+                standins.setdefault("cast", {})[lname] = existing_role_tag
+                _write_json(standins_path, standins)
+
     try:
         if existing_role_tag:
             # Already cast, already has a built asset -- just extend
@@ -257,17 +307,39 @@ def resolve_role(
         if tier == "background":
             character_id = ensure_background_role_asset(role_tag, config_path, placeholder_assets_root)
         else:
-            canonical_id = placeholder_blueprint.slugify_placeholder_id(speaker_name, "character")
-            bp = placeholder_blueprint.default_placeholder_blueprint(
-                canonical_id, "character", speaker_name)
-            placeholder_blueprint.build_placeholder_glb(
-                bp, f"{placeholder_assets_root}/{canonical_id}.glb",
-                f"out/blueprint_builds/{canonical_id}.blend",
-                f"out/blueprint_builds/{canonical_id}.manifest.json")
-            placeholder_blueprint.register_placeholder_asset(
-                config_path, canonical_id, "character", f"placeholders/{canonical_id}.glb",
-                source="casting_director")
-            character_id = canonical_id
+            # Tier 1.5b (docs/planning/LLM-ASSET-MATCHING-PLAN.md): a
+            # genuinely new principal -- but does the name match a
+            # real, already-built character asset (e.g. a hand-built
+            # hero) before spending a Blender build on yet another
+            # crude cylinder? Skipped cleanly if there's nothing real
+            # to check against, or no scene_evidence was given.
+            character_id = None
+            if scene_evidence:
+                config = _load_json(config_path)
+                real_characters = [
+                    {"id": cid, "display_name": cid, "description": ""}
+                    for cid, a in config.get("assets", {}).items()
+                    if a.get("kind") == "character" and not a.get("placeholder")
+                ]
+                if real_characters:
+                    match_result = llm_asset_match.match_existing_asset(
+                        speaker_name, scene_evidence, real_characters, "character")
+                    if match_result["matched_id"] and llm_asset_match.grounded(
+                            match_result["evidence"], scene_evidence):
+                        character_id = match_result["matched_id"]
+
+            if character_id is None:
+                canonical_id = placeholder_blueprint.slugify_placeholder_id(speaker_name, "character")
+                bp = placeholder_blueprint.default_placeholder_blueprint(
+                    canonical_id, "character", speaker_name)
+                placeholder_blueprint.build_placeholder_glb(
+                    bp, f"{placeholder_assets_root}/{canonical_id}.glb",
+                    f"out/blueprint_builds/{canonical_id}.blend",
+                    f"out/blueprint_builds/{canonical_id}.manifest.json")
+                placeholder_blueprint.register_placeholder_asset(
+                    config_path, canonical_id, "character", f"placeholders/{canonical_id}.glb",
+                    source="casting_director")
+                character_id = canonical_id
 
         placeholder_blueprint.register_placeholder_role(
             resolver_map_path, role_tag, character_id, resolved_location_tag, location_set_id)
@@ -317,6 +389,12 @@ def main() -> int:
     p.add_argument("--script", required=True, help="Episode script path, for continuation")
     p.add_argument("--episode", required=True)
     p.add_argument("--scene-number", type=int, required=True)
+    p.add_argument("--scene-context", default=None,
+                   help="Scripted dialogue/action text for this scene "
+                        "(docs/planning/LLM-ASSET-MATCHING-PLAN.md tier-1.5 "
+                        "grounding); omitted means alias/real-asset matching "
+                        "is skipped, same exact-match-or-build behavior as "
+                        "before it existed")
     p.add_argument("--config", default=CONFIG_PATH)
     p.add_argument("--resolver-map", default=RESOLVER_MAP_PATH)
     p.add_argument("--standins", default=STANDINS_PATH)
@@ -327,6 +405,7 @@ def main() -> int:
 
     result = resolve_role(
         args.speaker_name, args.location_tag,
+        scene_evidence=args.scene_context,
         config_path=args.config,
         resolver_map_path=args.resolver_map,
         standins_path=args.standins,

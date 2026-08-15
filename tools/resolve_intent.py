@@ -21,6 +21,9 @@ from motion_library import (
     entrance_times,
 )
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import llm_asset_match  # noqa: E402
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,8 +43,15 @@ def line_duration(text):
 # Resolution core (R2-R12)
 # ---------------------------------------------------------------------------
 
-def resolve_intent(intent, rmap, grammar, config):
-    """Apply R2-R12. Returns (spec | None, errors_list)."""
+def resolve_intent(intent, rmap, grammar, config, grammar_path=None):
+    """Apply R2-R12. Returns (spec | None, errors_list).
+
+    *grammar_path*, when given, lets R5's camera resolution persist a
+    tier-1.5 LLM match (docs/planning/LLM-ASSET-MATCHING-PLAN.md) back
+    into data/camera_grammar.json -- None just means that tier is
+    skipped, same exact-match-or-E_NO_CAMERA behavior as before it
+    existed.
+    """
     errors = []
 
     # ------------------------------------------------------------------
@@ -305,6 +315,11 @@ def resolve_intent(intent, rmap, grammar, config):
     # location entry defaults to "intimate" -- every location registered
     # before this field existed (the hand-authored bar) stays correct.
     scene_shot_scale = (loc_entry or {}).get("shot_scale", "intimate")
+    # docs/planning/LLM-ASSET-MATCHING-PLAN.md tier-1.5 grounding text --
+    # SceneIntent's own beat descriptions (Producer's LLM-condensed
+    # prose per section), no new data source needed.
+    scene_evidence = " ".join(
+        b.get("description", "") for b in intent.get("beats", []))
 
     for si in sorted_shots_intents:
         framing = si["framing"]
@@ -334,6 +349,46 @@ def resolve_intent(intent, rmap, grammar, config):
                     c for c in cameras
                     if c["framing"] == framing and c.get("subject_marks") == [spawn_mark]
                 ]
+                # Tier 1.5 (docs/planning/LLM-ASSET-MATCHING-PLAN.md):
+                # exact subject_marks equality just missed -- is there a
+                # camera for this framing that's genuinely unclaimed
+                # (subject_marks still empty) and belongs to this
+                # actor/spawn_mark? Only ever claims an EMPTY
+                # subject_marks list, never appends to or replaces an
+                # already-assigned one -- resolve_intent's own match
+                # check is exact list equality
+                # (c.get("subject_marks") == [spawn_mark]), so appending
+                # a second mark to an already-assigned camera would
+                # silently break whatever legitimately matches its
+                # current one (confirmed live 2026-08-14: this is
+                # exactly the bug caught and reverted by hand when
+                # cam_medium_bartender/cam_close_bartender were first
+                # patched for scene 15 -- append broke the exact-match
+                # check entirely; only a clean replace of an unclaimed
+                # list is safe here).
+                if len(matches) != 1 and scene_evidence:
+                    unclaimed = [c for c in cameras
+                                if c["framing"] == framing and not c.get("subject_marks")]
+                    candidates = [
+                        {"id": c["camera_id"], "display_name": c["camera_id"],
+                         "description": c.get("description", "")}
+                        for c in unclaimed
+                    ]
+                    if candidates:
+                        match_result = llm_asset_match.match_existing_asset(
+                            f"{subj_id} at {spawn_mark}", scene_evidence,
+                            candidates, "camera")
+                        if match_result["matched_id"] and llm_asset_match.grounded(
+                                match_result["evidence"], scene_evidence):
+                            for c in unclaimed:
+                                if c["camera_id"] == match_result["matched_id"]:
+                                    c["subject_marks"] = [spawn_mark]
+                                    matches = [c]
+                                    if grammar_path:
+                                        with open(grammar_path, "w", encoding="utf-8") as f:
+                                            json.dump(grammar, f, indent=2)
+                                            f.write("\n")
+                                    break
                 if len(matches) != 1:
                     errors.append(
                         f"E_NO_CAMERA: {framing} for actor '{subj_id}' (spawn_mark "
@@ -646,7 +701,7 @@ def main():
     out_path = Path(args.out) if args.out else Path(f"out/{scene_id}.scenespec.json")
 
     # Run resolution (R2-R12)
-    spec, errors = resolve_intent(intent, rmap, grammar, config)
+    spec, errors = resolve_intent(intent, rmap, grammar, config, grammar_path=args.grammar)
 
     if errors:
         for err in errors:

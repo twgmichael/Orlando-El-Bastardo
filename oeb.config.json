@@ -741,6 +741,72 @@
       "kind": "character",
       "placeholder": true,
       "source": "casting_director"
+    },
+    "set_bar_small_B": {
+      "file": "sets/bar_scene_scifi_extras.glb",
+      "node": "set_bar_small_A",
+      "kind": "set"
+    },
+    "placeholder_character_background_A__waitress": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "ship_earth_starfighter_hero_A": {
+      "file": "ships/earth_starfighter_hero_v0.0.8/earth_starfighter_hero_v0.0.8.glb",
+      "node": "ship_earth_starfighter_hero_A",
+      "kind": "vehicle"
+    },
+    "placeholder_character_background_A__communications_officer": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_vehicle_ship_A": {
+      "file": "placeholders/placeholder_vehicle_ship_A.glb",
+      "node": "placeholder_vehicle_ship_A",
+      "kind": "vehicle",
+      "placeholder": true,
+      "source": "producer --primitive-fallback"
+    },
+    "placeholder_character_background_A__dock_official": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__technician": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__deranti_secretary": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__voice": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
+    },
+    "placeholder_character_background_A__orion_pilot": {
+      "file": "placeholders/placeholder_character_background_A.glb",
+      "node": "placeholder_character_background_A",
+      "kind": "character",
+      "placeholder": true,
+      "source": "casting_director"
     }
   }
 }

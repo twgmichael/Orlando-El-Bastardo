@@ -5,7 +5,10 @@
       "camera_id": "cam_establishing_wide",
       "framing": "establishing",
       "description": "Wide shot of a small, confined interior (originally the bar); both actors and the counter visible. Reused by name across every 'intimate'-scale location -- each location's own .glb bakes its own object under this same name (tools/placeholder_blueprint.py's SHOT_SCALE_CAMERAS), not a single shared literal camera.",
-      "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
+      "subject_marks": [
+        "hero_barstool_A",
+        "bartender_idle_A"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_establishing_wide",
       "shot_scale": "intimate"
@@ -22,7 +25,10 @@
       "camera_id": "cam_two_shot_bar",
       "framing": "two_shot",
       "description": "Medium two-shot across the counter, hero and bartender in frame.",
-      "subject_marks": ["hero_barstool_A", "bartender_idle_A"],
+      "subject_marks": [
+        "hero_barstool_A",
+        "bartender_idle_A"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_two_shot_bar",
       "shot_scale": "intimate"
@@ -31,7 +37,9 @@
       "camera_id": "cam_close_hero",
       "framing": "close_on",
       "description": "Close-up on the hero seated at the counter.",
-      "subject_marks": ["hero_barstool_A"],
+      "subject_marks": [
+        "hero_barstool_A"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_close_hero"
     },
@@ -39,7 +47,9 @@
       "camera_id": "cam_close_bartender",
       "framing": "close_on",
       "description": "Close-up on the bartender behind the counter.",
-      "subject_marks": ["bartender_idle_A"],
+      "subject_marks": [
+        "set_bar_small_B_center"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_close_bartender"
     },
@@ -47,7 +57,9 @@
       "camera_id": "cam_medium_bartender",
       "framing": "medium_on",
       "description": "Medium shot of the bartender from across the counter, waist-up.",
-      "subject_marks": ["bartender_idle_A"],
+      "subject_marks": [
+        "set_bar_small_B_center"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_medium_bartender"
     },
@@ -55,7 +67,9 @@
       "camera_id": "cam_medium_hero_back",
       "framing": "medium_on",
       "description": "Medium shot on the seated hero from behind: the hero's back in the foreground, bartender visible beyond.",
-      "subject_marks": ["hero_barstool_A"],
+      "subject_marks": [
+        "hero_barstool_A"
+      ],
       "lens_mm": 35,
       "scene_object": "cam_medium_hero_back"
     }

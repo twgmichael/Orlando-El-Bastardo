@@ -327,7 +327,19 @@ def _export(args):
             placement_obj_names.append(inst_name)
         else:
             obj.location = mark_obj.location.copy()
-            placement_obj_names.append(bo_name)
+            # Fixed 2026-08-14: a background role registered under a
+            # per-role synthetic character_id (docs/bug-fix/
+            # E-DUPLICATE-CHARACTER-CORRECTION.md) that happens to be
+            # the ONLY actor using its shared node in THIS scene takes
+            # this branch, not the shared/instancing one below -- but
+            # downstream cue application (R7/R8/R13) reads
+            # actor_map[...]['blender_object'], not re-resolving
+            # through assets[...]['node'] itself. Leaving it as the
+            # synthetic bo_name meant a move/animation cue for this
+            # actor would look for an object that was never created
+            # (only real_node -- the real imported object -- exists).
+            actor_map[actor['actor_id']]['blender_object'] = real_node
+            placement_obj_names.append(real_node)
 
     # ── R6: prop placements ──────────────────────────────────────────────────
     for prop in spec['set'].get('props', []):
