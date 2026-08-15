@@ -1,7 +1,8 @@
 ---
 title: Animated Preview (2026-07-05)
 created: 2026-07-05T14:33:35-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: progress_report
 production_area: animation
 department: production

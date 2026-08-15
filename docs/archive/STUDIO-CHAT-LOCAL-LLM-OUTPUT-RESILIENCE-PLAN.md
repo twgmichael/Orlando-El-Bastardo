@@ -1,3 +1,18 @@
+---
+title: Studio Chat Local LLM Output Resilience Plan (Archived)
+created: 2026-07-26T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
+doc_type: progress_report
+production_area: pipeline
+department: production
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: Studio-Chat-Local-LLM-Output-Resilience-Plan
+wiki_order: 60
+---
 # Studio Chat Local LLM Output Resilience Plan
 
 Date: 2026-07-26
@@ -6,11 +21,11 @@ Status: **IMPLEMENTED**
 
 ## Related Documents
 
-- [OEB Studio Chat Lightweight Plan](../../../docs/plans/OEB-STUDIO-CHAT-LIGHTWEIGHT-PLAN.md)
+- [OEB Studio Chat Lightweight Plan](../planning/OEB-STUDIO-CHAT-LIGHTWEIGHT-PLAN.md)
   coordinates this work as Studio Chat Milestone 17.
 - [OEB Studio Chat Progress](OEB-STUDIO-CHAT-PROGRESS-2026-07-23.md)
   records the chat-to-harness implementation history.
-- [Conversation To Build Loop](../../../Orlando-El-Bastardo.wiki/Conversation-To-Build-Loop.md)
+- [Conversation To Build Loop](../planning/CONVERSATION-TO-BUILD-LOOP.md)
   defines the responsibility boundary between local models and deterministic
   workers.
 

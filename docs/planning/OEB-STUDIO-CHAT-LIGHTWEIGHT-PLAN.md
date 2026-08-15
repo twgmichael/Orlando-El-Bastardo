@@ -18,7 +18,7 @@ Status: **IMPLEMENTED FIRST SLICE; EVOLVING INTO CHAT-TO-HARNESS PRODUCTION LOOP
 
 ## Related Documents
 
-- [Studio Chat Local LLM Output Resilience Plan](STUDIO-CHAT-LOCAL-LLM-OUTPUT-RESILIENCE-PLAN.md)
+- [Studio Chat Local LLM Output Resilience Plan](../archive/STUDIO-CHAT-LOCAL-LLM-OUTPUT-RESILIENCE-PLAN.md)
   defines tolerant ingestion, semantic-preserving normalization, deterministic
   compilation gates, bounded repair, structured diagnostics, and the
   failure-class regression strategy.
@@ -26,10 +26,10 @@ Status: **IMPLEMENTED FIRST SLICE; EVOLVING INTO CHAT-TO-HARNESS PRODUCTION LOOP
   defines the OEB Semantic Asset Graph + Operation Contract milestone. It
   records what OEB already planned independently and what later similar-editor
   research clarified as architectural reference, not source dependency.
-- [OEB Studio Chat Progress - 2026-07-23](OEB-STUDIO-CHAT-PROGRESS-2026-07-23.md)
+- [OEB Studio Chat Progress - 2026-07-23](../archive/OEB-STUDIO-CHAT-PROGRESS-2026-07-23.md)
   records the implementation progress, fixes, and next architectural direction
   discovered while building and testing the local chat flow.
-- [Local Asset Builder Support Notes](LOCAL-ASSET-BUILDER-SUPPORT-NOTES.md)
+- [Local Asset Builder Support Notes](../archive/LOCAL-ASSET-BUILDER-SUPPORT-NOTES.md)
   captures the local asset-builder role and worker boundary decisions.
 - [Conversation To Build Loop](CONVERSATION-TO-BUILD-LOOP.md)
   defines local LLM versus deterministic worker responsibilities.

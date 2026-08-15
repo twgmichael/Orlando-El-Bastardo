@@ -1,3 +1,18 @@
+---
+title: Harness Render Quality Language
+created: 2026-07-20T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
+doc_type: standard
+production_area: rendering
+department: pipeline
+status: active
+canonical: true
+canonical_for: harness_render_quality_language
+wiki: true
+wiki_group: Standards
+wiki_page: Harness-Render-Quality-Language
+wiki_order: 50
+---
 # Harness Render Quality Language
 
 status: adopted

@@ -1,10 +1,25 @@
+---
+title: OEB Studio Chat Progress (2026-07-23, Archived)
+created: 2026-07-23T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
+doc_type: progress_report
+production_area: pipeline
+department: production
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: OEB-Studio-Chat-Progress-2026-07-23
+wiki_order: 50
+---
 # OEB Studio Chat Progress
 
 Date: 2026-07-23
 
 ## Related Documents
 
-- [OEB Studio Chat Lightweight Plan](../plans/OEB-STUDIO-CHAT-LIGHTWEIGHT-PLAN.md)
+- [OEB Studio Chat Lightweight Plan](../planning/OEB-STUDIO-CHAT-LIGHTWEIGHT-PLAN.md)
   is the main plan and has been updated with the current implemented state and
   next primitive-registry direction.
 

@@ -1,11 +1,12 @@
 ---
-title: Goal Review (2026-07-16)
+title: Goal Review (2026-07-16, Archived)
 created: 2026-07-16T11:46:27-04:00
-updated: 2026-07-16T11:46:27-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: progress_report
 production_area: operations
 department: production
-status: active
+status: archived
 canonical: false
 wiki: true
 wiki_group: Journal

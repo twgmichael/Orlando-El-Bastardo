@@ -1,7 +1,8 @@
 ---
 title: Local Asset Builder Support Notes
 created: 2026-07-21T13:45:07-04:00
-updated: 2026-08-09T23:02:42-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: reference
 production_area: assets
 department: art

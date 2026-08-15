@@ -1,3 +1,18 @@
+---
+title: Asset Review Render Streamlining Plan (Archived)
+created: 2026-07-18T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
+doc_type: progress_report
+production_area: rendering
+department: pipeline
+status: archived
+canonical: false
+wiki: true
+wiki_group: Journal
+wiki_page: Asset-Review-Render-Streamlining-Plan
+wiki_order: 40
+---
 # Asset Review Render Streamlining Plan
 
 Date: 2026-07-18

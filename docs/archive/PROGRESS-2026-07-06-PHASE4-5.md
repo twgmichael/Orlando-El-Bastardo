@@ -1,7 +1,8 @@
 ---
 title: Phases 4-5 (2026-07-06)
 created: 2026-07-06T09:13:12-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: progress_report
 production_area: pipeline
 department: production

@@ -1,13 +1,14 @@
 ---
 title: Prop Builder Plan
 created: 2026-08-08T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: plan
 production_area: props
 department: art
-status: aspirational
+status: draft
 canonical: true
 canonical_for: prop_builder_agent
-wiki: true
+wiki: false
 wiki_group: Planning
 wiki_order: 81
 ---

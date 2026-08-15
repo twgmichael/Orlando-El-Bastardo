@@ -1,17 +1,17 @@
 ---
 title: Open Questions
 created: 2026-07-07T12:09:28-04:00
-updated: 2026-07-16T12:00:11-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: register
 production_area: operations
 department: production
-status: remove_next_cleanup
-canonical: true
-canonical_for: open_questions
+status: archived
+canonical: false
 wiki: true
-wiki_group: Standards
+wiki_group: Journal
 wiki_page: Open-Questions
-wiki_order: 40
+wiki_order: 70
 ---
 # Open questions
 
