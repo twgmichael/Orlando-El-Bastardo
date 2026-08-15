@@ -355,6 +355,15 @@ GPU-accelerated review-render jobs completed end-to-end.
   `render-pc-01` with uploaded gallery artifacts
 - [x] Rename Mac mini worker identity to `render-mac-01` and restore the OEB
   menu bar worker — DONE 2026-07-19
+- Convention (noted 2026-08-15): the Mac mini worker runs in one of two
+  modes, never both at once (both register as `render-mac-01` and would
+  double-claim). Use the "silent" mode — the plain `agent.main` worker
+  started via `screen -dmS oeb-worker ...` (see `docs/local/COMMANDS.md`)
+  with no menu bar UI — for local testing against the local Docker
+  container harness (`127.0.0.1:8088`). Use the "high profile" OEB menu bar
+  app (`oeb_menu_bar.py config-examples/render-mac-01.yml`, shows the OEB
+  logo/status in the menu bar) for staging testing against
+  `oeb-studio.docker-pi`.
 - [x] Add review gallery lightbox navigation and retention pruning —
   DONE 2026-07-19; action plus six angles cycle in the lightbox and old review
   render image artifacts prune after 7 days while preserving latest active

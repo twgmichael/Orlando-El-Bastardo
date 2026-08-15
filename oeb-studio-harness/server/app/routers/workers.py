@@ -41,6 +41,21 @@ def _heartbeat_error_is_stale(server_update_state: str | None, body_update_state
     }
 
 
+def _worker_update_target_matches(target_sha: str | None, reported_sha: str | None) -> bool:
+    """Compare a stored update target git SHA against a worker-reported git SHA.
+
+    Workers report a short SHA (agent.updater's own probe already does a
+    bidirectional prefix check for the same reason); admins pass a full SHA
+    to `tools/update_worker.py`. Exact-equality here would always fail a
+    successful update, so prefix-match in whichever direction is shorter.
+    """
+    if not target_sha:
+        return True
+    if not reported_sha:
+        return False
+    return reported_sha.startswith(target_sha) or target_sha.startswith(reported_sha)
+
+
 @router.post("/register", response_model=WorkerRegisterResponse, status_code=status.HTTP_201_CREATED,
              dependencies=[Depends(require_enrollment)])
 async def register_worker(body: WorkerRegisterRequest, db: AsyncSession = Depends(get_db)):
@@ -64,7 +79,7 @@ async def register_worker(body: WorkerRegisterRequest, db: AsyncSession = Depend
         worker.resources = body.resources
         worker.current_job_id = None
         if worker.update_state in {"ready_to_update", "applying", "force_requested"}:
-            target_matches = not worker.update_target_git_sha or worker.update_target_git_sha == body.git_sha
+            target_matches = _worker_update_target_matches(worker.update_target_git_sha, body.git_sha)
             if target_matches:
                 worker.update_state = "complete"
                 worker.update_last_error = None

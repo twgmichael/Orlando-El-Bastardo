@@ -7,6 +7,7 @@ from app.routers.workers import (
     WORKER_UPDATE_ERROR_MAX_LENGTH,
     _heartbeat_error_is_stale,
     _worker_update_error,
+    _worker_update_target_matches,
 )
 from app.schemas.worker import WorkerHeartbeatResponse, WorkerUpdateRequest
 from app.services.worker_updates import worker_can_claim_jobs
@@ -71,3 +72,31 @@ def test_worker_update_ignores_stale_heartbeat_errors_for_new_requests(pending_s
 
 def test_worker_update_accepts_errors_after_apply_begins():
     assert not _heartbeat_error_is_stale("applying", "failed")
+
+
+def test_worker_update_target_matches_with_no_target():
+    assert _worker_update_target_matches(None, "993d21304e04")
+
+
+def test_worker_update_target_matches_short_reported_sha_against_full_target():
+    # Regression: the worker agent reports a short SHA, admins pass a full
+    # SHA to tools/update_worker.py. A successful update must not report
+    # "failed" just because the two strings differ in length.
+    assert _worker_update_target_matches(
+        "993d21304e049f1f17844250b8e57de80117e755", "993d21304e04"
+    )
+
+
+def test_worker_update_target_matches_exact_full_shas():
+    sha = "993d21304e049f1f17844250b8e57de80117e755"
+    assert _worker_update_target_matches(sha, sha)
+
+
+def test_worker_update_target_matches_rejects_different_sha():
+    assert not _worker_update_target_matches(
+        "993d21304e049f1f17844250b8e57de80117e755", "fb2f11783ae9"
+    )
+
+
+def test_worker_update_target_matches_rejects_missing_reported_sha():
+    assert not _worker_update_target_matches("993d21304e049f1f17844250b8e57de80117e755", None)
