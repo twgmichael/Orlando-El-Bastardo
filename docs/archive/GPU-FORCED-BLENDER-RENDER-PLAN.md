@@ -1,16 +1,17 @@
 ---
-title: GPU Forced Blender Render Plan
+title: GPU Forced Blender Render Plan (Archived)
 created: 2026-07-20T00:00:00-04:00
-updated: 2026-07-20T00:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: plan
 production_area: operations
 department: pipeline
-status: draft
+status: archived
 canonical: false
 wiki: true
-wiki_group: Planning
+wiki_group: Journal
 wiki_page: GPU-Forced-Blender-Render-Plan
-wiki_order: 96
+wiki_order: 90
 ---
 # GPU forced Blender render plan
 

@@ -1,7 +1,7 @@
 ---
 title: Journal Log
 created: 2026-07-14T18:01:24-04:00
-updated: 2026-07-28T14:30:00-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: progress_report
 production_area: operations
 department: production
@@ -16,6 +16,31 @@ wiki_order: 20
 # PROJECT-DONE — Orlando El Bastardo
 
 Completed work, newest first. Move items here from `PROJECT-TODO.md` with a date.
+
+---
+
+## 2026-08-15 — Schema discussion consolidated
+
+Unified `docs/SCHEMA.md`, `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`,
+and `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` so the canonical production
+schema, conversational scene-plan schema, and primitive-builder contract are
+clearly layered instead of overlapping.
+
+- Extracted the duplicated intermediate scene-plan schema (object categories,
+  relationship vocabulary, and the `shape` / `required_features` /
+  `source_phrases` / `materials` / `style_details` detail pass-through
+  contract) out of both planning docs into a new canonical spec,
+  `docs/CONVERSATIONAL-SCENE-SCHEMA.md`.
+- `docs/SCHEMA.md` now points to it for the conversational layer instead of
+  carrying its own summary and an open "needs consolidation" note.
+- `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md` and
+  `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` keep only their own scope
+  (graph/operation-contract architecture and rollout; endpoint/transport and
+  environment targeting) and reference the new spec instead of re-defining it.
+- Landed as part of a broader `docs/` taxonomy audit and cleanup this session:
+  11 stale/redundant docs archived into `docs/archive/` (or `docs/local/archive/`
+  for gitignored local notes), frontmatter/status corrected across the tree,
+  and two dormant sync-breaking taxonomy bugs fixed.
 
 ---
 

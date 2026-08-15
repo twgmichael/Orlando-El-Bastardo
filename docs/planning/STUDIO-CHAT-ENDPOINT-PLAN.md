@@ -1,7 +1,7 @@
 ---
 title: Studio Chat Endpoint Plan
 created: 2026-07-15T15:04:43-04:00
-updated: 2026-07-16T19:16:39-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
@@ -104,9 +104,10 @@ with `OEB_HARNESS_URL` and authenticate with `API_ADMIN_TOKEN`.
 - Keep the endpoint interface-agnostic so Open WebUI, CLI tools, dashboards,
   and future custom UIs can all use it.
 - Preserve object detail and prompt modifiers as structured scene-plan fields,
-  not only as label text. The builder-side schema home for this is
-  `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`; the broader canonical
-  schema overview is `docs/SCHEMA.md`.
+  not only as label text, per the schema in
+  `docs/CONVERSATIONAL-SCENE-SCHEMA.md`. `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`
+  covers the surrounding architecture; `docs/SCHEMA.md` covers the downstream
+  canonical production schema.
 - Preserve the full prompt loop in job trace data:
   - original prompt
   - LLM prompt
@@ -177,27 +178,9 @@ The CLI can then become a thin client of `/api/v1/studio-chat`.
 
 ## Detail Preservation Contract
 
-The chat endpoint should prompt and repair the local LLM so meaningful creative
-details pass through into structured fields. For example, "build a dining room
-table with rounded corners" should produce an object with fields such as:
-
-```json
-{
-  "label": "dining room table",
-  "category": "surface",
-  "shape": {
-    "primary_form": "rectangular_table",
-    "corner_style": "rounded"
-  },
-  "required_features": ["rounded_corners"],
-  "source_phrases": ["dining room table", "rounded corners"]
-}
-```
-
-Endpoint repair should compare the original prompt against the scene plan. If a
-prompt modifier only appears in a label, or disappears entirely, the repair pass
-should move it into `shape`, `required_features`, `materials`,
-`style_details`, or `source_phrases`.
+The chat endpoint prompts and repairs the local LLM against the schema defined
+in `docs/CONVERSATIONAL-SCENE-SCHEMA.md` so meaningful creative details pass
+through into structured fields instead of only label text.
 
 ## Next Build Step
 

@@ -1,7 +1,7 @@
 ---
 title: Scene Graph Primitive Builder Plan
 created: 2026-07-15T09:25:43-04:00
-updated: 2026-07-27T12:00:00-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: plan
 production_area: assets
 department: pipeline
@@ -220,181 +220,12 @@ Milestone 16 implementation:
 
 ## Scene Plan Schema
 
-Add a richer intermediate schema before the current primitive build spec.
-
-This is the current home for the conversational asset-detail schema discussion.
-Cross-reference: `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` covers where the
-local LLM produces and repairs this data, and `docs/SCHEMA.md` covers the
-broader canonical production schemas. These should eventually be consolidated
-so we do not maintain competing schema narratives.
-
-Example:
-
-```json
-{
-  "scene_type": "living_room",
-  "style": "modern minimalist",
-  "objects": [
-    {
-      "id": "reclining_chair",
-      "label": "reclining chair",
-      "category": "seating",
-      "count": 1,
-      "size": "medium",
-      "placement": "center",
-      "shape": {
-        "primary_form": "armchair",
-        "corner_style": "soft",
-        "edge_profile": "rounded"
-      },
-      "required_features": ["reclining_back"],
-      "source_phrases": ["reclining chair"],
-      "orientation": {
-        "faces": "television"
-      }
-    },
-    {
-      "id": "television",
-      "label": "television",
-      "category": "screen",
-      "count": 1,
-      "size": "large",
-      "placement": "rear_wall",
-      "mounting": "wall"
-    },
-    {
-      "id": "floor_lamp",
-      "label": "floor lamp",
-      "category": "lighting",
-      "count": 1,
-      "placement": "left_of_reclining_chair"
-    }
-  ],
-  "relationships": [
-    {
-      "subject": "reclining_chair",
-      "relation": "faces",
-      "target": "television"
-    },
-    {
-      "subject": "television",
-      "relation": "mounted_on",
-      "target": "rear_wall"
-    },
-    {
-      "subject": "floor_lamp",
-      "relation": "left_of",
-      "target": "reclining_chair"
-    }
-  ]
-}
-```
-
-## Detail And Modifier Pass-Through
-
-Creative modifiers must survive as structured data, not only as words embedded
-in labels. A prompt such as "build a dining room table with rounded corners"
-should not rely on `label: "dining_table_rounded_corners"` as the only carrier
-of the rounded-corner requirement.
-
-Add these fields to scene-plan objects:
-
-- `shape`: structured geometry intent such as `primary_form`, `corner_style`,
-  `edge_profile`, `profile`, `silhouette`, and simple proportion notes.
-- `required_features`: snake_case feature requirements that must be preserved
-  through repair and passed to the builder.
-- `source_phrases`: exact or near-exact prompt phrases that justify an object,
-  shape, material, count, placement, or relationship.
-- `materials`: material and finish hints when the prompt provides them.
-- `style_details`: visual style modifiers that affect the object but are not
-  core geometry.
-
-Example:
-
-```json
-{
-  "id": "dining_table",
-  "label": "dining room table",
-  "category": "surface",
-  "count": 1,
-  "size": "medium",
-  "placement": "center",
-  "mounting": "self",
-  "shape": {
-    "primary_form": "rectangular_table",
-    "corner_style": "rounded",
-    "edge_profile": "soft_beveled",
-    "top_thickness": "medium"
-  },
-  "required_features": ["rounded_corners"],
-  "source_phrases": ["dining room table", "rounded corners"],
-  "parts": [
-    {
-      "id": "tabletop",
-      "category": "surface",
-      "shape": {
-        "corner_style": "rounded"
-      }
-    },
-    {
-      "id": "legs",
-      "category": "support",
-      "count": 4
-    }
-  ]
-}
-```
-
-Repair rule: every meaningful adjective or modifier in the creative prompt must
-appear in a structured field, preferably `shape`, `required_features`,
-`materials`, `style_details`, or `source_phrases`. If the prompt contains
-"rounded corners" and no object has `shape.corner_style: "rounded"` or
-`required_features: ["rounded_corners"]`, the plan should be considered
-incomplete and repaired before job creation.
-
-## Core Object Categories
-
-The local LLM should classify arbitrary nouns into reusable production
-categories. The primitive builder should render categories, not one-off scene
-names.
-
-Initial categories:
-
-- `seating`: chair, couch, sofa, bench, stool, recliner
-- `surface`: desk, table, counter, altar, workbench
-- `storage`: cabinet, dresser, shelf, locker, crate
-- `screen`: television, monitor, computer, terminal, display
-- `lighting`: lamp, lantern, sconce, overhead light
-- `bed`: bed, cot, bunk, examination table, gurney
-- `medical`: medical device, scanner, monitor, examination equipment
-- `plant`: tree, plant, bush
-- `path`: road, path, walkway, corridor
-- `wall_item`: window, door, sign, panel, mirror
-- `machine`: console, reactor, kiosk, vending machine
-- `structure`: wall, platform, stage, booth, stall
-- `unknown`: fallback block with label-preserving object name
-
-The category set should grow slowly as repeated production needs appear.
-
-## Relationship Vocabulary
-
-Start with a small deterministic relationship vocabulary:
-
-- `faces`
-- `left_of`
-- `right_of`
-- `behind`
-- `in_front_of`
-- `near`
-- `on_top_of`
-- `mounted_on`
-- `inside`
-- `around`
-- `aligned_with`
-
-The local LLM should extract relationships explicitly. Component names may keep
-spatial hints for backward compatibility, but relationship records should be
-the durable representation.
+The intermediate schema before the current primitive build spec — object
+categories, relationship vocabulary, and the detail/modifier pass-through
+contract — is now specified in full in `docs/CONVERSATIONAL-SCENE-SCHEMA.md`
+(consolidated 2026-08-15 from this doc and
+`docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md`). `docs/SCHEMA.md` covers the
+downstream canonical production schema this layer feeds into.
 
 ## Repair Pass
 

@@ -3,14 +3,14 @@ title: Studio Chat Hierarchical General-Object Planner Plan
 created: 2026-07-28T20:58:00-04:00
 updated: 2026-08-15T00:00:00-04:00
 doc_type: plan
-production_area: studio_chat
+production_area: assets
 department: production
 status: draft
 canonical: true
 canonical_for: studio_chat_hierarchical_general_object_planner
 wiki: false
 wiki_group: Planning
-wiki_page: Studio Chat Hierarchical General-Object Planner
+wiki_page: Studio-Chat-Hierarchical-General-Object-Planner-Plan
 ---
 # Studio Chat Hierarchical General-Object Planner Plan
 

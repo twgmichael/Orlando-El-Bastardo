@@ -1,7 +1,7 @@
 ---
 title: Studio Chat / Blender MCP Review — Discussion Audit
 created: 2026-08-07T17:27:35-04:00
-updated: 2026-08-09T23:02:42-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: reference
 production_area: pipeline
 department: pipeline

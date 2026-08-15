@@ -1,7 +1,7 @@
 ---
 title: Schema
 created: 2026-07-06T09:00:16-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: spec
 production_area: pipeline
 department: pipeline
@@ -64,18 +64,16 @@ discriminated union keyed on a `type` field.
 ## Conversational asset-detail schema
 
 The newer conversational studio loop has a separate intermediate scene-plan
-schema before canonical production `SceneSpec`. Its current planning home is
-`docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`, with endpoint behavior
-tracked in `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md`.
+schema before canonical production `SceneSpec`, specified in
+`docs/CONVERSATIONAL-SCENE-SCHEMA.md`. Architecture and rollout planning for
+the surrounding semantic asset graph live in
+`docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`; endpoint/transport
+behavior is tracked in `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md`.
 
 Important direction: natural-language modifiers must become structured fields.
 For example, "rounded corners" should pass through as `shape.corner_style:
 "rounded"` and/or `required_features: ["rounded_corners"]`, not only as part of
 an object label.
-
-Open consolidation need: merge the canonical schema discussion, studio-chat
-scene-plan schema, and primitive-builder schema notes into one coherent schema
-map so each layer has one clear purpose.
 
 ## Logical identity vs target bindings
 

@@ -1,13 +1,13 @@
 ---
-title: Canonical ID Slug Plan
+title: Canonical ID Slug Plan (Archived)
 created: 2026-07-15T22:46:06-04:00
-updated: 2026-07-16T10:13:39-04:00
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
 doc_type: plan
 production_area: assets
 department: pipeline
-status: draft
-canonical: true
-canonical_for: canonical_id_slugging
+status: archived
+canonical: false
 wiki: false
 wiki_group: Planning
 ---

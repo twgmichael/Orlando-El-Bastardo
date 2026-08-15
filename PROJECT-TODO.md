@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 created: 2026-07-14T18:01:04-04:00
-updated: 2026-08-10T21:10:00-04:00
+updated: 2026-08-15T00:00:00-04:00
 doc_type: register
 production_area: operations
 department: production
@@ -62,13 +62,6 @@ visible shot.
 
 1. **Conversation-to-job intake** — build the smallest usable chat entry point
    where a creative request becomes a structured harness job payload.
-   - [ ] Simplify and consolidate schema discussion — unify `docs/SCHEMA.md`,
-     `docs/planning/SCENE-GRAPH-PRIMITIVE-BUILDER-PLAN.md`, and
-     `docs/planning/STUDIO-CHAT-ENDPOINT-PLAN.md` so the canonical production
-     schema, conversational scene-plan schema, and primitive-builder contract
-     are clearly layered. Include structured detail pass-through for fields
-     such as `shape`, `required_features`, `source_phrases`, `materials`, and
-     `style_details`.
    - [x] Add complete `oeb-studio-chat` trace ledger — keep the normal
      thread/message/build-event tables optimized for chat UI rehydration, but
      add append-only `studio_chat_trace_events` for full audit/reference

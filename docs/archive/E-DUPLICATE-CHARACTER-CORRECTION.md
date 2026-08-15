@@ -1,15 +1,16 @@
 ---
-title: E_DUPLICATE_CHARACTER — Correction Record
+title: E_DUPLICATE_CHARACTER — Correction Record (Archived)
 created: 2026-08-13T22:00:00-04:00
-updated: 2026-08-13T22:00:00-04:00
-doc_type: bug_fix_report
+updated: 2026-08-15T00:00:00-04:00
+archived: 2026-08-15
+doc_type: decision_log
 production_area: pipeline
 department: production
-status: active
-canonical: true
+status: archived
+canonical: false
 canonical_for: e_duplicate_character_bug
 wiki: false
-wiki_group: Bug Fixes
+wiki_group: Journal
 ---
 # E_DUPLICATE_CHARACTER — Correction Record
 
