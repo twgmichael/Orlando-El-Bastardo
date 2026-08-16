@@ -32,6 +32,34 @@
       "kind": "character",
       "skeleton": "oeb_humanoid_v1"
     },
+    "hero-stand-in_v0.0.1": {
+      "file": "concepts/orlando_1999/hero-stand-in_v0.0.1.glb",
+      "node": "char_orlando_1999_A",
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1",
+      "version": "0.0.1"
+    },
+    "male-stand-in_v0.0.1": {
+      "file": "concepts/orlando_1999/male-stand-in_v0.0.1.glb",
+      "node": "placeholder_character_generic_1999_A",
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1",
+      "version": "0.0.1"
+    },
+    "female-stand-in_v0.0.2": {
+      "file": "concepts/orlando_1999/female-stand-in_v0.0.2.glb",
+      "node": "female-stand-in_v0.0.2",
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1",
+      "version": "0.0.2"
+    },
+    "heavy-set-male-stand-in_v0.0.1": {
+      "file": "concepts/orlando_1999/heavy-set-male-stand-in_v0.0.1.glb",
+      "node": "heavy-set-male-stand-in_v0.0.1",
+      "kind": "character",
+      "skeleton": "oeb_humanoid_v1",
+      "version": "0.0.1"
+    },
     "prop_bar_counter_A": {
       "file": "sets/bar_scene_scifi.glb",
       "node": "prop_bar_counter_A",

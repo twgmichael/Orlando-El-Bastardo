@@ -2591,12 +2591,20 @@
     "technician": {
       "character_id": "placeholder_character_background_A__technician",
       "spawn_marks": {
-        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center"
+        "research_outpost_testing_facility": "placeholder_location_research_outpost_testing_facility_A_center",
+        "research_outpost_security_checkpoint": "placeholder_location_research_outpost_security_checkpoint_A_center"
       },
       "entrances": {
         "research_outpost_testing_facility": {
           "from_mark": "placeholder_location_research_outpost_testing_facility_A_entry",
           "approach_mark": "placeholder_location_research_outpost_testing_facility_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "research_outpost_security_checkpoint": {
+          "from_mark": "placeholder_location_research_outpost_security_checkpoint_A_entry",
+          "approach_mark": "placeholder_location_research_outpost_security_checkpoint_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
@@ -2633,12 +2641,36 @@
     "voice": {
       "character_id": "placeholder_character_background_A__voice",
       "spawn_marks": {
-        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center"
+        "starbase_eighty_six_service_passage": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+        "journeyblaster_cockpit": "placeholder_location_journeyblaster_cockpit_A_center",
+        "wipomonte_colgen_colony": "placeholder_location_wipomonte_colgen_colony_A_center",
+        "omega_pi_station_traffic_control": "placeholder_location_omega_pi_station_traffic_control_A_center"
       },
       "entrances": {
         "starbase_eighty_six_service_passage": {
           "from_mark": "placeholder_location_starbase_eighty_six_service_passage_A_entry",
           "approach_mark": "placeholder_location_starbase_eighty_six_service_passage_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "journeyblaster_cockpit": {
+          "from_mark": "placeholder_location_journeyblaster_cockpit_A_entry",
+          "approach_mark": "placeholder_location_journeyblaster_cockpit_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "wipomonte_colgen_colony": {
+          "from_mark": "placeholder_location_wipomonte_colgen_colony_A_entry",
+          "approach_mark": "placeholder_location_wipomonte_colgen_colony_A_center",
+          "walk_duration": 2.0,
+          "settle_duration": 0.5,
+          "rise_duration": 0.5
+        },
+        "omega_pi_station_traffic_control": {
+          "from_mark": "placeholder_location_omega_pi_station_traffic_control_A_entry",
+          "approach_mark": "placeholder_location_omega_pi_station_traffic_control_A_center",
           "walk_duration": 2.0,
           "settle_duration": 0.5,
           "rise_duration": 0.5
