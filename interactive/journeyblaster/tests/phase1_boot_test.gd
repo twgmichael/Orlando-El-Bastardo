@@ -86,8 +86,22 @@ func _run() -> void:
         if player.find_child(senso_globe, true, false) == null:
             fail("JB100 Senso-Globe marker is missing: %s" % senso_globe)
             return
-    if player.find_child("probe_tow_origin", true, false) == null:
-        fail("JB100 probe tow origin is missing")
+    var effect_center := player.find_child(
+        "effect_exclusion_center", true, false
+    ) as Node3D
+    if effect_center == null:
+        fail("JB100 effect-exclusion center is missing")
+        return
+    if (
+        not effect_center.position.is_equal_approx(Vector3(0.0, 1.1, 0.0))
+        or not is_equal_approx(
+            float(effect_center.get_meta("effect_exclusion_radius_m", 0.0)), 3.25
+        )
+        or not is_equal_approx(
+            float(effect_center.get_meta("effect_exclusion_clearance_m", 0.0)), 0.1
+        )
+    ):
+        fail("JB100 effect-exclusion bubble contract is incorrect")
         return
     if (
         player.find_child("frap_hardpoint_left", true, false) == null
@@ -110,6 +124,19 @@ func _run() -> void:
     var weapon_aim := instance.find_child("WeaponAim", true, false) as Control
     if weapon_aim == null or not instance.has_method("toggle_weapon_aim"):
         fail("toggleable projected weapon-aim HUD is missing")
+        return
+    var frap_aim_left := instance.find_child("FrapRayLeft", true, false) as Label
+    var frap_aim_right := instance.find_child("FrapRayRight", true, false) as Label
+    var torpedo_aim := instance.find_child("Torpedo", true, false) as Label
+    if (
+        frap_aim_left == null
+        or frap_aim_right == null
+        or torpedo_aim == null
+        or frap_aim_left.text != "•"
+        or frap_aim_right.text != "•"
+        or torpedo_aim.text != "×"
+    ):
+        fail("weapon-aim HUD does not distinguish FrapRay dots from the target X")
         return
     instance.toggle_weapon_aim()
     if weapon_aim.visible:

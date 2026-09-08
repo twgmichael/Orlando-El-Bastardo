@@ -32,6 +32,24 @@ func _run() -> void:
         fail("asteroid destruction controller is missing")
         return
 
+    var frap_left := player.find_child("frap_hardpoint_left", true, false) as Node3D
+    var frap_right := player.find_child("frap_hardpoint_right", true, false) as Node3D
+    var fire_direction := -player.global_basis.z.normalized()
+    var expected_left: Vector3 = player.effect_safe_origin(
+        frap_left.global_position, fire_direction
+    )
+    var expected_right: Vector3 = player.effect_safe_origin(
+        frap_right.global_position, fire_direction
+    )
+    var effect_center := player.find_child(
+        "effect_exclusion_center", true, false
+    ) as Node3D
+    if (
+        expected_left.distance_to(effect_center.global_position) < 3.349
+        or expected_right.distance_to(effect_center.global_position) < 3.349
+    ):
+        fail("weapon visuals begin inside the JB100 effect-exclusion bubble")
+        return
     if not player.fire_frapray():
         fail("FrapRay did not fire")
         return
@@ -41,17 +59,15 @@ func _run() -> void:
     if frap_bolts.size() != 2:
         fail("FrapRay did not emit paired plasma bolts")
         return
-    var frap_left := player.find_child("frap_hardpoint_left", true, false) as Node3D
-    var frap_right := player.find_child("frap_hardpoint_right", true, false) as Node3D
     var muzzle_matches := 0
     for bolt: Node3D in frap_bolts:
         if (
-            bolt.global_position.distance_to(frap_left.global_position) < 0.01
-            or bolt.global_position.distance_to(frap_right.global_position) < 0.01
+            bolt.global_position.distance_to(expected_left) < 0.01
+            or bolt.global_position.distance_to(expected_right) < 0.01
         ):
             muzzle_matches += 1
     if muzzle_matches != 2:
-        fail("FrapRay bolts did not originate at both physical cannon muzzles")
+        fail("FrapRay bolts did not emerge safely in line with both cannon muzzles")
         return
     await process_frame
     if frap_bolts[0].find_child("OrangePlasmaBolt", true, false) == null:

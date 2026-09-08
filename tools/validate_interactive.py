@@ -58,7 +58,7 @@ def validate_contract_invariants(contract: dict[str, Any], path: Path) -> list[s
         "sensor_source": {"sensor_origin"},
         "sensor_target": {"sensor_signature"},
         "data_download": {"data_port"},
-        "tow_source": {"probe_tow_origin"},
+        "tow_source": {"effect_exclusion_center"},
         "tow_target": {"tow_anchor"},
         "weapon_source": {
             "frap_hardpoint_left",

@@ -80,14 +80,16 @@
     {
       "marker_id": "tractor_origin",
       "role": "tractor_origin",
-      "position": [0.0, 0.82, 3.32],
+      "position": [0.0, 1.1, 0.0],
       "rotation_degrees": [0.0, 180.0, 0.0]
     },
     {
-      "marker_id": "probe_tow_origin",
-      "role": "probe_tow_origin",
-      "position": [0.0, 0.86, 3.48],
-      "rotation_degrees": [0.0, 180.0, 0.0]
+      "marker_id": "effect_exclusion_center",
+      "role": "effect_exclusion_center",
+      "position": [0.0, 1.1, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "radius_m": 3.25,
+      "clearance_m": 0.1
     },
     {
       "marker_id": "engine_emitter_left",
@@ -137,6 +139,7 @@
     "Pilot viewpoint derives from the approved v37/v38 cockpit review camera.",
     "Default pilot framing favors approximately 60 percent exterior visibility and 40 percent cockpit context across the primary view presets.",
     "FrapRay muzzle origins are derived from the exact forward-face centers of the named jb100_cannon_l and jb100_cannon_r meshes in jb100_v38.blend.",
+    "Tow beams, weapon fire, and runtime effects use a 3.25 m exclusion sphere centered at the hull collision center and become visible 0.10 m beyond its surface.",
     "Yellow-orange Senso-Globe hemispheres distributed across the hull provide active and passive environmental sensing; cockpit instruments only display their data.",
     "The pilot chair and gaze rotate independently through five detents or a free 360-degree yaw while ship heading and velocity continue unchanged.",
     "The joined GLB remains the canonical visual; runtime markers live in this contract and generated wrapper."

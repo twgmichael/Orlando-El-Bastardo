@@ -70,6 +70,9 @@ def render_shape_subresource(shape: dict[str, Any], index: int) -> tuple[str, st
 def render_wrapper(contract: dict[str, Any], staged_glb: str) -> str:
     is_pilotable = "pilotable" in contract.get("capabilities", [])
     is_destructible = "destructible" in contract.get("capabilities", [])
+    destructible_script = contract.get("runtime", {}).get(
+        "controller_script", "res://scripts/asteroid_destructible.gd"
+    )
     shape_resources = [
         render_shape_subresource(shape, index)
         for index, shape in enumerate(contract["collision"], start=1)
@@ -89,7 +92,7 @@ def render_wrapper(contract: dict[str, Any], staged_glb: str) -> str:
         )
     if is_destructible:
         lines.append(
-            '[ext_resource type="Script" path="res://scripts/asteroid_destructible.gd" id="4_destructible"]'
+            f'[ext_resource type="Script" path="{destructible_script}" id="4_destructible"]'
         )
     lines.append("")
     for _identifier, rendered in shape_resources:
@@ -163,6 +166,12 @@ def render_wrapper(contract: dict[str, Any], staged_glb: str) -> str:
                 f'metadata/interactive_role = "{marker["role"]}"',
             ]
         )
+        if "radius_m" in marker:
+            lines.append(f'metadata/effect_exclusion_radius_m = {number(marker["radius_m"])}')
+        if "clearance_m" in marker:
+            lines.append(
+                f'metadata/effect_exclusion_clearance_m = {number(marker["clearance_m"])}'
+            )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -402,39 +411,31 @@ def render_mission_scene(mission: dict[str, Any], contracts: dict[str, dict[str,
             "mouse_filter = 2",
             "",
             '[node name="FrapRayLeft" type="Label" parent="HUD/WeaponAim"]',
-            "offset_right = 28.0",
-            "offset_bottom = 28.0",
-            'theme_override_colors/font_color = Color(1, 0.34, 0.035, 0.96)',
-            "theme_override_font_sizes/font_size = 22",
+            "offset_right = 17.0",
+            "offset_bottom = 17.0",
+            'theme_override_colors/font_color = Color(1, 0.12, 0.08, 0.98)',
+            "theme_override_font_sizes/font_size = 14",
             'text = "•"',
             "horizontal_alignment = 1",
             "vertical_alignment = 1",
             "",
             '[node name="FrapRayRight" type="Label" parent="HUD/WeaponAim"]',
-            "offset_right = 28.0",
-            "offset_bottom = 28.0",
-            'theme_override_colors/font_color = Color(1, 0.34, 0.035, 0.96)',
-            "theme_override_font_sizes/font_size = 22",
+            "offset_right = 17.0",
+            "offset_bottom = 17.0",
+            'theme_override_colors/font_color = Color(1, 0.12, 0.08, 0.98)',
+            "theme_override_font_sizes/font_size = 14",
             'text = "•"',
             "horizontal_alignment = 1",
             "vertical_alignment = 1",
             "",
             '[node name="Torpedo" type="Label" parent="HUD/WeaponAim"]',
-            "offset_right = 34.0",
-            "offset_bottom = 34.0",
-            'theme_override_colors/font_color = Color(0.34, 0.68, 1, 0.98)',
-            "theme_override_font_sizes/font_size = 28",
-            'text = "◎"',
+            "offset_right = 17.0",
+            "offset_bottom = 17.0",
+            'theme_override_colors/font_color = Color(1, 0.12, 0.08, 0.98)',
+            "theme_override_font_sizes/font_size = 14",
+            'text = "×"',
             "horizontal_alignment = 1",
             "vertical_alignment = 1",
-            "",
-            '[node name="Caption" type="Label" parent="HUD/WeaponAim"]',
-            "offset_right = 120.0",
-            "offset_bottom = 18.0",
-            'theme_override_colors/font_color = Color(0.7, 0.82, 1, 0.86)',
-            "theme_override_font_sizes/font_size = 10",
-            'text = "WEAPON VECTOR"',
-            "horizontal_alignment = 1",
             "",
         ]
     )

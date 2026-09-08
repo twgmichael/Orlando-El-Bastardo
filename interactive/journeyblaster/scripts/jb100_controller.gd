@@ -1,6 +1,6 @@
 extends CharacterBody3D
 
-signal impact(speed_mps: float)
+signal impact(speed_mps: float, collider: Object)
 signal weapon_fired(weapon_kind: String)
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
@@ -33,6 +33,9 @@ var proton_torpedoes_fired := 0
 @onready var frapray_left := get_node_or_null("frap_hardpoint_left") as Node3D
 @onready var frapray_right := get_node_or_null("frap_hardpoint_right") as Node3D
 @onready var torpedo_launcher := get_node_or_null("torpedo_launcher") as Node3D
+@onready var effect_exclusion_center := (
+    get_node_or_null("effect_exclusion_center") as Node3D
+)
 
 
 func _ready() -> void:
@@ -113,11 +116,12 @@ func _physics_process(delta: float) -> void:
     var speed_before_move := velocity.length()
     move_and_slide()
     if get_slide_collision_count() > 0:
+        var collision := get_slide_collision(0)
         collision_count += 1
         last_impact_speed_mps = speed_before_move
         velocity *= 0.32
         throttle *= 0.55
-        impact.emit(speed_before_move)
+        impact.emit(speed_before_move, collision.get_collider())
     mouse_flight_delta = Vector2.ZERO
 
 
@@ -192,18 +196,47 @@ func _spawn_projectile(
 ) -> void:
     var projectile := WeaponProjectile.new()
     var projectile_parent := get_parent() as Node3D
+    var global_direction := -global_basis.z.normalized()
     var local_direction := (
-        projectile_parent.global_basis.inverse() * -global_basis.z
+        projectile_parent.global_basis.inverse() * global_direction
     ).normalized()
+    var safe_origin := effect_safe_origin(hardpoint.global_position, global_direction)
     projectile.configure(
         kind,
-        projectile_parent.to_local(hardpoint.global_position),
+        projectile_parent.to_local(safe_origin),
         local_direction,
         speed_mps,
         hit_damage,
         get_rid()
     )
     projectile_parent.add_child(projectile)
+
+
+func effect_safe_origin(requested_origin: Vector3, direction: Vector3) -> Vector3:
+    if effect_exclusion_center == null:
+        return requested_origin
+    var normalized_direction := direction.normalized()
+    if normalized_direction.is_zero_approx():
+        return requested_origin
+    var center := effect_exclusion_center.global_position
+    var radius: float = effect_exclusion_center.get_meta(
+        "effect_exclusion_radius_m", 0.0
+    )
+    var clearance: float = effect_exclusion_center.get_meta(
+        "effect_exclusion_clearance_m", 0.1
+    )
+    var safe_radius := radius + clearance
+    var offset := requested_origin - center
+    if offset.length_squared() >= safe_radius * safe_radius:
+        return requested_origin
+    var along_ray := offset.dot(normalized_direction)
+    var discriminant := (
+        along_ray * along_ray - (offset.length_squared() - safe_radius * safe_radius)
+    )
+    if discriminant < 0.0:
+        return requested_origin
+    var exit_distance := -along_ray + sqrt(discriminant)
+    return requested_origin + normalized_direction * maxf(0.0, exit_distance)
 
 
 func weapon_status_text() -> String:

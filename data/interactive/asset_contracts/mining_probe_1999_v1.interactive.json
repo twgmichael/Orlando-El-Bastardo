@@ -11,7 +11,8 @@
   "runtime": {
     "kind": "mission_prop",
     "root_node_type": "RigidBody3D",
-    "wrapper_scene": "res://generated/scenes/mining_probe_1999_v1.tscn"
+    "wrapper_scene": "res://generated/scenes/mining_probe_1999_v1.tscn",
+    "controller_script": "res://scripts/probe_destructible.gd"
   },
   "orientation": {
     "authored_forward_axis": "+X",
@@ -57,12 +58,14 @@
     "data_download",
     "tow_target",
     "beacon",
+    "destructible",
     "collision"
   ],
   "animation_bindings": {
     "beacon": "beacon_blink_loop"
   },
   "notes": [
-    "The probe remains a physical scene object after data download and while in tow."
+    "The probe remains a physical scene object after data download and while in tow.",
+    "Ship collision damages the probe data port but leaves the hull towable; any weapon hit destroys the probe and fails Mission 001."
   ]
 }

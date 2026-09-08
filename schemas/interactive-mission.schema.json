@@ -17,6 +17,7 @@
     "steps",
     "sensors",
     "interactions",
+    "failure_rules",
     "completion"
   ],
   "properties": {
@@ -123,16 +124,31 @@
         "tow": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["target_instance_id", "range_m", "max_relative_speed_mps", "tow_length_m", "source_marker_role", "target_marker_role"],
+          "required": ["target_instance_id", "range_m", "max_relative_speed_mps", "tow_length_m", "latch_duration_s", "source_marker_role", "target_marker_role"],
           "properties": {
             "target_instance_id": { "$ref": "#/$defs/logical_id" },
             "range_m": { "$ref": "#/$defs/positive_number" },
             "max_relative_speed_mps": { "$ref": "#/$defs/positive_number" },
             "tow_length_m": { "$ref": "#/$defs/positive_number" },
-            "source_marker_role": { "const": "probe_tow_origin" },
+            "latch_duration_s": { "$ref": "#/$defs/positive_number" },
+            "source_marker_role": { "const": "effect_exclusion_center" },
             "target_marker_role": { "const": "tow_anchor" }
           }
         }
+      }
+    },
+    "failure_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe_collision_disables_download",
+        "damaged_probe_remains_towable",
+        "probe_weapon_hit_state"
+      ],
+      "properties": {
+        "probe_collision_disables_download": { "const": true },
+        "damaged_probe_remains_towable": { "const": true },
+        "probe_weapon_hit_state": { "const": "FAILED" }
       }
     },
     "completion": {
@@ -215,6 +231,7 @@
         "RETURN_TO_ENTRY",
         "EXIT_READY",
         "HYPERSPACE",
+        "FAILED",
         "COMPLETE"
       ]
     }

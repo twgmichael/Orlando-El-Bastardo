@@ -68,11 +68,12 @@ not remove it, and towing does not convert it into inventory.
 - The JB100 fires paired orange FrapRay plasma bolts from its left and right
   hardpoints and limited proton torpedoes with a blue core and fading white
   vapor trail from its torpedo launcher.
-- FrapRay bolts originate at the measured forward-face centers of the named
-  cannon meshes in the local v38 Blender source, not at cosmetic centerline
-  approximations.
-- The aiming HUD projects all three actual weapon paths into the active camera
-  and can be toggled with `Tab`; the old fixed green plus is removed.
+- FrapRay paths align with the measured forward-face centers of the named
+  cannon meshes in the local v38 Blender source. Their visible bolts begin at
+  the exclusion-bubble exit along those exact axes.
+- The aiming HUD projects all three actual weapon paths into the active camera:
+  red dots identify the two FrapRay paths and a small red X identifies the
+  center torpedo path. `Tab` toggles the full set together.
 - Large asteroids break into three moving fragments. A subsequent weapon hit
   vaporizes a fragment into an expanding dust cloud that fully disappears.
 - Senso-Globe bearings remain ship-relative rather than chair-relative. The
@@ -113,7 +114,8 @@ Every hero and stand-in variant uses the same versioned contract envelope:
 - collision shapes
 - cockpit camera and field of view
 - sensor origin
-- tractor/tow origin
+- centered effect-exclusion bubble for tractor, weapon, and special-effect
+  visibility
 - tow attachment point
 - engine emitters and future weapon/damage attachment slots
 - controller profile
@@ -131,8 +133,8 @@ allows later combat missions without replacing the wrapper architecture.
   60/40 composition.
 - Normalize the asset's Blender `-Y` nose to Godot runtime `-Z` forward.
 - Add a conservative hull collision box.
-- Expose `cockpit_camera`, `sensor_origin`, `tractor_origin`, and
-  `probe_tow_origin` markers.
+- Expose `cockpit_camera`, `sensor_origin`, `tractor_origin`, and a centered
+  `effect_exclusion_center` marker with radius and visibility-clearance data.
 - Expose forward, port, starboard, aft, and dorsal Senso-Globe origins as a
   distributed hull sensor array.
 - Put the cockpit camera below an independent `SeatPivot`; do not parent ship
@@ -180,7 +182,8 @@ These values are gameplay defaults, not OEB canon:
 | Download action | within 12 m, relative speed at most 2.5 m/s |
 | Download duration | 3 seconds, interrupted by unsafe separation |
 | Tow attachment | within 12 m, relative speed at most 1.5 m/s |
-| Tow length | 14 m initial target |
+| Tow latch | 1.8-second visible beam extension |
+| Tow length | Captured attachment distance, held constant up to a 14 m safety maximum |
 | Exit success | JB100 and probe inside the entry-boundary exit volume |
 
 ## Prototype controls
@@ -254,7 +257,8 @@ Implemented in the nested Godot project:
 - five contract-authored Senso-Globe origins and progressive sensor readout
 - deterministic 15-obstacle field using five replaceable asteroid variants
 - probe identification dwell, line-of-sight, safe-speed download, beacon,
-  damped physical tow, visible tow beam, return check, hyperspace, and restart
+  animated beam latch, distance-preserving trailing tow, return check,
+  hyperspace, and restart
 - deterministic starfield, mission HUD, objective, flight, chair, and sensor
   telemetry
 
@@ -285,6 +289,18 @@ toggleable camera-projected aiming display, moves FrapRay fire to `Space`,
 moves course lock to `L`, assigns immediate dead stop to `X`, and places both
 FrapRay spawn points at the exact v38 cannon muzzle centers measured from the
 editable `.blend` source.
+
+The aiming display now distinguishes the paired FrapRay paths with red dots
+from the center red-X target while keeping all three under the same `Tab`
+toggle. Towing now visibly extends and latches over 1.8 seconds, captures the
+attachment distance, and lets the probe trail in world space when the ship
+pivots instead of snapping it into a rigid ship-relative position.
+
+The JB100 now defines a 3.25 m spherical effect-exclusion bubble centered on
+the hull collision center. Tow beams, projectiles, and future special effects
+remain hidden inside it and first appear 0.10 m beyond its surface. The tow
+beam calculates that surface exit dynamically toward the probe, eliminating
+the fixed-point path that could cross the cockpit.
 
 ## Phase 1 acceptance gate
 

@@ -74,14 +74,56 @@ func _run() -> void:
         return
 
     runtime.request_interaction()
-    runtime.state_elapsed = 0.35
-    runtime._update_mission(0.0)
-    if runtime.current_state() != "RETURN_TO_ENTRY" or not runtime.tow_attached:
-        fail("physical tow did not begin the return leg")
+    if runtime.current_state() != "IN_TOW" or not runtime.tow_attached:
+        fail("tow latch sequence did not start")
         return
-    runtime._update_tow(0.1)
+    var tow_origin := player.find_child("effect_exclusion_center", true, false) as Node3D
+    var tow_anchor := probe.find_child("tow_anchor", true, false) as Node3D
+    var probe_at_latch := probe.global_position
+    var captured_length: float = tow_origin.global_position.distance_to(
+        tow_anchor.global_position
+    )
+    runtime._update_tow(runtime.tow_latch_duration * 0.5)
     if not runtime.tow_beam.visible:
-        fail("tow beam is not visible while the probe is attached")
+        fail("tow beam is not visible during the latch sequence")
+        return
+    if not probe.global_position.is_equal_approx(probe_at_latch):
+        fail("probe moved before the tow beam finished latching")
+        return
+    if runtime.tow_beam_mesh.height >= captured_length:
+        fail("tow beam did not visibly extend toward the probe")
+        return
+    runtime._update_tow(runtime.tow_latch_duration * 0.5)
+    runtime._update_mission(0.0)
+    if runtime.current_state() != "RETURN_TO_ENTRY":
+        fail("completed tow latch did not begin the return leg")
+        return
+    var beam_start: Vector3 = runtime._tow_beam_visible_start(tow_anchor.global_position)
+    var bubble_clearance: float = beam_start.distance_to(tow_origin.global_position)
+    if not is_equal_approx(bubble_clearance, 3.35):
+        fail("tow beam did not begin 10 cm outside the 3.25 m ship bubble")
+        return
+
+    var probe_local_before_pivot := player.to_local(probe.global_position)
+    player.rotate_y(PI * 0.5)
+    var rigidly_rotated_probe := player.to_global(probe_local_before_pivot)
+    runtime._update_tow(0.1)
+    if not is_equal_approx(
+        tow_origin.global_position.distance_to(tow_anchor.global_position),
+        captured_length
+    ):
+        fail("tow constraint did not preserve the captured tether distance")
+        return
+    if probe.global_position.distance_to(rigidly_rotated_probe) < 0.5:
+        fail("probe rotated rigidly with the ship instead of trailing")
+        return
+    player.global_position += -player.global_transform.basis.z * 5.0
+    runtime._update_tow(0.1)
+    if not is_equal_approx(
+        tow_origin.global_position.distance_to(tow_anchor.global_position),
+        captured_length
+    ):
+        fail("trailing probe did not remain at the latched distance")
         return
 
     var entry := runtime.find_child("asteroid_field_entry", true, false) as Node3D

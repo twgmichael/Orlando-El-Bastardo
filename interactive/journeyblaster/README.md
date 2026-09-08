@@ -46,7 +46,11 @@ torpedo. FrapRay bolts are orange plasma energy. Proton torpedoes have a blue
 core and a fading white vapor trail. Large asteroids break into moving
 fragments; weapon hits vaporize the fragments into disappearing dust clouds.
 The aiming HUD projects the actual two cannon paths and center torpedo path;
-`Tab` toggles it.
+the FrapRay paths use red dots and the center target uses a small red X. `Tab`
+toggles them together. The tow beam extends and latches over 1.8 seconds, then
+holds the captured distance while the probe trails naturally as the JB100
+pivots and changes course. A centered 3.25 m ship-effect bubble hides tow and
+weapon visuals inside the hull; they become visible 0.10 m beyond its surface.
 
 The asteroid contracts prefer their registered canonical assets. When the
 external `assets/placeholders` library is not mounted, the documented builder

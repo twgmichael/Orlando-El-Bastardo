@@ -97,8 +97,11 @@ complete the data transfer without the mission behaving like waypoint chase.
 - [x] Add contextual `TAKE IN TOW` after the data download completes.
 - [x] Keep the probe physically visible behind the JB100; do not convert it
   into inventory.
-- [x] Add a stable damped tow constraint, visible tow beam, and collision-safe
-  tow length.
+- [x] Animate a 1.8-second beam extension and latch, then preserve the captured
+  tow distance with a world-space trailing constraint instead of snapping the
+  probe behind the ship.
+- [x] Route the tow beam from the JB100 hull center and reveal it only 0.10 m
+  beyond a 3.25 m ship-effect exclusion sphere, preventing cockpit clipping.
 - [x] Require the player to return to the original entry boundary with the
   probe still attached.
 - [x] Unlock hyperspace only after ship and probe clear the asteroid field.
@@ -125,7 +128,7 @@ hyperspace completion.
 - [x] Promote the JB100 FrapRay and proton-torpedo markers to an enforced
   weapon-source contract.
 - [x] Fire paired orange plasma FrapRay bolts with `Space` from the physical
-  left and right cannon muzzles.
+  left and right cannon axes, revealing them beyond the ship-effect bubble.
 - [x] Launch limited proton torpedoes with blue cores and fading white vapor
   trails with `T`.
 - [x] Give all five asteroid variants destructible runtime wrappers.
@@ -133,7 +136,8 @@ hyperspace completion.
 - [x] Vaporize fragments into expanding, disappearing dust clouds.
 - [x] Add weapon readiness, torpedo ammunition, and controls to the HUD.
 - [x] Replace the fixed green plus with a `Tab`-toggleable aiming HUD that
-  projects the actual twin FrapRay and center torpedo firing paths.
+  projects the actual twin FrapRay and center torpedo firing paths, using red
+  dots for the two FrapRay impacts and a small red X for the center aim point.
 - [x] Move course lock to `L` and make `X` immediately zero throttle and
   velocity.
 - [x] Add collision-level automated coverage for both weapons, breakup, and

@@ -62,6 +62,10 @@
         "wrapper_scene": {
           "type": "string",
           "pattern": "^res://generated/scenes/[a-zA-Z0-9_/-]+\\.tscn$"
+        },
+        "controller_script": {
+          "type": "string",
+          "pattern": "^res://scripts/[a-zA-Z0-9_/-]+\\.gd$"
         }
       }
     },
@@ -208,6 +212,7 @@
             "sensor_signature",
             "tractor_origin",
             "probe_tow_origin",
+            "effect_exclusion_center",
             "tow_anchor",
             "data_port",
             "engine_emitter_left",
@@ -228,6 +233,14 @@
         "source_lens_mm": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "radius_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "clearance_m": {
+          "type": "number",
+          "minimum": 0
         }
       }
     }

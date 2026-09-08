@@ -30,6 +30,13 @@ loop and adds optional asteroid combat and destruction.
 - The HUD reports FrapRay readiness, proton-torpedo ammunition, and fire keys.
 - The fixed green plus is removed. A `Tab`-toggleable aiming HUD projects the
   actual left cannon, right cannon, and torpedo paths into the active camera.
+  Red dots mark the two FrapRay impacts; a smaller red X marks the center path.
+- Tow activation visibly extends to the probe for 1.8 seconds before latching.
+  The tether then holds the captured distance while the probe trails through
+  ship pivots and turns rather than snapping rigidly behind the JB100.
+- A centered 3.25 m effect-exclusion sphere keeps the tow beam and weapon
+  visuals out of the JB100 hull. Effects first become visible 0.10 m beyond
+  the sphere along their actual travel direction.
 - `L` toggles course lock and `X` immediately zeros throttle and velocity.
 
 ## Runtime architecture
@@ -39,6 +46,8 @@ loop and adds optional asteroid combat and destruction.
 - FrapRay muzzle positions are measured from the named cannon meshes in the
   local v38 `.blend` source: lateral offsets of `±1.4919`, height `0.9571`,
   and runtime-forward position `-2.8263` metres.
+- Visible weapon effects remain aligned with those muzzle axes but begin only
+  after exiting the centered ship-effect bubble.
 - All five asteroid contracts declare `destructible`; their generated wrappers
   receive the common asteroid destruction controller.
 - Projectiles use swept physics ray tests between frames to avoid tunneling at

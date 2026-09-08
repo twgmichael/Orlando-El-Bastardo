@@ -8,11 +8,12 @@ const STATE_OBJECTIVES := {
     "DOWNLOADING": "Maintain range and relative speed during data transfer.",
     "DATA_SECURED": "Data secured. Prepare the probe for tow.",
     "TOW_READY": "Hold inside 12 m at low speed and press G to take the probe in tow.",
-    "IN_TOW": "Probe attached. Turn back toward the field entrance.",
+    "IN_TOW": "Tow beam acquiring and latching onto the probe.",
     "RETURN_TO_ENTRY": "Tow the physical probe back to the original entry boundary.",
     "EXIT_READY": "Ship and probe are clear. Press H to engage hyperspace.",
     "HYPERSPACE": "Yoyodyne hyperdrive engaging.",
     "COMPLETE": "Mining probe and data recovered. Mission complete.",
+    "FAILED": "Mining probe destroyed. Mission failed.",
 }
 
 @export_file("*.json") var mission_data_path: String
@@ -32,6 +33,9 @@ var download_progress := 0.0
 var state_elapsed := 0.0
 var tow_attached := false
 var identified := false
+var probe_damaged := false
+var probe_destroyed := false
+var probe_data_secured := false
 var tow_beam: MeshInstance3D
 var tow_beam_mesh: CylinderMesh
 var beacon_light: OmniLight3D
@@ -46,11 +50,13 @@ var weapon_aim: Control
 var frap_aim_left: Label
 var frap_aim_right: Label
 var torpedo_aim: Label
-var weapon_aim_caption: Label
 var frap_origin_left: Node3D
 var frap_origin_right: Node3D
 var torpedo_origin: Node3D
 var weapon_aim_enabled := true
+var tow_latch_elapsed := 0.0
+var tow_latch_duration := 1.8
+var tow_constraint_length := 0.0
 
 
 func _ready() -> void:
@@ -88,7 +94,7 @@ func _unhandled_input(event: InputEvent) -> void:
             KEY_TAB:
                 toggle_weapon_aim()
             KEY_R:
-                if mission_state == "COMPLETE":
+                if mission_state in ["COMPLETE", "FAILED"]:
                     get_tree().reload_current_scene()
     elif event is InputEventJoypadButton and event.pressed:
         match event.button_index:
@@ -127,7 +133,7 @@ func _resolve_runtime_nodes() -> bool:
         return false
     sensor_origin = player.find_child("sensor_origin", true, false) as Node3D
     probe_signature = probe.find_child("sensor_signature", true, false) as Node3D
-    tow_origin = player.find_child("probe_tow_origin", true, false) as Node3D
+    tow_origin = player.find_child("effect_exclusion_center", true, false) as Node3D
     tow_anchor = probe.find_child("tow_anchor", true, false) as Node3D
     pilot_view = player.find_child("SeatPivot", true, false) as Node3D
     entry_boundary = find_child(
@@ -159,10 +165,12 @@ func _resolve_runtime_nodes() -> bool:
     frap_aim_left = get_node_or_null("HUD/WeaponAim/FrapRayLeft") as Label
     frap_aim_right = get_node_or_null("HUD/WeaponAim/FrapRayRight") as Label
     torpedo_aim = get_node_or_null("HUD/WeaponAim/Torpedo") as Label
-    weapon_aim_caption = get_node_or_null("HUD/WeaponAim/Caption") as Label
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
     torpedo_origin = player.find_child("torpedo_launcher", true, false) as Node3D
+    player.connect("impact", _on_player_impact)
+    probe.connect("collision_damaged", _on_probe_collision_damaged)
+    probe.connect("destroyed_by_weapon", _on_probe_destroyed_by_weapon)
     return true
 
 
@@ -172,11 +180,15 @@ func begin_mission() -> void:
 
 
 func request_interaction() -> void:
-    if mission_state == "DOWNLOAD_READY" and _download_conditions_safe():
+    if (
+        mission_state == "DOWNLOAD_READY"
+        and not probe_damaged
+        and _download_conditions_safe()
+    ):
         download_progress = 0.0
         _set_state("DOWNLOADING")
     elif mission_state == "TOW_READY" and _tow_conditions_safe():
-        tow_attached = true
+        _begin_tow()
         _set_state("IN_TOW")
 
 
@@ -205,9 +217,11 @@ func _update_mission(delta: float) -> void:
             identification_progress = maxf(0.0, identification_progress - delta * 0.5)
         if identification_progress >= mission_data["sensors"]["identification_dwell_s"]:
             identified = true
-            _set_state("APPROACH")
+            _set_state("TOW_READY" if probe_damaged else "APPROACH")
     elif mission_state == "APPROACH":
-        if _download_conditions_safe():
+        if probe_damaged:
+            _set_state("TOW_READY")
+        elif _download_conditions_safe():
             _set_state("DOWNLOAD_READY")
     elif mission_state == "DOWNLOAD_READY":
         if not _download_conditions_safe():
@@ -219,10 +233,11 @@ func _update_mission(delta: float) -> void:
         else:
             download_progress += delta
             if download_progress >= mission_data["interactions"]["download"]["duration_s"]:
+                probe_data_secured = true
                 _set_state("DATA_SECURED")
     elif mission_state == "DATA_SECURED" and state_elapsed >= 0.65:
         _set_state("TOW_READY")
-    elif mission_state == "IN_TOW" and state_elapsed >= 0.35:
+    elif mission_state == "IN_TOW" and tow_latch_elapsed >= tow_latch_duration:
         _set_state("RETURN_TO_ENTRY")
     elif mission_state == "RETURN_TO_ENTRY" and _ship_and_probe_inside_entry_boundary():
         _set_state("EXIT_READY")
@@ -245,7 +260,9 @@ func _set_state(next_state: String) -> void:
 func _download_conditions_safe() -> bool:
     var rules: Dictionary = mission_data["interactions"]["download"]
     return (
-        _distance_to_probe() <= rules["range_m"]
+        probe.call("can_download_data")
+        and not probe_damaged
+        and _distance_to_probe() <= rules["range_m"]
         and player.velocity.length() <= rules["max_relative_speed_mps"]
         and (not rules["requires_line_of_sight"] or _has_probe_line_of_sight())
     )
@@ -254,9 +271,35 @@ func _download_conditions_safe() -> bool:
 func _tow_conditions_safe() -> bool:
     var rules: Dictionary = mission_data["interactions"]["tow"]
     return (
-        _distance_to_probe() <= rules["range_m"]
+        probe.call("can_be_towed")
+        and _distance_to_probe() <= rules["range_m"]
         and player.velocity.length() <= rules["max_relative_speed_mps"]
     )
+
+
+func _on_player_impact(impact_speed_mps: float, collider: Object) -> void:
+    if collider == probe and not probe_destroyed:
+        probe.call("apply_collision_damage", impact_speed_mps)
+
+
+func _on_probe_collision_damaged(_impact_speed_mps: float) -> void:
+    probe_damaged = true
+    download_progress = 0.0
+    if not probe_data_secured and mission_state in [
+        "APPROACH", "DOWNLOAD_READY", "DOWNLOADING"
+    ]:
+        _set_state("TOW_READY")
+
+
+func _on_probe_destroyed_by_weapon(_weapon_kind: String) -> void:
+    probe_destroyed = true
+    tow_attached = false
+    weapon_aim_enabled = false
+    if tow_beam:
+        tow_beam.visible = false
+    _set_state("FAILED")
+    player.set_controls_enabled(false)
+    _update_hud()
 
 
 func _has_probe_line_of_sight() -> bool:
@@ -282,16 +325,63 @@ func _ship_and_probe_inside_entry_boundary() -> bool:
     )
 
 
-func _update_tow(delta: float) -> void:
-    var tow_length: float = mission_data["interactions"]["tow"]["tow_length_m"]
-    var desired_anchor := (
-        tow_origin.global_position
-        + player.global_transform.basis.z.normalized() * tow_length
+func _begin_tow() -> void:
+    tow_attached = true
+    tow_latch_elapsed = 0.0
+    tow_latch_duration = float(
+        mission_data["interactions"]["tow"].get("latch_duration_s", 1.8)
     )
-    var anchor_error := desired_anchor - tow_anchor.global_position
-    probe.global_position += anchor_error * (1.0 - exp(-5.0 * delta))
-    probe.global_rotation = probe.global_rotation.lerp(player.global_rotation, 2.2 * delta)
-    _update_tow_beam_geometry(tow_origin.global_position, tow_anchor.global_position)
+    tow_constraint_length = _captured_tow_length()
+
+
+func _captured_tow_length() -> float:
+    var safety_max: float = mission_data["interactions"]["tow"]["tow_length_m"]
+    return clampf(
+        tow_origin.global_position.distance_to(tow_anchor.global_position),
+        0.5,
+        safety_max
+    )
+
+
+func _update_tow(delta: float) -> void:
+    if tow_constraint_length <= 0.0:
+        tow_constraint_length = _captured_tow_length()
+    if tow_latch_elapsed < tow_latch_duration:
+        tow_latch_elapsed = minf(tow_latch_elapsed + delta, tow_latch_duration)
+        var latch_ratio := clampf(tow_latch_elapsed / tow_latch_duration, 0.0, 1.0)
+        var latch_eased := smoothstep(0.0, 1.0, latch_ratio)
+        var beam_start := _tow_beam_visible_start(tow_anchor.global_position)
+        var beam_tip := beam_start.lerp(tow_anchor.global_position, latch_eased)
+        _update_tow_beam_geometry(beam_start, beam_tip)
+        return
+
+    # The probe is not parented to the ship. It keeps its world-space position
+    # through a pivot, then the taut tether projects its anchor back onto the
+    # captured radius. Straight flight pulls it along; turns make it trail.
+    var anchor_offset := tow_anchor.global_position - tow_origin.global_position
+    var tether_direction := anchor_offset.normalized()
+    if tether_direction.is_zero_approx():
+        tether_direction = player.global_transform.basis.z.normalized()
+    var constrained_anchor := (
+        tow_origin.global_position + tether_direction * tow_constraint_length
+    )
+    probe.global_position += constrained_anchor - tow_anchor.global_position
+    _update_tow_beam_geometry(
+        _tow_beam_visible_start(tow_anchor.global_position),
+        tow_anchor.global_position
+    )
+
+
+func _tow_beam_visible_start(target: Vector3) -> Vector3:
+    var center := tow_origin.global_position
+    var center_to_target := target - center
+    var target_distance := center_to_target.length()
+    if target_distance <= 0.001:
+        return center
+    var radius: float = tow_origin.get_meta("effect_exclusion_radius_m", 0.0)
+    var clearance: float = tow_origin.get_meta("effect_exclusion_clearance_m", 0.1)
+    var visible_distance := minf(target_distance, radius + clearance)
+    return center + center_to_target / target_distance * visible_distance
 
 
 func _build_tow_beam() -> void:
@@ -339,7 +429,9 @@ func _build_probe_beacon() -> void:
 
 
 func _update_probe_beacon() -> void:
-    if beacon_light:
+    if beacon_light and probe_destroyed:
+        beacon_light.light_energy = 0.0
+    elif beacon_light:
         beacon_light.light_energy = 1.0 + maxf(0.0, sin(Time.get_ticks_msec() * 0.008)) * 5.0
 
 
@@ -382,7 +474,10 @@ func _build_starfield() -> void:
 
 func _update_hud() -> void:
     if objective_label:
-        objective_label.text = STATE_OBJECTIVES.get(mission_state, "")
+        if mission_state == "TOW_READY" and probe_damaged and not probe_data_secured:
+            objective_label.text = "DATA PORT DAMAGED. Recover the probe in tow."
+        else:
+            objective_label.text = STATE_OBJECTIVES.get(mission_state, "")
     if sensor_label:
         sensor_label.text = _sensor_readout()
     if flight_label:
@@ -423,10 +518,6 @@ func _update_weapon_aim() -> void:
     _position_weapon_marker(frap_aim_left, left_point, camera)
     _position_weapon_marker(frap_aim_right, right_point, camera)
     _position_weapon_marker(torpedo_aim, torpedo_point, camera)
-    if weapon_aim_caption:
-        weapon_aim_caption.visible = torpedo_aim.visible
-        if torpedo_aim.visible:
-            weapon_aim_caption.position = torpedo_aim.position + Vector2(-43.0, 31.0)
 
 
 func _weapon_impact_point(origin: Vector3, direction: Vector3, range_m: float) -> Vector3:
@@ -456,6 +547,8 @@ func _position_weapon_marker(marker: Label, world_point: Vector3, camera: Camera
 
 
 func _sensor_readout() -> String:
+    if probe_destroyed:
+        return "SENSO-GLOBES · ACTIVE/PASSIVE\nTARGET DESTROYED"
     var distance := _distance_to_probe()
     var rules: Dictionary = mission_data["sensors"]
     var prefix := "SENSO-GLOBES · ACTIVE/PASSIVE\n"
@@ -482,6 +575,8 @@ func _sensor_readout() -> String:
             readout += "\nANALYZING  %02d%%" % roundi(identification_progress / dwell * 100.0)
     if identified and distance <= rules["visual_range_m"]:
         readout += "\nVISUAL ACQUISITION"
+    if probe_damaged and not probe_data_secured:
+        readout += "\nDATA PORT DAMAGED · TOW ONLY"
     return readout
 
 
@@ -496,9 +591,15 @@ func _context_prompt() -> String:
             return "DOWNLOADING · %02d%%" % roundi(download_progress / duration * 100.0)
         "TOW_READY":
             return "G · TAKE PROBE IN TOW" if _tow_conditions_safe() else "REDUCE SPEED AND CLOSE TO 12 m"
+        "IN_TOW":
+            return "TOW BEAM LATCHING · %02d%%" % roundi(
+                tow_latch_elapsed / tow_latch_duration * 100.0
+            )
         "EXIT_READY":
             return "H · ENGAGE HYPERSPACE"
         "COMPLETE":
             return "MISSION COMPLETE · R TO RESTART"
+        "FAILED":
+            return "MISSION FAILED · R TO RESTART"
         _:
             return ""
