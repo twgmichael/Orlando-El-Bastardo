@@ -4,8 +4,8 @@ config_version=5
 
 [application]
 
-config/name="JourneyBlaster — Mission 001 — Demo Prototype V2"
-config/version="demo-prototype-v2"
+config/name="JourneyBlaster — Mission 001 — Demo Prototype V4"
+config/version="demo-prototype-v4"
 run/main_scene="res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn"
 
 [display]

@@ -298,7 +298,6 @@ func _on_probe_destroyed_by_weapon(_weapon_kind: String) -> void:
     if tow_beam:
         tow_beam.visible = false
     _set_state("FAILED")
-    player.set_controls_enabled(false)
     _update_hud()
 
 
@@ -476,6 +475,8 @@ func _update_hud() -> void:
     if objective_label:
         if mission_state == "TOW_READY" and probe_damaged and not probe_data_secured:
             objective_label.text = "DATA PORT DAMAGED. Recover the probe in tow."
+        elif mission_state == "COMPLETE" and probe_damaged and not probe_data_secured:
+            objective_label.text = "Damaged mining probe recovered. Data unavailable."
         else:
             objective_label.text = STATE_OBJECTIVES.get(mission_state, "")
     if sensor_label:

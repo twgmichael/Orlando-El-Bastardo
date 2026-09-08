@@ -160,6 +160,14 @@ func _run() -> void:
     if probe.find_child("tow_anchor", true, false) == null:
         fail("mining probe tow anchor is missing")
         return
+    if (
+        not probe.has_method("apply_collision_damage")
+        or not probe.has_method("apply_weapon_hit")
+        or not probe.has_method("can_download_data")
+        or not probe.has_method("can_be_towed")
+    ):
+        fail("mining probe destructibility controller is missing")
+        return
 
     var obstacle_count := 0
     for obstacle in mission.get("environment", {}).get("obstacles", []):

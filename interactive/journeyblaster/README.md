@@ -1,6 +1,6 @@
 # JourneyBlaster Godot Runtime
 
-Current milestone: **Demo Prototype V2** (`demo-prototype-v2`), declared
+Current milestone: **Demo Prototype V4** (`demo-prototype-v4`), declared
 complete on 2026-09-08.
 
 This nested Godot 4 project is the first OEB interactive runtime. Canonical
@@ -20,6 +20,10 @@ godot --headless --path interactive/journeyblaster \
   --script res://tests/phase1_boot_test.gd
 godot --headless --path interactive/journeyblaster \
   --script res://tests/prototype_runtime_test.gd
+godot --headless --path interactive/journeyblaster \
+  --script res://tests/probe_damage_runtime_test.gd
+godot --headless --path interactive/journeyblaster \
+  --script res://tests/flight_controls_runtime_test.gd
 godot --path interactive/journeyblaster
 ```
 
@@ -41,6 +45,12 @@ interact, `X` dead stop, `1`–`5` chair views, right-mouse free chair rotation,
 hyperspace, and `F3` external debug view. Left-mouse drag and gamepad flight
 paths are also available.
 
+Keyboard and arrow steering eases into and out of full deflection. Pitch, yaw,
+and roll are always relative to the JB100 itself, including after the ship
+rolls upside down. Left-mouse drag uses direct pixel sensitivity with a short
+smoothing filter; releasing and clicking again starts cleanly without stale
+motion or a slower second drag.
+
 Combat controls are `Space` for paired FrapRay blasts and `T` for a proton
 torpedo. FrapRay bolts are orange plasma energy. Proton torpedoes have a blue
 core and a fading white vapor trail. Large asteroids break into moving
@@ -51,6 +61,12 @@ toggles them together. The tow beam extends and latches over 1.8 seconds, then
 holds the captured distance while the probe trails naturally as the JB100
 pivots and changes course. A centered 3.25 m ship-effect bubble hides tow and
 weapon visuals inside the hull; they become visible 0.10 m beyond its surface.
+
+The mining probe now carries mission consequences. Colliding with it damages
+its data port and permanently prevents the download, but the damaged probe can
+still be taken in tow and recovered. Hitting it with either weapon destroys it
+in an explosion and fails the mission, but the JB100 remains freely flyable in
+the current scene. Press `R` when ready to restart.
 
 The asteroid contracts prefer their registered canonical assets. When the
 external `assets/placeholders` library is not mounted, the documented builder

@@ -12,8 +12,8 @@ wiki: false
 ---
 # Mission 001 — Retrieve the Mining Probe
 
-Milestone status: **Demo Prototype V2**, declared complete on 2026-09-08.
-See [DEMO-PROTOTYPE-V2.md](DEMO-PROTOTYPE-V2.md) for the milestone record.
+Milestone status: **Demo Prototype V4**, declared complete on 2026-09-08.
+See [DEMO-PROTOTYPE-V4.md](DEMO-PROTOTYPE-V4.md) for the milestone record.
 
 ## Goal
 
@@ -35,15 +35,21 @@ cockpit briefing
   -> resolve bearing and strength
   -> identify mining probe
   -> approach safely
-  -> download data
+  -> download data (unless collision damaged the data port)
   -> take probe in tow
   -> turn around and return to entry boundary
   -> clear asteroid field with probe attached
   -> hyperspace
+
+weapon hit on probe -> probe explosion -> mission failed -> restart
 ```
 
 The probe is a physical mission object throughout. Downloading its data does
 not remove it, and towing does not convert it into inventory.
+
+Ship collision damages the probe and closes the download path, but keeps the
+physical hull towable. A FrapRay or proton-torpedo hit destroys the probe and
+immediately fails the mission.
 
 ## Locked experience decisions
 
@@ -274,6 +280,8 @@ INTERACTIVE-SYNC-OK assets=7 missions=1
 PHASE1-BOOT-OK: cockpit + chair pivot + Senso-Globes + probe + tow + 15 asteroids
 PROTOTYPE-RUNTIME-OK: flight + chair + sensors + download + tow + return + hyperspace
 COMBAT-RUNTIME-OK: FrapRay + proton torpedo + breakup + fragment vaporization + dust
+PROBE-DAMAGE-RUNTIME-OK: collision disables download + tow survives + weapon destruction fails mission + post-failure free flight
+FLIGHT-CONTROLS-RUNTIME-OK: smooth arrows + ship-local inverted axes + repeatable mouse drag
 ```
 
 ## Demo Prototype V2 combat expansion — 2026-09-08
@@ -301,6 +309,33 @@ the hull collision center. Tow beams, projectiles, and future special effects
 remain hidden inside it and first appear 0.10 m beyond its surface. The tow
 beam calculates that surface exit dynamically toward the probe, eliminating
 the fixed-point path that could cross the cockpit.
+
+## Demo Prototype V3 probe consequences — 2026-09-08
+
+The mining probe now uses a dedicated destructibility controller declared by
+its interactive-asset contract. A JB100 collision damages the probe data port,
+cancels or prevents the download, and routes the mission directly to recovery
+with `TAKE PROBE IN TOW`. Collision damage never destroys the probe, so the
+physical tow and return path remains available.
+
+A FrapRay or proton-torpedo hit destroys the probe immediately, plays a bright
+expanding explosion and dust burst, removes the target from play, detaches any
+tow, and transitions Mission 001 to `FAILED`. The JB100 remains freely
+flyable in the failed mission scene; the HUD identifies the destroyed target
+and offers `R` to restart when the player chooses.
+
+## Demo Prototype V4 flight-control refinement — 2026-09-08
+
+Keyboard steering now ramps smoothly into and out of full pitch, yaw, and roll
+instead of snapping instantly to maximum rate. All three rotations use the
+JB100's local axes. When the ship rolls inverted, up, down, left, and right
+therefore retain their meaning relative to the pilot and ship rather than
+silently switching to environment-relative orientation.
+
+Left-mouse drag now converts pointer movement directly to angular movement,
+then applies a short smoothing filter. This removes frame-rate-dependent
+sluggishness. Press and release explicitly clear both queued and filtered
+motion, so a second drag begins with the same response as the first.
 
 ## Phase 1 acceptance gate
 

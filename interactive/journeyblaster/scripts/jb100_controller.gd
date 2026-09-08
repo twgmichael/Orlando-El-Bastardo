@@ -13,6 +13,9 @@ const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 @export var pitch_rate_degrees := 54.0
 @export var yaw_rate_degrees := 48.0
 @export var roll_rate_degrees := 72.0
+@export var steering_response_per_second := 7.5
+@export var mouse_aim_sensitivity_degrees_per_pixel := 0.13
+@export var mouse_aim_smoothing_per_second := 20.0
 @export var frapray_cooldown_s := 0.18
 @export var torpedo_cooldown_s := 0.9
 @export var proton_torpedo_capacity := 8
@@ -24,6 +27,10 @@ var collision_count := 0
 var last_impact_speed_mps := 0.0
 var mouse_flight_active := false
 var mouse_flight_delta := Vector2.ZERO
+var mouse_rotation_step := Vector2.ZERO
+var pitch_input_smoothed := 0.0
+var yaw_input_smoothed := 0.0
+var roll_input_smoothed := 0.0
 var frapray_cooldown_remaining := 0.0
 var torpedo_cooldown_remaining := 0.0
 var proton_torpedoes_remaining := 8
@@ -47,6 +54,7 @@ func _physics_process(delta: float) -> void:
     frapray_cooldown_remaining = maxf(0.0, frapray_cooldown_remaining - delta)
     torpedo_cooldown_remaining = maxf(0.0, torpedo_cooldown_remaining - delta)
     if not controls_enabled:
+        mouse_flight_delta = Vector2.ZERO
         return
 
     var throttle_input := clampf(
@@ -60,35 +68,42 @@ func _physics_process(delta: float) -> void:
         1.0
     )
     if not course_lock:
-        var pitch_input := clampf(
+        var pitch_target := clampf(
             _key_axis(KEY_DOWN, KEY_UP)
-            - _joy_axis(JOY_AXIS_RIGHT_Y)
-            - mouse_flight_delta.y * 0.012,
+            - _joy_axis(JOY_AXIS_RIGHT_Y),
             -1.0,
             1.0
         )
-        var yaw_input := clampf(
+        var yaw_target := clampf(
             _key_axis(KEY_D, KEY_A)
             + _key_axis(KEY_RIGHT, KEY_LEFT)
-            - _joy_axis(JOY_AXIS_LEFT_X)
-            - mouse_flight_delta.x * 0.012,
+            - _joy_axis(JOY_AXIS_LEFT_X),
             -1.0,
             1.0
         )
-        var roll_input := clampf(
+        var roll_target := clampf(
             _key_axis(KEY_E, KEY_Q) + _joy_axis(JOY_AXIS_RIGHT_X),
             -1.0,
             1.0
         )
-        rotate_object_local(
-            Vector3.RIGHT,
-            deg_to_rad(pitch_rate_degrees) * pitch_input * delta
+        pitch_input_smoothed = _smooth_axis(
+            pitch_input_smoothed, pitch_target, delta
         )
-        rotate_y(deg_to_rad(yaw_rate_degrees) * yaw_input * delta)
-        rotate_object_local(
-            Vector3.BACK,
-            deg_to_rad(roll_rate_degrees) * roll_input * delta
+        yaw_input_smoothed = _smooth_axis(yaw_input_smoothed, yaw_target, delta)
+        roll_input_smoothed = _smooth_axis(roll_input_smoothed, roll_target, delta)
+        _apply_ship_rotation(
+            deg_to_rad(pitch_rate_degrees) * pitch_input_smoothed * delta,
+            deg_to_rad(yaw_rate_degrees) * yaw_input_smoothed * delta,
+            deg_to_rad(roll_rate_degrees) * roll_input_smoothed * delta
         )
+        var mouse_rotation := _consume_mouse_rotation(delta)
+        _apply_ship_rotation(mouse_rotation.y, mouse_rotation.x, 0.0)
+    else:
+        pitch_input_smoothed = _smooth_axis(pitch_input_smoothed, 0.0, delta)
+        yaw_input_smoothed = _smooth_axis(yaw_input_smoothed, 0.0, delta)
+        roll_input_smoothed = _smooth_axis(roll_input_smoothed, 0.0, delta)
+        mouse_rotation_step = Vector2.ZERO
+        mouse_flight_delta = Vector2.ZERO
 
     var strafe_input := _key_axis(KEY_C, KEY_Z)
     var lift_input := clampf(
@@ -139,12 +154,7 @@ func _unhandled_input(event: InputEvent) -> void:
             KEY_T:
                 fire_proton_torpedo()
     elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-        mouse_flight_active = event.pressed
-        Input.mouse_mode = (
-            Input.MOUSE_MODE_CAPTURED
-            if mouse_flight_active
-            else Input.MOUSE_MODE_VISIBLE
-        )
+        _set_mouse_flight_active(event.pressed)
     elif event is InputEventMouseMotion and mouse_flight_active:
         mouse_flight_delta += event.relative
     elif event is InputEventJoypadButton and event.pressed:
@@ -156,6 +166,58 @@ func _unhandled_input(event: InputEvent) -> void:
             fire_frapray()
         elif event.button_index == JOY_BUTTON_RIGHT_STICK:
             fire_proton_torpedo()
+
+
+func _smooth_axis(current: float, target: float, delta: float) -> float:
+    return move_toward(
+        current,
+        target,
+        steering_response_per_second * delta
+    )
+
+
+func _consume_mouse_rotation(delta: float) -> Vector2:
+    var target_rotation := Vector2.ZERO
+    if mouse_flight_active:
+        var pixels := mouse_flight_delta.limit_length(96.0)
+        target_rotation = -pixels * deg_to_rad(
+            mouse_aim_sensitivity_degrees_per_pixel
+        )
+    var smoothing_weight := 1.0 - exp(
+        -mouse_aim_smoothing_per_second * delta
+    )
+    mouse_rotation_step = mouse_rotation_step.lerp(
+        target_rotation,
+        smoothing_weight
+    )
+    mouse_flight_delta = Vector2.ZERO
+    return mouse_rotation_step
+
+
+func _apply_ship_rotation(
+    pitch_radians: float,
+    yaw_radians: float,
+    roll_radians: float
+) -> void:
+    # Every flight axis is ship-local. Rolling inverted therefore changes the
+    # world-space direction of "up" and "left" without changing their meaning
+    # to the pilot.
+    rotate_object_local(Vector3.RIGHT, pitch_radians)
+    rotate_object_local(Vector3.UP, yaw_radians)
+    rotate_object_local(Vector3.BACK, roll_radians)
+    transform.basis = transform.basis.orthonormalized()
+
+
+func _set_mouse_flight_active(active: bool, update_pointer_mode := true) -> void:
+    mouse_flight_active = active
+    mouse_flight_delta = Vector2.ZERO
+    mouse_rotation_step = Vector2.ZERO
+    if update_pointer_mode:
+        Input.mouse_mode = (
+            Input.MOUSE_MODE_CAPTURED
+            if active
+            else Input.MOUSE_MODE_VISIBLE
+        )
 
 
 func fire_frapray() -> bool:

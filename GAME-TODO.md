@@ -31,8 +31,8 @@ Player promise:
 
 Canonical plan: [`docs/game/MISSION-001-PLAN.md`](docs/game/MISSION-001-PLAN.md)
 
-Current milestone: **Demo Prototype V2**, declared complete on 2026-09-08.
-Milestone record: [`docs/game/DEMO-PROTOTYPE-V2.md`](docs/game/DEMO-PROTOTYPE-V2.md)
+Current milestone: **Demo Prototype V4**, declared complete on 2026-09-08.
+Milestone record: [`docs/game/DEMO-PROTOTYPE-V4.md`](docs/game/DEMO-PROTOTYPE-V4.md)
 
 ### Phase 1 — Contracts and project boot
 
@@ -142,6 +142,29 @@ hyperspace completion.
   velocity.
 - [x] Add collision-level automated coverage for both weapons, breakup, and
   fragment vaporization.
+
+### Demo Prototype V3 — Probe consequences
+
+- [x] Make ship collision damage the mining probe's data port without
+  destroying the physical probe.
+- [x] Prevent data download after collision damage while preserving the tow
+  and return path.
+- [x] Make either weapon immediately destroy the probe in an explosion and
+  transition Mission 001 to `FAILED`.
+- [x] Keep free-flight controls active after mission failure and expose `R` as
+  the explicit restart.
+- [x] Add contract, mission-schema, and collision-level runtime coverage for
+  both damage outcomes.
+
+### Demo Prototype V4 — Flight-control refinement
+
+- [x] Ease keyboard and arrow steering into and out of full deflection.
+- [x] Apply pitch, yaw, and roll around the JB100's local axes so controls keep
+  their pilot-relative meaning when the ship is inverted.
+- [x] Make pointer-drag aim frame-rate independent, faster, and smoothly
+  filtered without carrying stale movement into the next drag.
+- [x] Add automated coverage for steering ramps, inverted local yaw, and
+  identical first/second mouse-drag response.
 
 ## Explicit Mission 001 non-goals
 
