@@ -1,22 +1,25 @@
 ---
-title: Location-Based Scene Grouping Insight
+title: Location-Based Scene Grouping Insight (Archived)
 created: 2026-08-15T00:00:00-04:00
-updated: 2026-08-15T00:00:00-04:00
+updated: 2026-08-16T00:00:00-04:00
+archived: 2026-08-16
 doc_type: plan
 production_area: layout
 department: layout
-status: draft
-canonical: true
-canonical_for: location_based_scene_grouping
+status: superseded
+superseded_by: docs/planning/PRODUCTION-ASSEMBLY-PIPELINE-PLAN.md
+canonical: false
 wiki: true
-wiki_group: Planning
+wiki_group: Journal
 wiki_page: Location-Based-Scene-Grouping-Insight
-wiki_order: 201
+wiki_order: 100
 ---
 # Location-based scene grouping insight
 
-Recorded 2026-08-15. Status: **insight to ponder — not decided, nothing
-scoped or built from this document.**
+Recorded 2026-08-15. Status: **archived, superseded 2026-08-16 by
+`docs/planning/PRODUCTION-ASSEMBLY-PIPELINE-PLAN.md`** — this document is
+the historical record of the original insight and discussion; the
+successor doc is where active planning now happens.
 
 ## The insight (as given)
 

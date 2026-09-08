@@ -1,0 +1,27 @@
+; OEB JourneyBlaster interactive runtime. Generated asset staging is required
+; before launch: tools/sync_interactive_assets.py
+config_version=5
+
+[application]
+
+config/name="JourneyBlaster — Mission 001 — Demo Prototype V2"
+config/version="demo-prototype-v2"
+run/main_scene="res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[physics]
+
+common/physics_ticks_per_second=60

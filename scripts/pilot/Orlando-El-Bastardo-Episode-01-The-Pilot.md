@@ -17,6 +17,8 @@ wiki_group: Operations
 **Approximate Runtime: 50 Minutes**  
 **Format: Teleplay / Fountain-Compatible Markdown**
 
+**Budget: $5**
+
 ---
 
 FADE IN:

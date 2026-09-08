@@ -57,7 +57,13 @@ are not front-door reading unless they still serve the active production state.
 ## Tracking
 
 - [../PROJECT-TODO.md](../PROJECT-TODO.md) — active roadmap and current priorities
+- [../GAME-TODO.md](../GAME-TODO.md) — JourneyBlaster interactive roadmap
 - [../PROJECT-DONE.md](../PROJECT-DONE.md) — completed work and evidence ledger
+
+## Interactive
+
+- [game/README.md](game/README.md) — interactive runtime documentation index
+- [game/MISSION-001-PLAN.md](game/MISSION-001-PLAN.md) — mining-probe retrieval mission architecture and phased build plan
 
 ## World-building
 

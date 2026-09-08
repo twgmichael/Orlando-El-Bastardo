@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "asteroid_cratered_v1",
+  "asset_id": "placeholder_prop_asteroid_cratered_A",
+  "display_name": "Cratered Asteroid Stand-In",
+  "production_role": "stand_in",
+  "source": {
+    "config_asset_id": "placeholder_prop_asteroid_cratered_A",
+    "expected_node": "placeholder_prop_asteroid_cratered_A",
+    "deterministic_fallback": {
+      "file": "interactive/journeyblaster/source_assets/asteroids/placeholder_prop_asteroid_cratered_A.glb",
+      "builder": "blender --background --python tools/build_asteroid_placeholders.py -- --output-dir interactive/journeyblaster/source_assets/asteroids --skip-resolver-update"
+    }
+  },
+  "runtime": {
+    "kind": "obstacle",
+    "root_node_type": "StaticBody3D",
+    "wrapper_scene": "res://generated/scenes/asteroid_cratered_v1.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "none",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, 0.0, 0.0]
+  },
+  "visual": {
+    "scale": [4.1, 4.1, 4.1],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "asteroid_collision",
+      "kind": "sphere",
+      "position": [0.0, 0.0, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "radius": 5.0
+    }
+  ],
+  "markers": [],
+  "capabilities": ["obstacle", "destructible", "collision"]
+}

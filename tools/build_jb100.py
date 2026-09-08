@@ -2,6 +2,8 @@
 """
 build_jb100.py — Headless Blender: the JourneyBlaster 100 from primitives.
 
+Current asset pass: v38 (2026-08-24), pilot-free hero stand-in promotion.
+
 The JourneyBlaster 100 — the FIRST version of Yakara Starcraft's
 legendary sport attack craft line. Forked 2026-07-12 from the JB5K
 reconstruction (see build_jb5k.py, whose hull/anatomy notes
@@ -13,10 +15,12 @@ hiding the seam and giving the distinctive edge detail (v18); the top
 swells toward the aft (engine deck); centered smoked-glass bubble
 canopy with a cockpit TUB — flat floor and flat ribbed sides joined by a rounded
 corner (v14, "less cereal bowl, more cockpit") — visible through the
-top shell's HOLLOW centre, holding ONE
-simple L-chair (the JB100 is a single-seater); bowl and bubble
+top shell's HOLLOW centre, holding ONE low reclining crash seat plus a
+three-display analog dashboard, dual thigh sticks, physical throttle,
+and minimal side controls (v37); promoted without a baked pilot as the
+production hero stand-in in v38; bowl and bubble
 are simple CIRCLES in plan; the bubble is a hollow HALF-GLOBE shell (it is a
-2-seater sport attack craft; seated characters read waist/shoulders/head
+single-seat sport attack craft; seated characters read waist/shoulders/head
 through the glass, and the bubble stays under HALF the ship's total
 height — v8 proportions rule); FOUR amber "senso-globes" per side riding the hull profile,
 protruding MORE at the aft and less toward the bow; twin FRAP-RAY
@@ -37,12 +41,13 @@ an actor); origin at hull center with the lowest point at z = 0.
 
 Run from repo root:
   blender --background --factory-startup \
-    --python tools/build_jb100.py -- --output assets/ships/jb5k
+    --python tools/build_jb100.py -- --output assets/ships/jb100
 """
 
 import sys
 import os
 import argparse
+import json
 import math
 
 import bpy
@@ -59,7 +64,6 @@ DOME_AFT = 0.4        # aft bias: dome swells toward the back (engine deck)
 CANOPY_R = 1.35       # bubble canopy radius
 BOWL_R = 1.15         # corrugated cockpit bowl sunk below the bubble
 HOLE_R = 1.05         # hollow centre of the top shell (cockpit opening)
-SEAT_YS = (-0.4,)     # SINGLE seat, centred under the bubble
 POD_L = 2.16          # engine pod length (+20% again, v33)
 POD_R = 0.43          # engine pod radius (+20% again, v33)
 POD_X = 0.95          # pod lateral offset (aft deck beside canopy)
@@ -78,6 +82,7 @@ DISC_N = 16           # white maneuvering discs circling the flat belly
 DISC_RING_R = 2.55    # ring radius — close to the bottom-plate edge (v7)
 DISC_R = 0.2          # disc radius
 THRUSTER_R = 0.07     # rotating thruster stub in each disc centre
+BUILD_VERSION = 38
 
 
 def parse_args():
@@ -85,6 +90,10 @@ def parse_args():
     argv = argv[argv.index("--") + 1:] if "--" in argv else []
     p = argparse.ArgumentParser(prog="build_jb100")
     p.add_argument("--output", default="assets/ships/jb100")
+    p.add_argument("--versioned-output",
+                   default="assets/ships/jb100_v38/jb100_v38")
+    p.add_argument("--working-blend",
+                   default="assets/ships/jb100_v38/jb100_v38.blend")
     return p.parse_args(argv)
 
 
@@ -141,6 +150,18 @@ def obj_from_bmesh(name, bm, material):
     return ob
 
 
+def bevel_object(obj, width=0.025, segments=2):
+    """Apply a small production-friendly bevel to a primitive assembly."""
+    mod = obj.modifiers.new(name="softened_edges", type='BEVEL')
+    mod.width = width
+    mod.segments = segments
+    mod.limit_method = 'ANGLE'
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    obj.select_set(False)
+
+
 def main():
     args = parse_args()
     out_stem = args.output if os.path.isabs(args.output) \
@@ -161,11 +182,27 @@ def main():
                    emission=((1.0, 0.6, 0.0), 2.2))
     mat_burn = mat("mat_jb100_exhaust", (0.35, 0.02, 0.02), rough=0.4,
                    emission=((0.85, 0.04, 0.02), 0.8))
-    mat_dark = mat("mat_jb100_interior", (0.08, 0.08, 0.1), rough=0.8)
+    mat_dark = mat("mat_jb100_interior", (0.035, 0.04, 0.05), rough=0.82)
+    mat_panel = mat("mat_jb100_panel", (0.055, 0.06, 0.07), rough=0.66,
+                    metallic=0.12)
+    mat_frame = mat("mat_jb100_seat_frame", (0.025, 0.028, 0.032),
+                    rough=0.48, metallic=0.38)
+    mat_harness = mat("mat_jb100_harness", (0.48, 0.015, 0.012),
+                      rough=0.58)
+    mat_screen_green = mat("mat_jb100_screen_nav", (0.008, 0.045, 0.014),
+                           rough=0.2, emission=((0.02, 0.45, 0.06), 0.9))
+    mat_screen_amber = mat("mat_jb100_screen_weapons", (0.06, 0.025, 0.003),
+                           rough=0.2, emission=((0.75, 0.18, 0.01), 0.8))
+    mat_indicator_green = mat("mat_jb100_indicator_green", (0.01, 0.35, 0.04),
+                              rough=0.2, emission=((0.03, 1.0, 0.12), 2.0))
+    mat_indicator_amber = mat("mat_jb100_indicator_amber", (0.55, 0.12, 0.005),
+                              rough=0.2, emission=((1.0, 0.28, 0.01), 2.0))
+    mat_indicator_red = mat("mat_jb100_indicator_red", (0.48, 0.005, 0.005),
+                            rough=0.2, emission=((1.0, 0.01, 0.01), 2.2))
     mat_white = mat("mat_jb100_disc", (0.92, 0.92, 0.95), rough=0.35,
                     emission=((1.0, 1.0, 1.0), 0.3))
     mat_tanks = mat("mat_jb100_tanks", (0.92, 0.92, 0.95), rough=0.35)
-    mat_seat = mat("mat_jb100_seat", (0.34, 0.35, 0.4), rough=0.6)
+    mat_seat = mat("mat_jb100_seat", (0.075, 0.08, 0.09), rough=0.72)
 
     # Two-half hull (v18, like the 1995 original): flat-bottom bowl
     # below, top shell overhanging it by LIP
@@ -239,12 +276,12 @@ def main():
     canopy = obj_from_bmesh("jb100_canopy", bm, mat_glass)  # into the tub
 
     # Cockpit: corrugated open bowl sunk below the bubble (simple
-    # shapes, like the '95 original), two L-chairs, console block
+    # shapes, like the '95 original), one low seat and compact controls.
     # Tub profile (v14): flat floor, flat vertical wall, rounded corner
     # joining them — lathed around Z, ribbing applied to the wall only
     bm = bmesh.new()
     FLOOR_Z, FILLET, WALL_TOP = 0.22, 0.16, 1.09
-    profile = [(0.02, FLOOR_Z), (BOWL_R - FILLET, FLOOR_Z)]
+    profile = [(0.0, FLOOR_Z), (BOWL_R - FILLET, FLOOR_Z)]
     for k in range(1, 5):                      # quarter-round corner
         a = math.pi / 2 * k / 4
         profile.append((BOWL_R - FILLET + FILLET * math.sin(a),
@@ -274,7 +311,10 @@ def main():
             v.co.z = deck_z(v.co.x, v.co.y) + 0.09
     # LIP: flare the cup's top ring outward into a collar proud of the
     # hull — the glass seals against THIS, not the red metal (v27)
-    rim_edges = [e for e in bm.edges if e.is_boundary]
+    # Only flare the outer/top boundary. Earlier passes also caught the tiny
+    # floor-centre boundary, accidentally pulling it upward into a cone.
+    rim_edges = [e for e in bm.edges if e.is_boundary and
+                 all(v.co.z > WALL_TOP - 0.01 for v in e.verts)]
     ret = bmesh.ops.extrude_edge_only(bm, edges=rim_edges)
     for g in ret["geom"]:
         if isinstance(g, bmesh.types.BMVert):
@@ -284,37 +324,214 @@ def main():
             g.co.y *= f
             g.co.z = deck_z(g.co.x, g.co.y) + 0.01   # flange lands ON
     cockpit = obj_from_bmesh("jb100_bowl", bm, mat_dark)  # the deck (v29)
+    # Keep the shallow tub floor optically flat. Smooth interpolation across
+    # the lathed centre ring can otherwise read as a phantom cone in closeups.
+    for poly in cockpit.data.polygons:
+        if all(abs(cockpit.data.vertices[i].co.z - FLOOR_Z) < 0.005
+               for i in poly.vertices):
+            poly.use_smooth = False
 
     cockpit_parts = [cockpit]
 
-    def add_box(bm, size, center):
+    def add_box(bm, size, center, rot=None):
+        """Add a box, optionally rotated around its own centre."""
         res = bmesh.ops.create_cube(bm, size=1.0)
         for v in res["verts"]:
-            v.co = Vector((v.co.x * size[0] + center[0],
-                           v.co.y * size[1] + center[1],
-                           v.co.z * size[2] + center[2]))
+            co = Vector((v.co.x * size[0], v.co.y * size[1],
+                         v.co.z * size[2]))
+            if rot is not None:
+                co = rot @ co
+            v.co = co + Vector(center)
+        return res["verts"]
 
-    # Furniture scaled to the dressed HERO (1.82 standing; seated head
-    # 1.39 above origin, shoulder ~1.1)
+    def add_beam(bm, start, end, width, depth=None):
+        """Rectangular beam used for belts, levers, and display marks."""
+        a, b = Vector(start), Vector(end)
+        delta = b - a
+        depth = width if depth is None else depth
+        rot = delta.to_track_quat('Z', 'Y').to_matrix()
+        return add_box(bm, (width, depth, delta.length), (a + b) * 0.5, rot)
+
+    # v37 cockpit set.  The pilot faces -Y.  Furniture is deliberately
+    # compact and mechanical: one reclined Barka predecessor seat, a curved
+    # three-display dashboard, two thigh sticks, and a separate left throttle.
+    seat_y = 0.24
+    back_rot = Matrix.Rotation(math.radians(-13.0), 3, 'X')
+
+    # Structural chair frame and low pedestal.
     bm = bmesh.new()
-    for cy in SEAT_YS:
-        add_box(bm, (0.72, 0.66, 0.12), (0, cy, 0.75))       # seat of the L
-        add_box(bm, (0.72, 0.12, 0.72), (0, cy + 0.36, 1.14))  # back of the L
-    # control panel: chest height, reaching aft over the knees (bottom
-    # clears them), pedestal at the tub wall
-    add_box(bm, (0.8, 0.5, 0.18), (0, -0.92, 1.34))
-    add_cone(bm, 0.09, 0.07, 1.05, (0, -1.1, 0.71), segs=10)
-    seats = obj_from_bmesh("jb100_seats", bm, mat_seat)
-    cockpit_parts.append(seats)
-    # oxygen tanks: twin cylinders on the chair back
+    add_box(bm, (0.54, 0.46, 0.10), (0, seat_y + 0.04, 0.34))
+    add_box(bm, (0.12, 0.48, 0.18), (-0.25, seat_y + 0.10, 0.45))
+    add_box(bm, (0.12, 0.48, 0.18), (0.25, seat_y + 0.10, 0.45))
+    add_box(bm, (0.64, 0.11, 0.78), (0, seat_y + 0.32, 0.91), back_rot)
+    frame = obj_from_bmesh("jb100_cockpit_seat_frame", bm, mat_frame)
+    bevel_object(frame, 0.028, 2)
+    cockpit_parts.append(frame)
+
+    # Chunky crash padding: low cushion, back pad, headrest, and bolsters.
     bm = bmesh.new()
-    for tx in (-0.15, 0.15):
-        add_cone(bm, 0.144, 0.144, 0.78, (tx, SEAT_YS[0] + 0.56, 1.18),
-                 segs=14)
-        add_cone(bm, 0.06, 0.036, 0.144, (tx, SEAT_YS[0] + 0.56, 1.65),
-                 segs=10)                                    # valve neck
-    tanks = obj_from_bmesh("jb100_tanks", bm, mat_tanks)
+    add_box(bm, (0.56, 0.57, 0.14), (0, seat_y - 0.02, 0.52))
+    add_box(bm, (0.54, 0.14, 0.66), (0, seat_y + 0.28, 0.91), back_rot)
+    add_box(bm, (0.50, 0.17, 0.22), (0, seat_y + 0.41, 1.30), back_rot)
+    for sx in (-1, 1):
+        add_box(bm, (0.11, 0.50, 0.20), (sx * 0.30, seat_y, 0.57))
+        add_box(bm, (0.10, 0.14, 0.54),
+                (sx * 0.29, seat_y + 0.28, 0.91), back_rot)
+    padding = obj_from_bmesh("jb100_cockpit_seat_padding", bm, mat_seat)
+    bevel_object(padding, 0.045, 3)
+    cockpit_parts.append(padding)
+
+    # Four-point red harness with a compact mechanical buckle.
+    bm = bmesh.new()
+    add_beam(bm, (-0.17, seat_y + 0.38, 1.24),
+             (-0.08, seat_y + 0.18, 0.63), 0.055, 0.025)
+    add_beam(bm, (0.17, seat_y + 0.38, 1.24),
+             (0.08, seat_y + 0.18, 0.63), 0.055, 0.025)
+    add_beam(bm, (-0.29, seat_y - 0.03, 0.60),
+             (-0.03, seat_y + 0.12, 0.63), 0.055, 0.025)
+    add_beam(bm, (0.29, seat_y - 0.03, 0.60),
+             (0.03, seat_y + 0.12, 0.63), 0.055, 0.025)
+    add_box(bm, (0.12, 0.06, 0.10), (0, seat_y + 0.12, 0.63))
+    harness = obj_from_bmesh("jb100_cockpit_harness", bm, mat_harness)
+    bevel_object(harness, 0.012, 2)
+    cockpit_parts.append(harness)
+
+    # Oxygen bottles stay on the aft face of the seat, clear of the pilot.
+    bm = bmesh.new()
+    for tx in (-0.14, 0.14):
+        add_cone(bm, 0.095, 0.095, 0.60,
+                 (tx, seat_y + 0.49, 0.91), segs=14)
+        add_cone(bm, 0.045, 0.028, 0.10,
+                 (tx, seat_y + 0.49, 1.26), segs=10)
+    tanks = obj_from_bmesh("jb100_cockpit_oxygen", bm, mat_tanks)
     cockpit_parts.append(tanks)
+
+    # Curved dashboard shell: three faceted sections are readable from above
+    # but leave the pilot's knees and canopy sight line unobstructed.
+    bm = bmesh.new()
+    add_box(bm, (0.54, 0.18, 0.43), (0, -0.82, 1.13))
+    for sx in (-1, 1):
+        wing_rot = Matrix.Rotation(math.radians(-sx * 14.0), 3, 'Z')
+        add_box(bm, (0.43, 0.17, 0.37),
+                (sx * 0.46, -0.73, 1.10), wing_rot)
+        add_box(bm, (0.20, 0.29, 0.18),
+                (sx * 0.72, -0.57, 0.98), wing_rot)
+    add_box(bm, (1.44, 0.12, 0.11), (0, -0.70, 0.91))
+    panel_shell = obj_from_bmesh("jb100_cockpit_instrument_panel", bm, mat_panel)
+    bevel_object(panel_shell, 0.035, 2)
+    cockpit_parts.append(panel_shell)
+
+    # Three inset displays: NAV/radar, system status, weapons/targeting.
+    bm = bmesh.new()
+    add_box(bm, (0.32, 0.025, 0.24), (-0.39, -0.628, 1.16))
+    nav_screen = obj_from_bmesh("jb100_display_nav", bm, mat_screen_green)
+    bevel_object(nav_screen, 0.012, 2)
+    cockpit_parts.append(nav_screen)
+
+    bm = bmesh.new()
+    add_box(bm, (0.32, 0.025, 0.24), (0, -0.716, 1.16))
+    sys_screen = obj_from_bmesh("jb100_display_systems", bm, mat_screen_green)
+    bevel_object(sys_screen, 0.012, 2)
+    cockpit_parts.append(sys_screen)
+
+    bm = bmesh.new()
+    add_box(bm, (0.32, 0.025, 0.24), (0.39, -0.628, 1.16))
+    weapon_screen = obj_from_bmesh("jb100_display_weapons", bm, mat_screen_amber)
+    bevel_object(weapon_screen, 0.012, 2)
+    cockpit_parts.append(weapon_screen)
+
+    # Display graphics and chunky indicator bars (no text/UI dependency).
+    bm = bmesh.new()
+    for x in (-0.47, -0.39, -0.31):
+        add_box(bm, (0.012, 0.012, 0.18), (x, -0.609, 1.16))
+    add_box(bm, (0.26, 0.012, 0.012), (-0.39, -0.609, 1.16))
+    for row in range(4):
+        for col in range(3):
+            h = 0.025 + 0.018 * ((row + col) % 3)
+            add_box(bm, (0.045, 0.012, h),
+                    (-0.09 + col * 0.09, -0.697, 1.08 + row * 0.055))
+    green_marks = obj_from_bmesh("jb100_display_green_marks", bm,
+                                 mat_indicator_green)
+    cockpit_parts.append(green_marks)
+
+    bm = bmesh.new()
+    add_box(bm, (0.25, 0.012, 0.012), (0.39, -0.609, 1.16))
+    add_box(bm, (0.012, 0.012, 0.18), (0.39, -0.609, 1.16))
+    for x, z in ((0.31, 1.08), (0.47, 1.24), (0.45, 1.10)):
+        add_box(bm, (0.028, 0.014, 0.028), (x, -0.605, z))
+    amber_marks = obj_from_bmesh("jb100_display_amber_marks", bm,
+                                 mat_indicator_amber)
+    cockpit_parts.append(amber_marks)
+
+    # Physical switch bank below displays and warning lamps on the wings.
+    bm = bmesh.new()
+    for x in (-0.52, -0.39, -0.26, -0.13, 0.0, 0.13, 0.26, 0.39, 0.52):
+        add_box(bm, (0.055, 0.055, 0.055), (x, -0.635, 0.96))
+    switches = obj_from_bmesh("jb100_cockpit_switch_bank", bm, mat_tanks)
+    bevel_object(switches, 0.008, 1)
+    cockpit_parts.append(switches)
+
+    for name, sx, material in (
+            ("left", -1, mat_indicator_red),
+            ("right", 1, mat_indicator_amber)):
+        bm = bmesh.new()
+        for z in (1.00, 1.11, 1.22):
+            add_sphere(bm, 0.035, (1.0, 0.45, 1.0),
+                       (sx * 0.67, -0.545, z), segs=12, rings=6)
+        lamps_panel = obj_from_bmesh(f"jb100_panel_lamps_{name}", bm, material)
+        cockpit_parts.append(lamps_panel)
+
+    # Dual thigh sticks. Left: thrust/translation/systems. Right:
+    # pitch/roll/yaw/weapons. Both get a broad base and red thumb trigger.
+    for name, sx in (("left", -1), ("right", 1)):
+        bm = bmesh.new()
+        add_cone(bm, 0.16, 0.13, 0.10, (sx * 0.49, -0.08, 0.37), segs=18)
+        add_cone(bm, 0.055, 0.045, 0.49, (sx * 0.49, -0.10, 0.66), segs=14)
+        add_sphere(bm, 0.09, (0.72, 1.18, 0.72),
+                   (sx * 0.49, -0.12, 0.92), segs=16, rings=8)
+        stick = obj_from_bmesh(f"jb100_control_stick_{name}", bm, mat_frame)
+        bevel_object(stick, 0.012, 2)
+        cockpit_parts.append(stick)
+        bm = bmesh.new()
+        add_sphere(bm, 0.032, (1.0, 0.7, 0.55),
+                   (sx * 0.49, -0.18, 0.96), segs=12, rings=6)
+        trigger = obj_from_bmesh(f"jb100_control_trigger_{name}", bm,
+                                 mat_indicator_red)
+        cockpit_parts.append(trigger)
+
+    # Separate physical throttle, preserving the screenplay's pull action.
+    bm = bmesh.new()
+    add_box(bm, (0.20, 0.45, 0.14), (-0.77, 0.24, 0.43))
+    throttle_base = obj_from_bmesh("jb100_throttle_quadrant", bm, mat_panel)
+    bevel_object(throttle_base, 0.03, 2)
+    cockpit_parts.append(throttle_base)
+    bm = bmesh.new()
+    add_box(bm, (0.035, 0.30, 0.025), (-0.77, 0.23, 0.505))
+    add_beam(bm, (-0.77, 0.22, 0.50), (-0.77, 0.34, 0.78), 0.045)
+    add_box(bm, (0.15, 0.10, 0.075), (-0.77, 0.35, 0.80))
+    throttle = obj_from_bmesh("jb100_throttle_lever", bm, mat_harness)
+    bevel_object(throttle, 0.016, 2)
+    cockpit_parts.append(throttle)
+
+    # Minimal side panels: port NavComp/comms and starboard emergency systems.
+    for name, sx in (("navcomp", -1), ("emergency", 1)):
+        side_rot = Matrix.Rotation(math.radians(sx * 9.0), 3, 'Y')
+        bm = bmesh.new()
+        add_box(bm, (0.12, 0.48, 0.28),
+                (sx * 0.91, 0.03, 0.68), side_rot)
+        side_panel = obj_from_bmesh(f"jb100_side_panel_{name}", bm, mat_panel)
+        bevel_object(side_panel, 0.025, 2)
+        cockpit_parts.append(side_panel)
+        bm = bmesh.new()
+        for row in range(3):
+            for col in range(2):
+                add_box(bm, (0.028, 0.052, 0.035),
+                        (sx * 0.84, -0.10 + col * 0.14,
+                         0.61 + row * 0.075))
+        side_controls = obj_from_bmesh(f"jb100_side_controls_{name}", bm,
+                                       mat_indicator_amber if sx < 0
+                                       else mat_indicator_red)
+        cockpit_parts.append(side_controls)
 
     # Senso-globes: four per side riding the hull's side profile;
     # sink shrinks toward the AFT so the rear globes protrude the most.
@@ -412,9 +629,36 @@ def main():
             f"jb100_cannon_{'l' if sx < 0 else 'r'}", bm, mat_pod)
         cannon_parts.append(cannon)
 
-    # Join into ONE canonical node
+    # Save the editable v38 source before producing the legacy single-node
+    # interchange asset.  The bubble is intentionally hidden in this working
+    # file so cockpit set-dressing remains unobstructed in viewport and renders.
     parts = [hull, bowl_bottom, canopy, *cockpit_parts, lamps,
              *cannon_parts, *pod_objs]
+    for part in parts:
+        part["jb100_build_version"] = BUILD_VERSION
+        part["production_role"] = "hero_stand_in"
+        part["pilot_included"] = False
+    canopy.hide_set(True)
+    canopy.hide_viewport = True
+    canopy.hide_render = True
+    canopy["working_visibility"] = "hidden_for_cockpit_build"
+    scene = bpy.context.scene
+    scene["asset_id"] = "prop_jb100_A"
+    scene["asset_version"] = f"v{BUILD_VERSION}"
+    scene["cockpit_pass"] = "minimal_one_pilot_attack_recon"
+    scene["production_role"] = "hero_stand_in"
+    scene["pilot_included"] = False
+    working_blend = (args.working_blend if os.path.isabs(args.working_blend)
+                     else os.path.join(os.getcwd(), args.working_blend))
+    os.makedirs(os.path.dirname(working_blend), exist_ok=True)
+    print(f"[build_jb100] Saving editable cockpit source {working_blend}")
+    bpy.ops.wm.save_as_mainfile(filepath=working_blend)
+
+    # Canonical GLB/USDC remain one mesh for existing scene scripts that look
+    # up and transform prop_jb100_A directly.
+    canopy.hide_set(False)
+    canopy.hide_viewport = False
+    canopy.hide_render = False
     bpy.ops.object.select_all(action='DESELECT')
     for o in parts:
         o.select_set(True)
@@ -423,20 +667,97 @@ def main():
     ship = bpy.context.view_layer.objects.active
     ship.name = "prop_jb100_A"
     ship.data.name = "prop_jb100_A_mesh"
+    ship["asset_version"] = f"v{BUILD_VERSION}"
+    ship["cockpit"] = "one pilot; dual sticks; physical throttle; canopy"
+    ship["production_role"] = "hero_stand_in"
+    ship["pilot_included"] = False
     print(f"[build_jb100] joined: {len(ship.data.polygons)} polys, "
           f"{len(ship.material_slots)} materials")
 
-    glb = out_stem + ".glb"
-    print(f"[build_jb100] Exporting {glb}")
-    bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB',
-                              use_selection=False)
-    usdc = out_stem + ".usdc"
-    print(f"[build_jb100] Exporting {usdc}")
-    try:
-        bpy.ops.wm.usd_export(filepath=usdc, export_animation=False,
-                              export_materials=True)
-    except TypeError:
-        bpy.ops.wm.usd_export(filepath=usdc)
+    versioned_stem = (args.versioned_output
+                      if os.path.isabs(args.versioned_output)
+                      else os.path.join(os.getcwd(), args.versioned_output))
+    os.makedirs(os.path.dirname(versioned_stem), exist_ok=True)
+    export_stems = [out_stem]
+    if os.path.normpath(versioned_stem) != os.path.normpath(out_stem):
+        export_stems.append(versioned_stem)
+    for stem in export_stems:
+        glb = stem + ".glb"
+        print(f"[build_jb100] Exporting {glb}")
+        bpy.ops.export_scene.gltf(filepath=glb, export_format='GLB',
+                                  use_selection=False, export_extras=True)
+        usdc = stem + ".usdc"
+        print(f"[build_jb100] Exporting {usdc}")
+        try:
+            bpy.ops.wm.usd_export(filepath=usdc, export_animation=False,
+                                  export_materials=True)
+        except TypeError:
+            bpy.ops.wm.usd_export(filepath=usdc)
+
+    corners = [ship.matrix_world @ Vector(corner) for corner in ship.bound_box]
+    bounds_min = [min(point[i] for point in corners) for i in range(3)]
+    bounds_max = [max(point[i] for point in corners) for i in range(3)]
+    dimensions = [bounds_max[i] - bounds_min[i] for i in range(3)]
+    manifest = {
+        "asset_id": "prop_jb100_A",
+        "display_name": "JourneyBlaster 100 Hero Stand-In",
+        "version": f"v{BUILD_VERSION}",
+        "previous_version": "v37",
+        "production_role": "hero_stand_in",
+        "maturity": "approved_stand_in",
+        "change_summary": (
+            "Promoted the approved one-pilot cockpit build as the JB100 hero "
+            "stand-in; pilot remains a separately cast scene actor."),
+        "pilot_included": False,
+        "canopy_included": True,
+        "style": "simple smooth 1990s CGI; minimal analog attack cockpit",
+        "files": {
+            "blend": os.path.basename(working_blend),
+            "glb": os.path.basename(versioned_stem) + ".glb",
+            "usdc": os.path.basename(versioned_stem) + ".usdc",
+            "canonical_glb": "../jb100.glb",
+            "canonical_usdc": "../jb100.usdc",
+        },
+        "review": {
+            "front_action": "review/jb100_v38_bubble_front_action.png",
+            "back_action": "review/jb100_v38_bubble_back_action.png",
+            "left_action": "review/jb100_v38_bubble_left_action.png",
+            "right_action": "review/jb100_v38_bubble_right_action.png",
+            "canopy_state": "visible_transparent",
+            "pilot_included": False,
+        },
+        "evaluated_bounds": {
+            "min": [round(value, 6) for value in bounds_min],
+            "max": [round(value, 6) for value in bounds_max],
+            "dimensions": [round(value, 6) for value in dimensions],
+        },
+        "orientation_standard": {
+            "front_axis": "-Y",
+            "rear_axis": "+Y",
+            "left_axis": "-X",
+            "right_axis": "+X",
+            "up_axis": "+Z",
+            "origin_policy": "hull center; lowest belly point at z=0",
+        },
+        "construction": {
+            "root_node": "prop_jb100_A",
+            "joined_export": True,
+            "editable_named_parts": len(parts),
+            "materials": sorted(slot.material.name for slot in ship.material_slots
+                                if slot.material),
+            "cockpit": {
+                "crew": 1,
+                "seat": "low reclining Barka predecessor with four-point harness",
+                "controls": "dual thigh sticks plus separate physical throttle",
+                "displays": 3,
+            },
+        },
+    }
+    manifest_path = versioned_stem + ".manifest.json"
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+        handle.write("\n")
+    print(f"[build_jb100] Wrote {manifest_path}")
     print("[build_jb100] Done.")
 
 

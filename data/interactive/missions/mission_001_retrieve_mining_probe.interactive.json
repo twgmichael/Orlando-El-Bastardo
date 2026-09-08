@@ -1,0 +1,289 @@
+{
+  "schema_version": "1.0.0",
+  "mission_id": "mission_001_retrieve_mining_probe",
+  "title": "Retrieve the Mining Probe",
+  "summary": "Fly the JB100 into the asteroid field, locate the mining probe, download its data, attach the probe in tow, return to the entry boundary, and engage hyperspace.",
+  "runtime_scene": "res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn",
+  "player": {
+    "instance_id": "player_jb100",
+    "contract_id": "jb100_hero_stand_in_v38",
+    "spawn": {
+      "position": [0.0, 0.0, 480.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "scale": [1.0, 1.0, 1.0]
+    }
+  },
+  "environment": {
+    "space_preset": "deep_space",
+    "entry_boundary": {
+      "boundary_id": "asteroid_field_entry",
+      "center": [0.0, 0.0, 510.0],
+      "radius_m": 70.0
+    },
+    "obstacles": [
+      {
+        "instance_id": "asteroid_round_01",
+        "contract_id": "asteroid_round_v1",
+        "transform": {
+          "position": [-48.0, 18.0, 330.0],
+          "rotation_degrees": [12.0, 18.0, -18.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      },
+      {
+        "instance_id": "asteroid_oblong_01",
+        "contract_id": "asteroid_oblong_v1",
+        "transform": {
+          "position": [72.0, -24.0, 205.0],
+          "rotation_degrees": [-18.0, 26.0, 14.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      },
+      {
+        "instance_id": "asteroid_jagged_01",
+        "contract_id": "asteroid_jagged_v1",
+        "transform": {
+          "position": [-82.0, 34.0, 62.0],
+          "rotation_degrees": [28.0, -12.0, 36.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      },
+      {
+        "instance_id": "asteroid_peanut_01",
+        "contract_id": "asteroid_peanut_v1",
+        "transform": {
+          "position": [66.0, 21.0, -92.0],
+          "rotation_degrees": [-14.0, -22.0, -20.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      },
+      {
+        "instance_id": "asteroid_cratered_01",
+        "contract_id": "asteroid_cratered_v1",
+        "transform": {
+          "position": [-52.0, -31.0, -255.0],
+          "rotation_degrees": [20.0, 30.0, 8.0],
+          "scale": [1.0, 1.0, 1.0]
+        }
+      },
+      {
+        "instance_id": "asteroid_round_02",
+        "contract_id": "asteroid_round_v1",
+        "transform": {
+          "position": [38.0, -22.0, 390.0],
+          "rotation_degrees": [-8.0, 42.0, 18.0],
+          "scale": [0.75, 0.75, 0.75]
+        }
+      },
+      {
+        "instance_id": "asteroid_oblong_02",
+        "contract_id": "asteroid_oblong_v1",
+        "transform": {
+          "position": [-62.0, 45.0, 270.0],
+          "rotation_degrees": [34.0, -16.0, 52.0],
+          "scale": [1.2, 1.2, 1.2]
+        }
+      },
+      {
+        "instance_id": "asteroid_jagged_02",
+        "contract_id": "asteroid_jagged_v1",
+        "transform": {
+          "position": [18.0, -48.0, 140.0],
+          "rotation_degrees": [-28.0, 62.0, -11.0],
+          "scale": [0.9, 0.9, 0.9]
+        }
+      },
+      {
+        "instance_id": "asteroid_peanut_02",
+        "contract_id": "asteroid_peanut_v1",
+        "transform": {
+          "position": [-38.0, 10.0, -20.0],
+          "rotation_degrees": [17.0, -48.0, 29.0],
+          "scale": [1.1, 1.1, 1.1]
+        }
+      },
+      {
+        "instance_id": "asteroid_cratered_02",
+        "contract_id": "asteroid_cratered_v1",
+        "transform": {
+          "position": [84.0, -15.0, -170.0],
+          "rotation_degrees": [-36.0, 12.0, 41.0],
+          "scale": [0.82, 0.82, 0.82]
+        }
+      },
+      {
+        "instance_id": "asteroid_round_03",
+        "contract_id": "asteroid_round_v1",
+        "transform": {
+          "position": [-90.0, 50.0, -350.0],
+          "rotation_degrees": [24.0, 58.0, -32.0],
+          "scale": [1.25, 1.25, 1.25]
+        }
+      },
+      {
+        "instance_id": "asteroid_oblong_03",
+        "contract_id": "asteroid_oblong_v1",
+        "transform": {
+          "position": [12.0, 42.0, -300.0],
+          "rotation_degrees": [-13.0, -68.0, 22.0],
+          "scale": [0.7, 0.7, 0.7]
+        }
+      },
+      {
+        "instance_id": "asteroid_jagged_03",
+        "contract_id": "asteroid_jagged_v1",
+        "transform": {
+          "position": [56.0, -44.0, 10.0],
+          "rotation_degrees": [45.0, 9.0, -57.0],
+          "scale": [1.05, 1.05, 1.05]
+        }
+      },
+      {
+        "instance_id": "asteroid_peanut_03",
+        "contract_id": "asteroid_peanut_v1",
+        "transform": {
+          "position": [-70.0, -35.0, 180.0],
+          "rotation_degrees": [-22.0, 31.0, 66.0],
+          "scale": [0.8, 0.8, 0.8]
+        }
+      },
+      {
+        "instance_id": "asteroid_cratered_03",
+        "contract_id": "asteroid_cratered_v1",
+        "transform": {
+          "position": [76.0, 48.0, -380.0],
+          "rotation_degrees": [38.0, -27.0, 14.0],
+          "scale": [1.15, 1.15, 1.15]
+        }
+      }
+    ]
+  },
+  "entities": [
+    {
+      "instance_id": "mining_probe",
+      "contract_id": "mining_probe_1999_v1",
+      "mission_role": "primary_target",
+      "transform": {
+        "position": [32.0, 8.0, -430.0],
+        "rotation_degrees": [0.0, 24.0, 8.0],
+        "scale": [1.0, 1.0, 1.0]
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step_id": "briefing",
+      "state": "BRIEFING",
+      "verb": "BRIEF",
+      "objective": "Bring the JB100 online and enter the asteroid field."
+    },
+    {
+      "step_id": "locate_signal",
+      "state": "LOCATE",
+      "verb": "LOCATE",
+      "objective": "Use the Senso-Globe to locate the unknown signal.",
+      "requires": ["BRIEFING"]
+    },
+    {
+      "step_id": "approach_probe",
+      "state": "APPROACH",
+      "verb": "APPROACH",
+      "objective": "Approach the identified mining probe at a safe relative speed.",
+      "requires": ["LOCATE"]
+    },
+    {
+      "step_id": "download_ready",
+      "state": "DOWNLOAD_READY",
+      "verb": "DOWNLOAD",
+      "objective": "Hold position within download range.",
+      "requires": ["APPROACH"]
+    },
+    {
+      "step_id": "downloading",
+      "state": "DOWNLOADING",
+      "verb": "DOWNLOAD",
+      "objective": "Maintain position while the probe data transfers.",
+      "requires": ["DOWNLOAD_READY"]
+    },
+    {
+      "step_id": "data_secured",
+      "state": "DATA_SECURED",
+      "verb": "DOWNLOAD",
+      "objective": "Data secured. Prepare the probe for tow.",
+      "requires": ["DOWNLOADING"]
+    },
+    {
+      "step_id": "tow_ready",
+      "state": "TOW_READY",
+      "verb": "TRACTOR",
+      "objective": "Align the JB100 tow origin with the probe tow anchor.",
+      "requires": ["DATA_SECURED"]
+    },
+    {
+      "step_id": "probe_in_tow",
+      "state": "IN_TOW",
+      "verb": "TRACTOR",
+      "objective": "Probe attached. Turn back toward the field entrance.",
+      "requires": ["TOW_READY"]
+    },
+    {
+      "step_id": "return_to_entry",
+      "state": "RETURN_TO_ENTRY",
+      "verb": "RETURN",
+      "objective": "Tow the probe back out through the entry boundary.",
+      "requires": ["IN_TOW"]
+    },
+    {
+      "step_id": "exit_ready",
+      "state": "EXIT_READY",
+      "verb": "EXIT",
+      "objective": "Ship and probe clear. Prepare for hyperspace.",
+      "requires": ["RETURN_TO_ENTRY"]
+    },
+    {
+      "step_id": "hyperspace",
+      "state": "HYPERSPACE",
+      "verb": "HYPERSPACE",
+      "objective": "Engage the Yoyodyne hyperdrive.",
+      "requires": ["EXIT_READY"]
+    },
+    {
+      "step_id": "complete",
+      "state": "COMPLETE",
+      "verb": "COMPLETE",
+      "objective": "Mining probe and data recovered.",
+      "requires": ["HYPERSPACE"]
+    }
+  ],
+  "sensors": {
+    "target_instance_id": "mining_probe",
+    "detection_range_m": 900.0,
+    "bearing_range_m": 700.0,
+    "strength_range_m": 450.0,
+    "identification_range_m": 180.0,
+    "identification_dwell_s": 2.0,
+    "visual_range_m": 80.0
+  },
+  "interactions": {
+    "download": {
+      "target_instance_id": "mining_probe",
+      "range_m": 12.0,
+      "max_relative_speed_mps": 2.5,
+      "duration_s": 3.0,
+      "requires_line_of_sight": true
+    },
+    "tow": {
+      "target_instance_id": "mining_probe",
+      "range_m": 12.0,
+      "max_relative_speed_mps": 1.5,
+      "tow_length_m": 14.0,
+      "source_marker_role": "probe_tow_origin",
+      "target_marker_role": "tow_anchor"
+    }
+  },
+  "completion": {
+    "return_boundary_id": "asteroid_field_entry",
+    "require_tow_attached": true,
+    "hyperspace_required": true
+  }
+}

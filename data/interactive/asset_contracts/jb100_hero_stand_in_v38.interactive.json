@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "jb100_hero_stand_in_v38",
+  "asset_id": "prop_jb100_A",
+  "display_name": "JourneyBlaster 100 Hero Stand-In",
+  "production_role": "hero_stand_in",
+  "source": {
+    "config_asset_id": "prop_jb100_A",
+    "expected_node": "prop_jb100_A"
+  },
+  "runtime": {
+    "kind": "vehicle",
+    "root_node_type": "CharacterBody3D",
+    "wrapper_scene": "res://generated/scenes/jb100_hero_stand_in_v38.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "-Y",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, 180.0, 0.0]
+  },
+  "visual": {
+    "scale": [1.0, 1.0, 1.0],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "hull_collision",
+      "kind": "box",
+      "position": [0.0, 1.1, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "size": [6.1, 2.15, 6.3]
+    }
+  ],
+  "markers": [
+    {
+      "marker_id": "cockpit_camera",
+      "role": "cockpit_camera",
+      "position": [0.0, 1.86, 0.2],
+      "rotation_degrees": [-10.0, 0.0, 0.0],
+      "fov_degrees": 72.0,
+      "source_lens_mm": 54.0
+    },
+    {
+      "marker_id": "sensor_origin",
+      "role": "sensor_origin",
+      "position": [0.0, 1.58, -0.7],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "senso_globe_forward",
+      "role": "sensor_origin",
+      "position": [0.0, 0.68, -3.08],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "senso_globe_port",
+      "role": "sensor_origin",
+      "position": [-3.0, 0.72, 0.0],
+      "rotation_degrees": [0.0, -90.0, 0.0]
+    },
+    {
+      "marker_id": "senso_globe_starboard",
+      "role": "sensor_origin",
+      "position": [3.0, 0.72, 0.0],
+      "rotation_degrees": [0.0, 90.0, 0.0]
+    },
+    {
+      "marker_id": "senso_globe_aft",
+      "role": "sensor_origin",
+      "position": [0.0, 0.82, 3.18],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    },
+    {
+      "marker_id": "senso_globe_dorsal",
+      "role": "sensor_origin",
+      "position": [0.0, 2.16, 0.15],
+      "rotation_degrees": [-90.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "tractor_origin",
+      "role": "tractor_origin",
+      "position": [0.0, 0.82, 3.32],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    },
+    {
+      "marker_id": "probe_tow_origin",
+      "role": "probe_tow_origin",
+      "position": [0.0, 0.86, 3.48],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    },
+    {
+      "marker_id": "engine_emitter_left",
+      "role": "engine_emitter_left",
+      "position": [-0.95, 1.0, 3.32],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    },
+    {
+      "marker_id": "engine_emitter_right",
+      "role": "engine_emitter_right",
+      "position": [0.95, 1.0, 3.32],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    },
+    {
+      "marker_id": "frap_hardpoint_left",
+      "role": "frap_hardpoint_left",
+      "position": [-1.4919, 0.9571, -2.8263],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "frap_hardpoint_right",
+      "role": "frap_hardpoint_right",
+      "position": [1.4919, 0.9571, -2.8263],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "torpedo_launcher",
+      "role": "torpedo_launcher",
+      "position": [0.0, 0.38, -3.12],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    }
+  ],
+  "capabilities": [
+    "pilotable",
+    "sensor_source",
+    "tow_source",
+    "weapon_source",
+    "collision"
+  ],
+  "controller_profile": {
+    "profile_id": "jb100_arcade_spacecraft_v1",
+    "flight_model": "arcade_spacecraft",
+    "auto_stabilize": true,
+    "supports_lateral_thrust": true
+  },
+  "notes": [
+    "Pilot viewpoint derives from the approved v37/v38 cockpit review camera.",
+    "Default pilot framing favors approximately 60 percent exterior visibility and 40 percent cockpit context across the primary view presets.",
+    "FrapRay muzzle origins are derived from the exact forward-face centers of the named jb100_cannon_l and jb100_cannon_r meshes in jb100_v38.blend.",
+    "Yellow-orange Senso-Globe hemispheres distributed across the hull provide active and passive environmental sensing; cockpit instruments only display their data.",
+    "The pilot chair and gaze rotate independently through five detents or a free 360-degree yaw while ship heading and velocity continue unchanged.",
+    "The joined GLB remains the canonical visual; runtime markers live in this contract and generated wrapper."
+  ]
+}

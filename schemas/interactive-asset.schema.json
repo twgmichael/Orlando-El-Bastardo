@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "oeb:interactive-asset:1.0.0",
+  "title": "InteractiveAssetContract",
+  "description": "Target-neutral OEB asset identity plus the deterministic metadata required to wrap a production variant for a real-time interactive runtime.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_id",
+    "asset_id",
+    "display_name",
+    "production_role",
+    "source",
+    "runtime",
+    "orientation",
+    "visual",
+    "collision",
+    "markers",
+    "capabilities"
+  ],
+  "properties": {
+    "schema_version": { "$ref": "#/$defs/semver" },
+    "contract_id": { "$ref": "#/$defs/logical_id" },
+    "asset_id": { "$ref": "#/$defs/logical_id" },
+    "display_name": { "type": "string", "minLength": 1 },
+    "production_role": {
+      "type": "string",
+      "enum": ["placeholder", "stand_in", "hero_stand_in", "hero"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_asset_id", "expected_node"],
+      "properties": {
+        "config_asset_id": { "$ref": "#/$defs/logical_id" },
+        "expected_node": { "$ref": "#/$defs/logical_id" },
+        "deterministic_fallback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "builder"],
+          "properties": {
+            "file": { "type": "string", "minLength": 1 },
+            "builder": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "root_node_type", "wrapper_scene"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["vehicle", "mission_prop", "obstacle", "effect"]
+        },
+        "root_node_type": {
+          "type": "string",
+          "enum": ["Node3D", "CharacterBody3D", "AnimatableBody3D", "RigidBody3D", "StaticBody3D", "Area3D"]
+        },
+        "wrapper_scene": {
+          "type": "string",
+          "pattern": "^res://generated/scenes/[a-zA-Z0-9_/-]+\\.tscn$"
+        }
+      }
+    },
+    "orientation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authored_forward_axis", "authored_up_axis", "runtime_forward_axis", "visual_rotation_degrees"],
+      "properties": {
+        "authored_forward_axis": { "$ref": "#/$defs/axis_or_none" },
+        "authored_up_axis": { "$ref": "#/$defs/axis" },
+        "runtime_forward_axis": { "const": "-Z" },
+        "visual_rotation_degrees": { "$ref": "#/$defs/vector3" }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale", "visible_from_cockpit"],
+      "properties": {
+        "scale": {
+          "$ref": "#/$defs/positive_vector3"
+        },
+        "visible_from_cockpit": { "type": "boolean" }
+      }
+    },
+    "collision": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/collision_shape" }
+    },
+    "markers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/marker" }
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "pilotable",
+          "sensor_source",
+          "sensor_target",
+          "data_download",
+          "tow_source",
+          "tow_target",
+          "beacon",
+          "obstacle",
+          "weapon_source",
+          "destructible",
+          "collision"
+        ]
+      }
+    },
+    "controller_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "flight_model"],
+      "properties": {
+        "profile_id": { "$ref": "#/$defs/logical_id" },
+        "flight_model": { "enum": ["arcade_spacecraft"] },
+        "auto_stabilize": { "type": "boolean" },
+        "supports_lateral_thrust": { "type": "boolean" }
+      }
+    },
+    "animation_bindings": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/logical_id" },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "logical_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$"
+    },
+    "axis": {
+      "type": "string",
+      "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z"]
+    },
+    "axis_or_none": {
+      "type": "string",
+      "enum": ["+X", "-X", "+Y", "-Y", "+Z", "-Z", "none"]
+    },
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    },
+    "positive_vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number", "exclusiveMinimum": 0 }
+    },
+    "collision_shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shape_id", "kind", "position", "rotation_degrees"],
+      "properties": {
+        "shape_id": { "$ref": "#/$defs/logical_id" },
+        "kind": { "enum": ["box", "sphere", "capsule"] },
+        "position": { "$ref": "#/$defs/vector3" },
+        "rotation_degrees": { "$ref": "#/$defs/vector3" },
+        "size": { "$ref": "#/$defs/positive_vector3" },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "box" } } },
+          "then": { "required": ["size"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "sphere" } } },
+          "then": { "required": ["radius"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "capsule" } } },
+          "then": { "required": ["radius", "height"] }
+        }
+      ]
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["marker_id", "role", "position", "rotation_degrees"],
+      "properties": {
+        "marker_id": { "$ref": "#/$defs/logical_id" },
+        "role": {
+          "type": "string",
+          "enum": [
+            "cockpit_camera",
+            "sensor_origin",
+            "sensor_signature",
+            "tractor_origin",
+            "probe_tow_origin",
+            "tow_anchor",
+            "data_port",
+            "engine_emitter_left",
+            "engine_emitter_right",
+            "frap_hardpoint_left",
+            "frap_hardpoint_right",
+            "torpedo_launcher",
+            "damage_location"
+          ]
+        },
+        "position": { "$ref": "#/$defs/vector3" },
+        "rotation_degrees": { "$ref": "#/$defs/vector3" },
+        "fov_degrees": {
+          "type": "number",
+          "minimum": 20,
+          "maximum": 120
+        },
+        "source_lens_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  }
+}

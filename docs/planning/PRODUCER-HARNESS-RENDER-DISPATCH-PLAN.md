@@ -1,11 +1,11 @@
 ---
 title: Producer Harness Render Dispatch Plan
 created: 2026-08-15T00:00:00-04:00
-updated: 2026-08-15T00:00:00-04:00
+updated: 2026-08-16T00:00:00-04:00
 doc_type: plan
 production_area: pipeline
 department: pipeline
-status: draft
+status: active
 canonical: true
 canonical_for: producer_harness_render_dispatch
 wiki: true
@@ -15,8 +15,13 @@ wiki_order: 200
 ---
 # Producer Harness Render Dispatch Plan
 
-Recorded 2026-08-15. Status: **design doc, scoping only — nothing built from
-this document.**
+Recorded 2026-08-15. Status: **active — as of 2026-08-16, this is the
+sequenced prerequisite for `docs/planning/PRODUCTION-ASSEMBLY-PIPELINE-PLAN.md`.**
+Decision (2026-08-16): prove the full 81-scene script rendering end-to-end
+through the staging harness, distributed across real workers, before any
+Producer reorganization work begins — see that plan's "Decisions" section
+for the full rationale. Still nothing built as of this writing; this update
+adds the build plan, not code.
 
 ## Why this exists
 
@@ -108,6 +113,85 @@ dispatch branch — each needing its own tests — plus a deploy to
 `docker-pi-01` (same flow used earlier 2026-08-15 for the worker-update
 comparison fix) before it is usable against staging at all.
 
+## Build plan (proposed 2026-08-16)
+
+Phased so each step is independently verifiable before the next depends on
+it. No step requires an LLM call — this whole plan is deterministic-pipeline
+plumbing, orthogonal to the local/cloud model-routing work in
+`docs/planning/PRODUCTION-ASSEMBLY-PIPELINE-PLAN.md`.
+
+1. **Settle the open job-type question below** (new type vs. extending
+   `scene.render`) before writing schema code — it changes the shape of
+   every later step.
+2. **Server**: `scene.pipeline_render` schema + route + service function
+   (or the equivalent extension to `scene.render`), per the "Proposed job
+   type" section above. Docker-backed tests, matching this project's
+   existing convention (`docker exec oeb_studio_harness_local_api pytest
+   ...`).
+3. **Worker adapter**: the new `run_pipeline.py --intent <tmp-path> ...`
+   dispatch path. Include the same worker-assignment fields
+   `scene.render`/`tools/submit_scene_render.py` already have
+   (`preferred_worker_id`, `require_gpu_cycles`, `priority`,
+   `blender_timeout_seconds`) so this job type behaves consistently with the
+   existing one rather than inventing a second dispatch contract. Tests.
+4. **Producer dispatch branch**: env-driven harness-or-local, per the
+   "Proposed job type" section's item 3. First target: **local Docker
+   harness** (`127.0.0.1:8088`), not staging — smaller blast radius, and
+   directly closes the local-routing half of open question 2 below before
+   attempting staging.
+5. **Staging proof run**: the actual milestone this whole plan exists to
+   reach. Submit the full 81-scene episode
+   (`scripts/pilot/Orlando-El-Bastardo-Episode-01-The-Pilot.md`) through
+   `oeb-studio.docker-pi` with jobs distributed across `render-mac-01` and
+   `render-pc-01`, and confirm it completes to an equivalent episode cut —
+   the harness-dispatched counterpart to the local 81-scene run completed
+   2026-08-15/16 (74/81 delivered that run; see `PROJECT-DONE.md` once
+   logged). This is the "prove what we know works" checkpoint the
+   Production Assembly Pipeline decision is gated on.
+
+### A real architecture decision inside step 4: serial or fan-out dispatch?
+
+Today's `main()` loop is **synchronous per scene** — submit, block, move to
+the next scene. That's exactly why the local 81-scene run took ~12 hours on
+one machine. Naively harness-routing that same loop (submit one
+`scene.pipeline_render` job, poll to completion, then submit the next) would
+still only ever have one job in flight — it would not use `render-pc-01` and
+`render-mac-01` at the same time, and the actual payoff of "integrate the
+staging harness" (real parallel throughput across two-plus workers) would be
+left on the table. Getting real speedup requires restructuring the loop to
+submit a batch of jobs and poll the batch — a bigger change to
+`tools/producer.py`'s control flow than the dispatch branch alone, and worth
+scoping explicitly in step 4 rather than discovering it mid-implementation.
+
+## Render task assignment across workers
+
+Directly relevant now that staging-harness distribution is the near-term
+goal, not a someday capability:
+
+- `scene.render`'s existing `preferred_worker_id` / `require_gpu_cycles`
+  fields (`tools/submit_scene_render.py`) are the model to reuse for
+  `scene.pipeline_render` — don't invent a second worker-assignment
+  contract.
+- **2026-08-16:** `docs/planning/HARNESS-RESOURCE-MODEL-PLAN.md` proposes a
+  new `job_limit` field on worker registration (local render workers = 1,
+  cloud render/LLM resources = higher) as the general mechanism for
+  per-resource capacity awareness across both render and LLM dispatch. Once
+  that lands, `scene.pipeline_render` worker assignment should respect it
+  rather than assuming every worker is single-job like today's two local
+  machines.
+- **Known blocker, found and never resolved earlier this session:**
+  `render-pc-01`'s `gpu.cycles_render` capability is degraded — Blender
+  reports "No CUDA/OptiX GPU devices discovered" despite `nvidia-smi`
+  seeing the GPU fine. If any full-script proof run requests
+  `require_gpu_cycles` for final-quality passes, those jobs will not route
+  to `render-pc-01` until that's diagnosed — worth a pre-flight check
+  before the staging proof run in step 5, not a surprise discovered during
+  it.
+- Whether the proof run needs `require_gpu_cycles` at all is itself an open
+  call — the local 81-scene run used plain local Blender rendering with no
+  GPU requirement, so a first staging proof run could reasonably do the
+  same and treat GPU-required final passes as a follow-up.
+
 ## Open questions
 
 - Should `scene.pipeline_render` be a genuinely new job type, or should
@@ -118,15 +202,19 @@ comparison fix) before it is usable against staging at all.
   here.
 - Local Docker harness routing (the other half of the original ask — "local
   dev harness sends to local dev render") needs the same env-driven dispatch
-  but pointed at `127.0.0.1:8088` and a local worker instead of staging. The
-  proposed design already covers this for free (it is just which
-  `OEB_HARNESS_URL`/worker is configured), but it has not been exercised or
-  verified against the local Docker stack specifically.
+  but pointed at `127.0.0.1:8088` and a local worker instead of staging. Per
+  the build plan above, this is now the deliberate first target rather than
+  staging, specifically so it gets exercised before the staging proof run.
 - Whether Producer should download the rendered artifact locally for
   `episode_cut()`, or whether episode-cut stitching itself should become
   harness-aware and operate on remote artifact URLs, is undecided.
+- Serial-submit-and-poll vs. batch fan-out (see build plan step 4) — not
+  decided; fan-out is where the actual throughput win lives, but it's a
+  larger change to `producer.py`'s control flow than the dispatch branch
+  alone.
 
 ## Not built
 
 Nothing in this document has been implemented. `tools/producer.py`'s render
-step is unchanged as of this writing.
+step is unchanged as of this writing. This update records a build plan and
+sequencing decision only.

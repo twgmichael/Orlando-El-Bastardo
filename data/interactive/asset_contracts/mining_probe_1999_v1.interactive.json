@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "mining_probe_1999_v1",
+  "asset_id": "prop_mining_probe_1999_A",
+  "display_name": "Mining Probe 1999",
+  "production_role": "hero",
+  "source": {
+    "config_asset_id": "prop_mining_probe_1999_A",
+    "expected_node": "prop_mining_probe_1999_A"
+  },
+  "runtime": {
+    "kind": "mission_prop",
+    "root_node_type": "RigidBody3D",
+    "wrapper_scene": "res://generated/scenes/mining_probe_1999_v1.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "+X",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, -90.0, 0.0]
+  },
+  "visual": {
+    "scale": [1.0, 1.0, 1.0],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "probe_collision",
+      "kind": "box",
+      "position": [0.0, 0.36, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "size": [0.75, 0.72, 1.0]
+    }
+  ],
+  "markers": [
+    {
+      "marker_id": "sensor_signature",
+      "role": "sensor_signature",
+      "position": [0.0, 0.42, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "data_port",
+      "role": "data_port",
+      "position": [0.0, 0.42, -0.48],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    },
+    {
+      "marker_id": "tow_anchor",
+      "role": "tow_anchor",
+      "position": [0.0, 0.34, 0.52],
+      "rotation_degrees": [0.0, 180.0, 0.0]
+    }
+  ],
+  "capabilities": [
+    "sensor_target",
+    "data_download",
+    "tow_target",
+    "beacon",
+    "collision"
+  ],
+  "animation_bindings": {
+    "beacon": "beacon_blink_loop"
+  },
+  "notes": [
+    "The probe remains a physical scene object after data download and while in tow."
+  ]
+}

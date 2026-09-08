@@ -1,7 +1,7 @@
 ---
 title: JourneyBlaster
 created: 2026-07-13T19:47:00-04:00
-updated: 2026-07-19T03:10:00-04:00
+updated: 2026-08-24T13:45:00-04:00
 doc_type: design_record
 production_area: vehicles
 department: art
@@ -58,7 +58,10 @@ original 1995 Infini-D designs; Tier 1 provenance.
 | Hull | Two halves; flat-bottom bowl + aft-swelling top shell with lip overhang; JB100 adds a CONCAVE belly recess (0.1 deep, r 2.85) |
 | Bubble | Hollow PERFECT half-globe, no rim extrusion, rides high, seals inside the ribbed tub at the cup's lip (not against the red hull); < half total ship height as staging rule; thin-shell glass (zero thickness) |
 | Cockpit | Circular tub: flat floor, fine vertical striping (20 shallow flutes), rounded floor corner, rim conforms to the deck with a flared lip |
-| Seats | JB5K tandem two-seater; JB100 SINGLE seat. Primitives L-chair kept deliberately (simple shapes, scales with pilot). Oxygen tanks on the chair back; control panel at chest height reaching over the knees |
+| JB100 cockpit v37 | Minimal one-pilot attack/recon set: shallow dark tub, low reclining Barka-predecessor crash seat, red four-point harness, three physical instrument displays, dual thigh sticks, separate pull throttle, compact NavComp/comms and emergency side panels. No AI/luxury language. |
+| JB100 v38 promotion | The approved v37 cockpit configuration is promoted unchanged as the production **hero stand-in**. The ship asset remains pilot-free; Orlando is cast, seated, and animated separately by scene rigs. |
+| Seats | JB5K tandem two-seater; JB100 SINGLE seat. The v37 chair is low, reclined, heavily padded, and scaled to the dressed hero. Twin oxygen bottles remain on the aft face of the chair. |
+| Working source | `assets/ships/jb100_v38/jb100_v38.blend` preserves named cockpit components for set work and opens with `jb100_canopy` hidden in viewport and render. Versioned GLB/USDC exports and canonical `jb100.glb`/`.usdc` aliases remain joined as `prop_jb100_A` for compatibility. |
 | Weapons | Twin frap-ray cannons lying ALONG the fore hull, muzzles straight forward inside the rim, 3 rings per barrel, exhaust ports 90° outboard |
 | Engines | Twin slim pods on the aft deck pointing STRAIGHT BACK; red-cored vents, orange emissive tips; no end flange |
 | Senso-globes | Four per side riding the hull profile, proudest AFT; VIBRANT YELLOW (hot core) |

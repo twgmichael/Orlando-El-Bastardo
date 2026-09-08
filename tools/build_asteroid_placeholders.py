@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import random
@@ -547,14 +548,42 @@ def validate_exports() -> None:
           f"plus {len(expected_marks)} location marks")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, default=OUT_DIR)
+    parser.add_argument(
+        "--skip-resolver-update",
+        action="store_true",
+        help="Build assets without updating data/resolver_map.json.",
+    )
+    blender_args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    return parser.parse_args(blender_args)
+
+
 def main() -> None:
+    global OUT_DIR, PREVIEW_DIR
+    args = parse_args()
+    OUT_DIR = (
+        args.output_dir
+        if args.output_dir.is_absolute()
+        else PROJECT_ROOT / args.output_dir
+    )
+    PREVIEW_DIR = OUT_DIR / "previews"
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Keep locally generated Blender sources out of a nested Godot project's
+    # import scan. The synchronized GLB copies under generated/assets remain
+    # visible to Godot.
+    (OUT_DIR.parent / ".gdignore").write_text("", encoding="utf-8")
     PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
     for spec in SPECS:
         build_individual(spec)
     obstacles = build_field()
-    register_field_collision_data(
-        str(PROJECT_ROOT / "data" / "resolver_map.json"), "asteroid_field", obstacles)
+    if not args.skip_resolver_update:
+        register_field_collision_data(
+            str(PROJECT_ROOT / "data" / "resolver_map.json"),
+            "asteroid_field",
+            obstacles,
+        )
     validate_exports()
     print(f"Built {len(SPECS)} asteroid placeholders in {OUT_DIR}")
 

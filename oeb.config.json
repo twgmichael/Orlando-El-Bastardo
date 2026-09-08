@@ -86,10 +86,25 @@
       "kind": "prop"
     },
     "prop_jb100_A": {
-      "file": "ships/jb100.glb",
+      "file": "ships/jb100_v38/jb100_v38.glb",
       "node": "prop_jb100_A",
-      "kind": "prop",
-      "radius_m": 3.3
+      "kind": "vehicle",
+      "radius_m": 3.3,
+      "status": "available",
+      "tags": [
+        "journeyblaster 100",
+        "jb100",
+        "hero stand-in",
+        "light attack",
+        "recon",
+        "one pilot",
+        "cockpit"
+      ],
+      "hero": true,
+      "production_role": "hero_stand_in",
+      "pilot_included": false,
+      "version": "v38",
+      "source": "tools/build_jb100.py"
     },
     "prop_starbase_86_A": {
       "file": "locations/starbase_86_v1.1.0/starbase_86_v1.1.0.glb",
