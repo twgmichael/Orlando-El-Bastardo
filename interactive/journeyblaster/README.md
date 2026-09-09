@@ -1,7 +1,7 @@
 # JourneyBlaster Godot Runtime
 
-Current milestone: **Mission 003 Starbase Defense Prototype V1**
-(`mission-003-starbase-defense-prototype-v1`), declared complete on
+Current milestone: **Mission 003 Starbase Defense Prototype V3**
+(`mission-003-prototype-v3`), declared complete on
 2026-09-09.
 
 This nested Godot 4 project is the first OEB interactive runtime. Canonical

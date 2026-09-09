@@ -4,8 +4,8 @@ config_version=5
 
 [application]
 
-config/name="JourneyBlaster — Mission 003 — Starbase Defense Prototype V1"
-config/version="mission-003-prototype-v1"
+config/name="JourneyBlaster — Mission 003 — Starbase Defense Prototype V3"
+config/version="mission-003-prototype-v3"
 run/main_scene="res://scenes/mission_003_starbase_defense.tscn"
 
 [display]

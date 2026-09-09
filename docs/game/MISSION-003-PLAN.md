@@ -14,9 +14,9 @@ wiki: false
 
 Working title: **Starbase Defense**
 
-Prototype status: **Starbase Defense Prototype V1**, implemented on
+Prototype status: **Starbase Defense Prototype V3**, implemented on
 2026-09-09. See
-[MISSION-003-PROTOTYPE-V1.md](MISSION-003-PROTOTYPE-V1.md) for the milestone
+[MISSION-003-PROTOTYPE-V3.md](MISSION-003-PROTOTYPE-V3.md) for the current milestone
 record.
 
 ## Mission promise
@@ -226,3 +226,24 @@ attacker objectives and all station/flyer health values hidden.
 
 Remaining work is playability tuning: attacker speed and evasion weights,
 weapon cadence, defensive accuracy, damage pacing, and encounter duration.
+
+## Prototype V2 movement correction — 2026-09-09
+
+Pirate AI now has sole ownership of each flyer's transform. Physics transform
+synchronization is disabled on the `AnimatableBody3D` flyer wrapper so Godot
+does not restore the previous transform after the AI movement update. Runtime
+coverage now requires all three flyers to visibly change position under live
+AI control shortly after the mission begins.
+
+## Prototype V3 strafing runs — 2026-09-09
+
+Pirates no longer orbit station targets while firing repeatedly. Each flyer
+first moves to an outside ingress point, commits to a tangential strafing lane,
+fires exactly once near its target, continues clear past the station, and then
+turns back into the next pass. Alternating pass directions create readable
+attack-and-recovery cycles and substantially slow station damage so the pilot
+has time to launch, orient, and intercept.
+
+Station defense bolts are now active navigation hazards. Flyers predict the
+closest point of approach for nearby green plasma bolts and blend an evasive
+steering response into their current attack run without abandoning the run.

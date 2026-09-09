@@ -1,7 +1,7 @@
 ---
 title: Interactive Game Roadmap
 created: 2026-08-24T00:00:00-04:00
-updated: 2026-09-08T00:00:00-04:00
+updated: 2026-09-09T00:00:00-04:00
 doc_type: register
 production_area: interactive
 department: production
@@ -31,9 +31,9 @@ Player promise:
 
 Canonical plan: [`docs/game/MISSION-001-PLAN.md`](docs/game/MISSION-001-PLAN.md)
 
-Current milestone: **Mission 002 Planetfall Prototype V1**, declared complete
-on 2026-09-08. Milestone record:
-[`docs/game/MISSION-002-PROTOTYPE-V1.md`](docs/game/MISSION-002-PROTOTYPE-V1.md)
+Current milestone: **Mission 003 Starbase Defense Prototype V3**, declared
+complete on 2026-09-09. Milestone record:
+[`docs/game/MISSION-003-PROTOTYPE-V3.md`](docs/game/MISSION-003-PROTOTYPE-V3.md)
 
 ### Phase 1 — Contracts and project boot
 
@@ -210,7 +210,7 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   subsystem objectives and randomized target order.
 - [x] Add three shield, three weapon, and three hangar damage locations without
   exposing station or flyer health to the pilot.
-- [x] Implement fuzzy objective flight, attack orbiting, JB100 avoidance,
+- [x] Implement fuzzy objective flight, attack runs, JB100 avoidance,
   flyer separation, and individual behavioral variation.
 - [x] Make the first objective-complete flyer attack the JB100 while later
   flyers pile onto surviving station targets, with replacement behavior.
@@ -229,6 +229,24 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
 - [x] Add end-to-end automated coverage for hero assets, hangar launch, hidden
   objectives, station systems, pirate damage states, retreat, friendly fire,
   success, station loss, and JB100 disablement.
+
+### Starbase Defense Prototype V2 — Live pirate flight
+
+- [x] Give scripted pirate AI sole ownership of flyer transforms by disabling
+  `AnimatableBody3D` physics transform synchronization.
+- [x] Add a runtime assertion that all three flyers move under live AI control
+  immediately after the mission starts.
+
+### Starbase Defense Prototype V3 — Strafing passes and danger avoidance
+
+- [x] Replace target-circling fire with readable ingress, single-shot strafe,
+  fly-past, and return phases.
+- [x] Keep each strafing lane outside the station body and alternate directions
+  between successive passes.
+- [x] Treat nearby station-defense bolts on an intercept course as hazards and
+  blend evasive steering into the current pass.
+- [x] Add runtime coverage for continuous fly-past geometry, one shot per pass,
+  and defensive-fire avoidance.
 
 ## Explicit Mission 001 non-goals
 

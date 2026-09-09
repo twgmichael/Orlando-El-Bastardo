@@ -585,7 +585,7 @@ func _build_aim_label(label_name: String, value: String) -> Label:
 func _update_hud() -> void:
     if title_label == null:
         return
-    title_label.text = "JOURNEYBLASTER · MISSION 003 · STARBASE DEFENSE PROTOTYPE V1"
+    title_label.text = "JOURNEYBLASTER · MISSION 003 · STARBASE DEFENSE PROTOTYPE V3"
     status_label.text = "MISSION STATE · %s" % mission_state
     objective_label.text = OBJECTIVES.get(mission_state, "")
     sensor_label.text = _sensor_readout()

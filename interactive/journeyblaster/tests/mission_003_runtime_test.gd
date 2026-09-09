@@ -70,12 +70,70 @@ func _run() -> void:
         fail("Enter did not begin the defense mission")
         return
     var categories: Dictionary = {}
+    var initial_pirate_positions: Array[Vector3] = []
     for pirate in runtime.pirates:
         categories[pirate.objective_category] = true
+        initial_pirate_positions.append(pirate.global_position)
+    for frame in 24:
+        await physics_frame
+    var moving_pirates := 0
+    for index in runtime.pirates.size():
+        if runtime.pirates[index].global_position.distance_to(
+            initial_pirate_positions[index]
+        ) > 0.5:
+            moving_pirates += 1
+    if moving_pirates != 3:
+        fail("all three pirate flyers did not move under live AI control")
+        return
+    for pirate in runtime.pirates:
         pirate.ai_enabled = false
+        if pirate.attack_run_phase != "INGRESS":
+            fail("pirate did not begin by flying to a strafing-run ingress point")
+            return
+        var ingress_direction: Vector3 = (
+            pirate.run_fire_point - pirate.run_ingress_point
+        ).normalized()
+        var egress_direction: Vector3 = (
+            pirate.run_egress_point - pirate.run_fire_point
+        ).normalized()
+        if ingress_direction.dot(egress_direction) < 0.8:
+            fail("pirate strafing lane did not continue past its target")
+            return
     if categories.size() != 3:
         fail("pirates did not begin with one hidden objective category each")
         return
+
+    var strafing_pirate := runtime.pirates[0] as AnimatableBody3D
+    strafing_pirate.ai_enabled = true
+    strafing_pirate.attack_run_phase = "STRAFE"
+    strafing_pirate.run_shot_fired = false
+    strafing_pirate.fire_timer = 0.0
+    strafing_pirate.global_position = strafing_pirate.run_fire_point
+    var projectile_count_before := get_nodes_in_group("weapon_projectile").size()
+    strafing_pirate.call("_physics_process", 0.001)
+    var projectile_count_after_shot := get_nodes_in_group("weapon_projectile").size()
+    strafing_pirate.call("_physics_process", 0.001)
+    if (
+        projectile_count_after_shot != projectile_count_before + 1
+        or get_nodes_in_group("weapon_projectile").size() != projectile_count_after_shot
+    ):
+        fail("pirate did not fire exactly once during a strafing pass")
+        return
+    var no_exclusions: Array[RID] = []
+    runtime.call(
+        "_spawn_combat_projectile",
+        "starbase_plasma",
+        strafing_pirate.global_position - Vector3(0.0, 0.0, 30.0),
+        Vector3.BACK,
+        155.0,
+        0.8,
+        RID(),
+        no_exclusions
+    )
+    if strafing_pirate.call("_defense_fire_avoidance").length_squared() <= 0.0001:
+        fail("pirate did not treat intercepting station fire as an evasive threat")
+        return
+    strafing_pirate.ai_enabled = false
 
     var shield := runtime.targets_by_category["shield"][0] as StaticBody3D
     var weapon := runtime.targets_by_category["weapon"][0] as StaticBody3D
