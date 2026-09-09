@@ -31,8 +31,9 @@ Player promise:
 
 Canonical plan: [`docs/game/MISSION-001-PLAN.md`](docs/game/MISSION-001-PLAN.md)
 
-Current milestone: **Demo Prototype V4**, declared complete on 2026-09-08.
-Milestone record: [`docs/game/DEMO-PROTOTYPE-V4.md`](docs/game/DEMO-PROTOTYPE-V4.md)
+Current milestone: **Mission 002 Planetfall Prototype V1**, declared complete
+on 2026-09-08. Milestone record:
+[`docs/game/MISSION-002-PROTOTYPE-V1.md`](docs/game/MISSION-002-PROTOTYPE-V1.md)
 
 ### Phase 1 — Contracts and project boot
 
@@ -165,6 +166,36 @@ hyperspace completion.
   filtered without carrying stale movement into the next drag.
 - [x] Add automated coverage for steering ramps, inverted local yaw, and
   identical first/second mouse-drag response.
+
+## Mission 002 — Planetfall
+
+Canonical plan: [`docs/game/MISSION-002-PLAN.md`](docs/game/MISSION-002-PLAN.md)
+
+### Planetfall Prototype V1 — Intercept, charges, and debris chase
+
+- [x] Present a lightweight procedural planet with a single Fresnel atmosphere
+  shell rather than volumetric rendering.
+- [x] Scale an existing asteroid into a mission-sized primary body that falls
+  toward the planet while slowly toppling and spinning.
+- [x] Add three surface fracture targets distributed around the rotating body.
+- [x] Reuse the tow beam in reverse as a blue explosive-placement beam that
+  remains outside the JB100 effect-exclusion bubble.
+- [x] Use `/` or `?` to toggle between FrapRay and reverse tow-beam modes;
+  preserve mouse-drag ship steering in both modes.
+- [x] Project the blue circle along the JB100's actual forward tow-beam path
+  and use `Space` to shoot a charge onto an acquired blue torus.
+- [x] Reserve `G` for detonation after all charges are placed and the JB100 has
+  reached safe distance.
+- [x] Require a safe detonation distance after all three charges are placed.
+- [x] Break the primary into three existing-asset major fragments with
+  independent falling trajectories.
+- [x] Trigger one staged natural breakup during the chase.
+- [x] Allow FrapRay and proton-torpedo fire to break major debris into smaller
+  pieces and atomize every remaining fragment.
+- [x] Complete when no dangerous returns remain; fail if a dangerous body
+  crosses the atmospheric safety boundary while preserving free flight.
+- [x] Add end-to-end automated coverage for placement acquisition, effect
+  clearance, controlled and natural breakup, live weapon fire, and atomization.
 
 ## Explicit Mission 001 non-goals
 

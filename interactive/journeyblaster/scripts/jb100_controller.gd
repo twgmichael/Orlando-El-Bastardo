@@ -26,6 +26,8 @@ var course_lock := false
 var collision_count := 0
 var last_impact_speed_mps := 0.0
 var mouse_flight_active := false
+var mouse_flight_suppressed := false
+var frapray_fire_suppressed := false
 var mouse_flight_delta := Vector2.ZERO
 var mouse_rotation_step := Vector2.ZERO
 var pitch_input_smoothed := 0.0
@@ -153,9 +155,17 @@ func _unhandled_input(event: InputEvent) -> void:
                 fire_frapray()
             KEY_T:
                 fire_proton_torpedo()
-    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+    elif (
+        event is InputEventMouseButton
+        and event.button_index == MOUSE_BUTTON_LEFT
+        and not mouse_flight_suppressed
+    ):
         _set_mouse_flight_active(event.pressed)
-    elif event is InputEventMouseMotion and mouse_flight_active:
+    elif (
+        event is InputEventMouseMotion
+        and mouse_flight_active
+        and not mouse_flight_suppressed
+    ):
         mouse_flight_delta += event.relative
     elif event is InputEventJoypadButton and event.pressed:
         if event.button_index == JOY_BUTTON_B:
@@ -220,8 +230,22 @@ func _set_mouse_flight_active(active: bool, update_pointer_mode := true) -> void
         )
 
 
+func set_mouse_flight_suppressed(suppressed: bool) -> void:
+    mouse_flight_suppressed = suppressed
+    if suppressed:
+        _set_mouse_flight_active(false)
+
+
+func set_frapray_fire_suppressed(suppressed: bool) -> void:
+    frapray_fire_suppressed = suppressed
+
+
 func fire_frapray() -> bool:
-    if not controls_enabled or frapray_cooldown_remaining > 0.0:
+    if (
+        not controls_enabled
+        or frapray_fire_suppressed
+        or frapray_cooldown_remaining > 0.0
+    ):
         return false
     if frapray_left == null or frapray_right == null:
         return false

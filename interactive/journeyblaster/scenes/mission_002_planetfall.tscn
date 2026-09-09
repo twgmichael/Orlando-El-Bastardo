@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/mission_002_boot.gd" id="1_mission"]
+[ext_resource type="PackedScene" path="res://generated/scenes/jb100_hero_stand_in_v38.tscn" id="2_player"]
+
+[node name="mission_002_planetfall" type="Node3D"]
+script = ExtResource("1_mission")
+
+[node name="player_jb100" parent="." instance=ExtResource("2_player")]
+position = Vector3(0, 0, 0)
+metadata/mission_role = "player"

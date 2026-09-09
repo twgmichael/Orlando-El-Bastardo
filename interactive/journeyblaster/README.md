@@ -1,6 +1,7 @@
 # JourneyBlaster Godot Runtime
 
-Current milestone: **Demo Prototype V4** (`demo-prototype-v4`), declared
+Current milestone: **Mission 002 Planetfall Prototype V1**
+(`mission-002-prototype-v1`), declared
 complete on 2026-09-08.
 
 This nested Godot 4 project is the first OEB interactive runtime. Canonical
@@ -24,11 +25,14 @@ godot --headless --path interactive/journeyblaster \
   --script res://tests/probe_damage_runtime_test.gd
 godot --headless --path interactive/journeyblaster \
   --script res://tests/flight_controls_runtime_test.gd
+godot --headless --path interactive/journeyblaster \
+  --script res://tests/mission_002_runtime_test.gd
 godot --path interactive/journeyblaster
 ```
 
 Open `interactive/journeyblaster/project.godot` in Godot after synchronization
-to inspect the Mission 001 cockpit boot scene.
+to play Mission 002. Mission 001 remains available at
+`res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn`.
 
 Run the explicit import after every clean sync. Sync replaces the generated
 tree deterministically, including Godot's adjacent `.import` sidecars.
@@ -71,3 +75,24 @@ the current scene. Press `R` when ready to restart.
 The asteroid contracts prefer their registered canonical assets. When the
 external `assets/placeholders` library is not mounted, the documented builder
 command creates equivalent deterministic runtime sources under this project.
+
+## Mission 002 controls and loop
+
+Mission 002 starts with `Enter`. Intercept the falling primary asteroid and
+close to placement range, then press `/` or `?` to switch from FrapRay to the
+reverse tow beam. Left-mouse drag always steers the JB100; the restored blue
+circle shows where the ship-forward tow beam will strike. Aim it over a blue
+torus and press `Space` to shoot the beam and attach a charge. Press `/` or `?`
+again to switch back to FrapRay; `T` continues to launch proton torpedoes.
+
+The three-minute charge-placement window begins when `Enter` starts the
+mission; time spent reading the briefing does not consume it.
+
+After placing all three charges, retreat to the displayed safe distance and
+press `G` to detonate. Chase the resulting major fragments with `Space`
+FrapRay and `T` proton torpedoes. Major fragments break into small debris;
+small debris vaporizes into dust on the next hit. One major fragment breaks up
+naturally during the chase. Destroy every dangerous return before it crosses
+the atmospheric boundary. A separate one-minute planetfall clock begins when
+the charges detonate; the breakup animation is included in that minute.
+Failure preserves free flight and `R` restarts.
