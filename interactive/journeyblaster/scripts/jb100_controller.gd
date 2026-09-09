@@ -2,6 +2,8 @@ extends CharacterBody3D
 
 signal impact(speed_mps: float, collider: Object)
 signal weapon_fired(weapon_kind: String)
+signal hull_damaged(remaining_integrity: float, weapon_kind: String)
+signal ship_disabled()
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 
@@ -38,6 +40,9 @@ var torpedo_cooldown_remaining := 0.0
 var proton_torpedoes_remaining := 8
 var frapray_shots_fired := 0
 var proton_torpedoes_fired := 0
+var hull_integrity := 100.0
+var hull_integrity_max := 100.0
+var disabled_in_space := false
 
 @onready var frapray_left := get_node_or_null("frap_hardpoint_left") as Node3D
 @onready var frapray_right := get_node_or_null("frap_hardpoint_right") as Node3D
@@ -120,10 +125,11 @@ func _physics_process(delta: float) -> void:
         if throttle >= 0.0
         else throttle * maximum_reverse_speed_mps * 4.0
     )
+    var thrust_factor := thrust_efficiency()
     var desired_velocity := (
-        -global_transform.basis.z * forward_speed
-        + global_transform.basis.x * strafe_input * lateral_speed_mps
-        + global_transform.basis.y * lift_input * lateral_speed_mps
+        -global_transform.basis.z * forward_speed * thrust_factor
+        + global_transform.basis.x * strafe_input * lateral_speed_mps * thrust_factor
+        + global_transform.basis.y * lift_input * lateral_speed_mps * thrust_factor
     )
     velocity = velocity.lerp(
         desired_velocity,
@@ -329,6 +335,28 @@ func weapon_status_text() -> String:
     var frap_status := "READY" if frapray_cooldown_remaining <= 0.0 else "CHARGING"
     var torpedo_status := "%02d" % proton_torpedoes_remaining
     return "WEAPONS\nFRAPRAY  %s · SPACE\nPROTON TORPEDO  %s · T" % [frap_status, torpedo_status]
+
+
+func apply_weapon_hit(
+    damage: float,
+    weapon_kind: String,
+    _hit_position: Vector3,
+    _impact_direction: Vector3
+) -> void:
+    if disabled_in_space:
+        return
+    hull_integrity = maxf(0.0, hull_integrity - damage)
+    hull_damaged.emit(hull_integrity, weapon_kind)
+    if hull_integrity <= 0.0:
+        disabled_in_space = true
+        throttle = 0.0
+        ship_disabled.emit()
+
+
+func thrust_efficiency() -> float:
+    if disabled_in_space:
+        return 0.0
+    return clampf(hull_integrity / hull_integrity_max, 0.0, 1.0)
 
 
 func dead_stop() -> void:

@@ -5,6 +5,7 @@ var travel_velocity := Vector3.ZERO
 var damage := 1.0
 var lifetime_s := 2.5
 var shooter_rid: RID
+var additional_exclusions: Array[RID] = []
 var vapor_clock := 0.0
 
 
@@ -14,13 +15,15 @@ func configure(
     direction: Vector3,
     speed_mps: float,
     hit_damage: float,
-    source_rid: RID
+    source_rid: RID,
+    extra_exclusions: Array[RID] = []
 ) -> void:
     weapon_kind = kind
     position = start_position
     travel_velocity = direction.normalized() * speed_mps
     damage = hit_damage
     shooter_rid = source_rid
+    additional_exclusions = extra_exclusions.duplicate()
     basis = Basis.looking_at(direction.normalized(), Vector3.UP)
 
 
@@ -31,6 +34,16 @@ func _ready() -> void:
         lifetime_s = 5.0
         _build_torpedo_visual()
         _spawn_vapor_puff()
+    elif weapon_kind == "starbase_plasma":
+        name = "StarbaseDefenseBolt"
+        _build_colored_bolt(
+            Color(0.12, 1.0, 0.72), Color(0.02, 0.72, 0.48), 4.2
+        )
+    elif weapon_kind == "pirate_plasma":
+        name = "PiratePlasmaBolt"
+        _build_colored_bolt(
+            Color(1.0, 0.08, 0.035), Color(1.0, 0.025, 0.01), 5.8
+        )
     else:
         name = "FrapRayBolt"
         _build_frapray_visual()
@@ -40,8 +53,10 @@ func _physics_process(delta: float) -> void:
     var start := global_position
     var finish := start + travel_velocity * delta
     var query := PhysicsRayQueryParameters3D.create(start, finish)
+    var exclusions: Array[RID] = additional_exclusions.duplicate()
     if shooter_rid.is_valid():
-        query.exclude = [shooter_rid]
+        exclusions.append(shooter_rid)
+    query.exclude = exclusions
     var result := get_world_3d().direct_space_state.intersect_ray(query)
     if not result.is_empty():
         var collider: Object = result.get("collider")
@@ -84,6 +99,30 @@ func _build_frapray_visual() -> void:
     light.light_color = Color(1.0, 0.24, 0.02)
     light.light_energy = 2.8
     light.omni_range = 5.0
+    add_child(light)
+
+
+func _build_colored_bolt(
+    color: Color, emission_color: Color, emission_energy: float
+) -> void:
+    var bolt := MeshInstance3D.new()
+    bolt.name = "CombatPlasmaBolt"
+    var mesh := BoxMesh.new()
+    mesh.size = Vector3(0.3, 0.3, 3.8)
+    var material := StandardMaterial3D.new()
+    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    material.albedo_color = color
+    material.emission_enabled = true
+    material.emission = emission_color
+    material.emission_energy_multiplier = emission_energy
+    mesh.material = material
+    bolt.mesh = mesh
+    add_child(bolt)
+    var light := OmniLight3D.new()
+    light.name = "CombatPlasmaGlow"
+    light.light_color = color
+    light.light_energy = 3.2
+    light.omni_range = 6.0
     add_child(light)
 
 

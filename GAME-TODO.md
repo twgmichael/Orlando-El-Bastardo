@@ -197,6 +197,39 @@ Canonical plan: [`docs/game/MISSION-002-PLAN.md`](docs/game/MISSION-002-PLAN.md)
 - [x] Add end-to-end automated coverage for placement acquisition, effect
   clearance, controlled and natural breakup, live weapon fire, and atomization.
 
+## Mission 003 — Starbase Defense
+
+Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
+
+### Starbase Defense Prototype V1 — Hangar launch and pirate defense
+
+- [x] Start the JB100 v38 inside Starbase 86 v1.1's real open hangar and face
+  the player toward a readable launch exit.
+- [x] Present a lightweight distant planet, atmosphere, moon, and starfield.
+- [x] Spawn three accepted Ellipso pirate flyers with unique randomized hidden
+  subsystem objectives and randomized target order.
+- [x] Add three shield, three weapon, and three hangar damage locations without
+  exposing station or flyer health to the pilot.
+- [x] Implement fuzzy objective flight, attack orbiting, JB100 avoidance,
+  flyer separation, and individual behavioral variation.
+- [x] Make the first objective-complete flyer attack the JB100 while later
+  flyers pile onto surviving station targets, with replacement behavior.
+- [x] Add slow, imperfect starbase defensive fire that can hit pirates or the
+  JB100 but cannot damage the station.
+- [x] Drive flyers off after three paired FrapRay shots, destroy them after
+  seven, or destroy them with one torpedo plus three FrapRay shots.
+- [x] Count flyers as driven off at 5,000 m and show their hyperspace departure
+  at 6,000 m while keeping retreat speed pursuable.
+- [x] Scale station-weapon effectiveness with health and amplify weapon/hangar
+  damage for each disabled shield generator.
+- [x] Reduce JB100 thrust by 10 percent per hostile or friendly hit until it is
+  dead in space.
+- [x] Preserve the established HUD, controls, weapon reticles, safe-hangar,
+  post-failure free-flight, and `R` restart conventions.
+- [x] Add end-to-end automated coverage for hero assets, hangar launch, hidden
+  objectives, station systems, pirate damage states, retreat, friendly fire,
+  success, station loss, and JB100 disablement.
+
 ## Explicit Mission 001 non-goals
 
 - Shields, enemy AI, ship-to-ship combat damage, and subsystem targeting

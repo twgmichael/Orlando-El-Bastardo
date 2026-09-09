@@ -1,8 +1,8 @@
 # JourneyBlaster Godot Runtime
 
-Current milestone: **Mission 002 Planetfall Prototype V1**
-(`mission-002-prototype-v1`), declared
-complete on 2026-09-08.
+Current milestone: **Mission 003 Starbase Defense Prototype V1**
+(`mission-003-starbase-defense-prototype-v1`), declared complete on
+2026-09-09.
 
 This nested Godot 4 project is the first OEB interactive runtime. Canonical
 assets remain under the Studio's `assets/` tree. Runtime copies and wrapper
@@ -27,12 +27,15 @@ godot --headless --path interactive/journeyblaster \
   --script res://tests/flight_controls_runtime_test.gd
 godot --headless --path interactive/journeyblaster \
   --script res://tests/mission_002_runtime_test.gd
+godot --headless --path interactive/journeyblaster \
+  --script res://tests/mission_003_runtime_test.gd
 godot --path interactive/journeyblaster
 ```
 
 Open `interactive/journeyblaster/project.godot` in Godot after synchronization
-to play Mission 002. Mission 001 remains available at
-`res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn`.
+to play Mission 003. Mission 001 remains available at
+`res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn`, and
+Mission 002 remains available at `res://scenes/mission_002_planetfall.tscn`.
 
 Run the explicit import after every clean sync. Sync replaces the generated
 tree deterministically, including Godot's adjacent `.import` sidecars.
@@ -96,3 +99,21 @@ naturally during the chase. Destroy every dangerous return before it crosses
 the atmospheric boundary. A separate one-minute planetfall clock begins when
 the charges detonate; the breakup animation is included in that minute.
 Failure preserves free flight and `R` restarts.
+
+## Mission 003 controls and loop
+
+Mission 003 starts with `Enter`, with the JB100 inside Starbase 86's open
+hangar and facing the launch exit. Use the established mouse-drag or keyboard
+flight controls to launch, `Space` for paired FrapRay fire, `T` for proton
+torpedoes, and `Tab` for the actual weapon-path HUD.
+
+Three Ellipso pirate flyers attack nine hidden station damage locations. Their
+objectives, target order, and health are not exposed. Three FrapRay shots drive
+a flyer into a committed retreat, seven destroy it, and one torpedo plus three
+FrapRay shots also destroys it. Starbase defensive bolts can hit the pirates
+or the JB100; each hit on the JB100 removes 10 of its 100 thrust points.
+
+Destroy all three flyers or drive each beyond 5,000 m to complete the mission.
+The open hangar is safe from deliberate pirate pursuit. Losing all nine
+station targets or all JB100 thrust fails the mission without ending the
+current battle; `R` restarts.

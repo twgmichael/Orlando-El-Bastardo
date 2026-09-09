@@ -4,9 +4,9 @@ config_version=5
 
 [application]
 
-config/name="JourneyBlaster — Mission 002 — Planetfall Prototype V1"
-config/version="mission-002-prototype-v1"
-run/main_scene="res://scenes/mission_002_planetfall.tscn"
+config/name="JourneyBlaster — Mission 003 — Starbase Defense Prototype V1"
+config/version="mission-003-prototype-v1"
+run/main_scene="res://scenes/mission_003_starbase_defense.tscn"
 
 [display]
 

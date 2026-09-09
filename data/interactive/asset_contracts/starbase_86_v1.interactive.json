@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "starbase_86_v1",
+  "asset_id": "prop_starbase_86_A",
+  "display_name": "Starbase 86",
+  "production_role": "hero",
+  "source": {
+    "config_asset_id": "prop_starbase_86_A",
+    "expected_node": "prop_starbase_86_A"
+  },
+  "runtime": {
+    "kind": "obstacle",
+    "root_node_type": "StaticBody3D",
+    "wrapper_scene": "res://generated/scenes/starbase_86_v1.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "none",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, 0.0, 0.0]
+  },
+  "visual": {
+    "scale": [1.0, 1.0, 1.0],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "central_mast_collision",
+      "kind": "capsule",
+      "position": [0.0, 75.0, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "radius": 17.0,
+      "height": 150.0
+    }
+  ],
+  "markers": [],
+  "capabilities": ["obstacle", "collision"],
+  "notes": [
+    "Mission 003 uses the production v1.1.0 Starbase 86 model with its first opposed hangar tunnel fully open.",
+    "Runtime subsystem targets provide localized collision and damage while the central capsule keeps the navigation proxy inexpensive."
+  ]
+}

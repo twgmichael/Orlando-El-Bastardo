@@ -127,6 +127,24 @@
       "pod_construction": "rounded box with squashed top and bottom hemispheres",
       "source": "user-annotated original pod restoration v005"
     },
+    "prop_pirate_flyer_A": {
+      "file": "ships/ellipso_flyer_mk1.glb",
+      "node": "prop_pirate_flyer_A",
+      "kind": "vehicle",
+      "radius_m": 4.5,
+      "status": "available",
+      "tags": [
+        "ellipso flyer",
+        "pirate flyer",
+        "ventradi",
+        "hostile",
+        "fighter"
+      ],
+      "hero": false,
+      "production_role": "hero",
+      "version": "mk1",
+      "source": "tools/build_ellipso_flyer_mk1.py"
+    },
     "scene_oeb_title_A": {
       "kind": "scene",
       "current_revision": "scene_versions/oeb_scene_title_v0.0.12",

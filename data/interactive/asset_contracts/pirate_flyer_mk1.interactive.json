@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "pirate_flyer_mk1",
+  "asset_id": "prop_pirate_flyer_A",
+  "display_name": "Ellipso Pirate Flyer Mark 1",
+  "production_role": "hero",
+  "source": {
+    "config_asset_id": "prop_pirate_flyer_A",
+    "expected_node": "prop_pirate_flyer_A"
+  },
+  "runtime": {
+    "kind": "vehicle",
+    "root_node_type": "AnimatableBody3D",
+    "wrapper_scene": "res://generated/scenes/pirate_flyer_mk1.tscn",
+    "controller_script": "res://scripts/pirate_flyer.gd"
+  },
+  "orientation": {
+    "authored_forward_axis": "-Y",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, 180.0, 0.0]
+  },
+  "visual": {
+    "scale": [2.1, 2.1, 2.1],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "flyer_collision",
+      "kind": "box",
+      "position": [0.0, 2.2, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "size": [8.6, 3.4, 8.2]
+    }
+  ],
+  "markers": [
+    {
+      "marker_id": "sensor_signature",
+      "role": "sensor_signature",
+      "position": [0.0, 2.2, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0]
+    }
+  ],
+  "capabilities": ["sensor_target", "destructible", "collision"],
+  "notes": [
+    "Three instances provide the Mission 003 attackers.",
+    "Paired FrapRay bolts count as one shot: three shots drive the flyer off, seven destroy it, and one proton torpedo plus three FrapRay shots destroys it."
+  ]
+}
