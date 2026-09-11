@@ -7,6 +7,7 @@ const VIEW_PRESETS := [
     {"label": "RIGHT SIDE", "yaw": 90.0, "pitch": 0.0},
     {"label": "STRAIGHT BACK", "yaw": 180.0, "pitch": 0.0},
 ]
+const VIEW_CYCLE_ORDER := [0, 2, 3, 4, 1]
 
 @export var rotation_speed := 7.0
 @export var mouse_sensitivity := 0.16
@@ -42,23 +43,17 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         match event.physical_keycode:
-            KEY_1:
-                snap_to_preset(0)
-            KEY_2:
-                snap_to_preset(1)
-            KEY_3:
-                snap_to_preset(2)
-            KEY_4:
-                snap_to_preset(3)
-            KEY_5:
-                snap_to_preset(4)
+            KEY_MINUS, KEY_KP_SUBTRACT:
+                cycle_view(-1)
+            KEY_EQUAL, KEY_KP_ADD:
+                cycle_view(1)
             KEY_V:
-                snap_to_preset((current_preset + 1) % VIEW_PRESETS.size())
+                cycle_view(1)
             KEY_HOME:
                 snap_to_preset(0)
             KEY_F3:
                 toggle_debug_camera()
-    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE:
         free_look_active = event.pressed
         Input.mouse_mode = (
             Input.MOUSE_MODE_CAPTURED
@@ -98,6 +93,14 @@ func snap_to_preset(index: int) -> void:
     view_label = preset["label"]
     if cockpit_camera:
         cockpit_camera.current = true
+
+
+func cycle_view(direction: int) -> void:
+    var cycle_index := VIEW_CYCLE_ORDER.find(current_preset)
+    if cycle_index < 0:
+        cycle_index = 0
+    cycle_index = posmod(cycle_index + direction, VIEW_CYCLE_ORDER.size())
+    snap_to_preset(VIEW_CYCLE_ORDER[cycle_index])
 
 
 func toggle_debug_camera() -> void:

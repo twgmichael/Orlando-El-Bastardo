@@ -28,10 +28,8 @@ func _run() -> void:
     if primary.scale.x < 8.0 or runtime.charge_sites.size() != 3:
         fail("large primary asteroid or its three fracture sites are missing")
         return
-    var briefing_position: Vector3 = primary.global_position
-    runtime.call("_process", 5.0)
-    if not primary.global_position.is_equal_approx(briefing_position):
-        fail("charge-placement clock advanced before the mission began")
+    if runtime.current_state() != "INTERCEPT":
+        fail("Mission 002 did not begin immediately on load")
         return
     if not is_equal_approx(runtime.CHARGE_PLACEMENT_WINDOW_S, 180.0):
         fail("charge-placement window is not three minutes")
@@ -54,7 +52,6 @@ func _run() -> void:
         fail("reverse tow-beam placement effect is missing")
         return
 
-    runtime.begin_mission()
     player.global_position = primary.global_position + Vector3(0.0, 0.0, 110.0)
     runtime.call("_process", 0.0)
     if runtime.current_state() != "PLACEMENT_READY":

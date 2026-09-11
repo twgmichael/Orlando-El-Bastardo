@@ -24,13 +24,13 @@ atomization.
 - A low-cost procedural planet uses one opaque surface sphere and one
   transparent Fresnel atmosphere shell.
 - Three blue fracture targets occupy different faces of the rotating primary.
-- The pilot has three minutes from pressing `Enter` to place the charges and
-  clear the primary; briefing time does not consume the countdown.
+- The mission begins immediately and the pilot has three minutes from load to
+  place the charges and clear the primary.
 - Detonation starts a fresh one-minute debris-chase clock, independent of the
   time used for placement and inclusive of the breakup animation.
 - `/` or `?` toggles between FrapRay and reverse tow-beam modes after mission
   start; `G` is reserved for detonation.
-- Left-mouse drag always steers the JB100. In tow-beam mode, the blue placement
+- Mouse position always steers the JB100. In tow-beam mode, the blue placement
   circle shows the actual ship-forward beam path.
 - Pressing `Space` on an acquired blue torus extends the reverse tow beam and
   attaches a visible demolition charge.

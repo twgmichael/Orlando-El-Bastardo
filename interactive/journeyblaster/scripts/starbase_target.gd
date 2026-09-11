@@ -1,6 +1,7 @@
 extends StaticBody3D
 
 signal target_disabled(target: StaticBody3D)
+signal target_damaged(target: StaticBody3D, remaining_health: float)
 
 var system_category := "shield"
 var vertical_tier := "middle"
@@ -20,7 +21,7 @@ func configure(category: String, tier: String, tint: Color) -> void:
     var collision := CollisionShape3D.new()
     collision.name = "DamageCollision"
     var collision_shape := SphereShape3D.new()
-    collision_shape.radius = 5.5
+    collision_shape.radius = 3.8
     collision.shape = collision_shape
     add_child(collision)
 
@@ -40,6 +41,7 @@ func configure(category: String, tier: String, tint: Color) -> void:
     material.emission_energy_multiplier = 1.8
     mesh.material = material
     marker.mesh = mesh
+    marker.visible = false
     add_child(marker)
 
     hit_flash = OmniLight3D.new()
@@ -59,6 +61,7 @@ func apply_weapon_hit(
     if disabled or weapon_kind != "pirate_plasma":
         return
     health = maxf(0.0, health - damage)
+    target_damaged.emit(self, health)
     hit_flash.light_energy = 8.0
     var tween := hit_flash.create_tween()
     tween.tween_property(hit_flash, "light_energy", 0.0, 0.28)
@@ -74,4 +77,3 @@ func apply_weapon_hit(
 
 func effectiveness() -> float:
     return clampf(health / maximum_health, 0.0, 1.0)
-

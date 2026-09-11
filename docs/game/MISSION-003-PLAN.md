@@ -14,9 +14,9 @@ wiki: false
 
 Working title: **Starbase Defense**
 
-Prototype status: **Starbase Defense Prototype V3**, implemented on
+Prototype status: **Starbase Defense Prototype V4**, implemented on
 2026-09-09. See
-[MISSION-003-PROTOTYPE-V3.md](MISSION-003-PROTOTYPE-V3.md) for the current milestone
+[MISSION-003-PROTOTYPE-V4.md](MISSION-003-PROTOTYPE-V4.md) for the current milestone
 record.
 
 ## Mission promise
@@ -247,3 +247,53 @@ has time to launch, orient, and intercept.
 Station defense bolts are now active navigation hazards. Flyers predict the
 closest point of approach for nearby green plasma bolts and blend an evasive
 steering response into their current attack run without abandoning the run.
+
+## Prototype V4 cockpit instrumentation — 2026-09-09
+
+The large floating telemetry panels are replaced in Mission 003 by overlays
+fitted to the JB100's three modeled cockpit screens. The left screen presents
+PWR, THR, SHD, and WPN bars. PWR and SHD begin at 100%, THR follows commanded
+throttle, and WPN follows a 100% FrapRay reserve that spends 10% per paired
+volley and recharges at 2% per second; a right-aligned TPD counter starts at
+five. The middle screen presents a primitive 1,000-meter XYZ Senso-Globe with
+hostiles red and friendlies blue, and the right screen carries mission
+briefing, state, and current objective text. All display text is uppercase and
+green on black; only weapon targeting marks remain projected into the forward
+view.
+
+The open hangar uses two steady runtime lights and two red ceiling strobes
+centered six meters apart. An Earth Starfighter hero craft is parked behind and
+to one side of the JB100 without blocking the through-flight lane. Station
+damage volumes are surface-fitted and invisible, the starfield remains centered
+on the pilot, and a visible solar-system sun accompanies the directional light.
+Station defensive accuracy now tightens with range while pirate projectile
+avoidance remains subordinate to committed strafing runs.
+
+All three prototype missions now begin immediately when loaded. In the shared
+flight controls, the ship continuously follows the visible mouse without a
+button hold, left click fires FrapRay, holding right mouse for three seconds
+charges the torpedo and acquires a target under the reticle, releasing right
+mouse fires it, middle drag rotates the chair, and `Esc` commands all stop.
+During torpedo build-up, the center X changes from red to blue and a circular
+progress ring fills around it; the full charge remains held until release.
+Mouse steering now uses captured relative motion to push a bounded 180-pixel
+virtual stick. A 6% dead zone and 2.2 response exponent provide careful
+long-range aiming; a 200 ms spring return neutralizes the stick when motion
+stops. Startup, focus loss, and window exit forcibly clear steering, preventing
+the JB100 from continuing along stale input. Pressing `X` also recenters the
+virtual stick immediately. A torpedo searches a 12-degree forward acquisition cone, snaps
+its reticle onto the acquired target, launches at 260 m/s, and homes strongly
+for up to 12 seconds so a flyer cannot escape by speed alone. Three paired
+FrapRay volleys drive off a pirate; six paired volleys or two proton torpedoes
+destroy one.
+
+The right cockpit screen maintains a live Starbase 86 report line. Actual
+pirate hits produce category-specific damage reports for shields, weapons, or
+hangars; perimeter crossings and flyer destruction report updated counts. The
+Senso-Globe renders pirate contacts red and Starbase 86 and friendly craft
+blue. An amber `F` arrow uses the globe's XYZ projection to indicate the
+JB100's local forward direction.
+
+After Mission 003 fails for any reason, every surviving pirate disengages from
+the JB100, ceases firing, and circles Starbase 86 indefinitely. The player can
+continue flying or watching the aftermath until restarting with `R`.

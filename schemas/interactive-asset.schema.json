@@ -220,7 +220,10 @@
             "frap_hardpoint_left",
             "frap_hardpoint_right",
             "torpedo_launcher",
-            "damage_location"
+            "damage_location",
+            "hangar_volume_center",
+            "hangar_entrance",
+            "hangar_exit"
           ]
         },
         "position": { "$ref": "#/$defs/vector3" },
@@ -241,7 +244,8 @@
         "clearance_m": {
           "type": "number",
           "minimum": 0
-        }
+        },
+        "size": { "$ref": "#/$defs/positive_vector3" }
       }
     }
   }

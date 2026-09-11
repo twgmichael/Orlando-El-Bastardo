@@ -1,6 +1,7 @@
 extends Node3D
 
 const CombatEffects = preload("res://scripts/combat_effects.gd")
+const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
 const ASTEROID_SCENES := [
     preload("res://generated/scenes/asteroid_round_v1.tscn"),
     preload("res://generated/scenes/asteroid_cratered_v1.tscn"),
@@ -76,6 +77,7 @@ var placement_reticle: Label
 var frap_aim_left: Label
 var frap_aim_right: Label
 var torpedo_aim: Label
+var torpedo_charge_indicator: Control
 var weapon_aim: Control
 
 
@@ -98,6 +100,7 @@ func _ready() -> void:
     _build_placement_beam()
     _build_hud()
     _set_state("BRIEFING")
+    begin_mission()
     print("MISSION-002-RUNTIME-OK: Planetfall")
 
 
@@ -143,8 +146,6 @@ func _update_phase_clocks(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         match event.physical_keycode:
-            KEY_ENTER, KEY_KP_ENTER:
-                begin_mission()
             KEY_G:
                 request_interaction()
             KEY_SLASH:
@@ -712,7 +713,7 @@ func _build_hud() -> void:
     prompt_label = _build_label(Vector2(viewport_width * 0.5 - 330.0, 638.0), Vector2(660.0, 42.0), 18, Color(1.0, 0.68, 0.22))
     prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var help := _build_label(Vector2(viewport_width - 850.0, 684.0), Vector2(830.0, 25.0), 11, Color(0.68, 0.72, 0.72, 0.86))
-    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X stop · LMB drag steer · /? FRAPRAY/TOW · SPACE fire/place · T TORPEDO · G detonate"
+    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X recenter · ESC stop · mouse steer · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
     help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
     weapon_aim = Control.new()
@@ -723,6 +724,10 @@ func _build_hud() -> void:
     frap_aim_left = _build_aim_label("FrapRayLeft", "•", Color(1.0, 0.12, 0.08), 14)
     frap_aim_right = _build_aim_label("FrapRayRight", "•", Color(1.0, 0.12, 0.08), 14)
     torpedo_aim = _build_aim_label("Torpedo", "×", Color(1.0, 0.12, 0.08), 14)
+    torpedo_charge_indicator = TorpedoChargeIndicator.new()
+    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
+    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
+    weapon_aim.add_child(torpedo_charge_indicator)
 
     placement_reticle = Label.new()
     placement_reticle.name = "BluePlacementReticle"
@@ -875,7 +880,7 @@ func _context_prompt() -> String:
         "CHARGE_PLACEMENT":
             if placement_in_progress:
                 return "PLACING CHARGE · %02d%%" % roundi(placement_elapsed / placement_duration * 100.0)
-            return "LMB DRAG STEER · SPACE SHOOT BLUE TORUS · %d/%d SET" % [charges_placed, REQUIRED_CHARGES]
+            return "MOUSE STEER · SPACE SHOOT BLUE TORUS · %d/%d SET" % [charges_placed, REQUIRED_CHARGES]
         "CLEAR_BLAST":
             return "CLEAR TO %d m · CURRENT %d m" % [SAFE_DETONATION_RANGE_M, roundi(_distance_to_primary())]
         "DETONATION_READY":
@@ -913,11 +918,31 @@ func _update_weapon_aim() -> void:
         _weapon_impact_point(frap_origin_right.global_position, direction, 650.0),
         camera
     )
-    _position_aim_marker(
-        torpedo_aim,
-        _weapon_impact_point(torpedo_origin.global_position, direction, 700.0),
-        camera
+    var torpedo_point := _weapon_impact_point(
+        torpedo_origin.global_position, direction, 700.0
     )
+    if (
+        player.torpedo_charging
+        and player.torpedo_acquired_target != null
+        and is_instance_valid(player.torpedo_acquired_target)
+    ):
+        torpedo_point = player.torpedo_acquired_target.global_position
+    _position_aim_marker(torpedo_aim, torpedo_point, camera)
+    _update_torpedo_charge_indicator()
+
+
+func _update_torpedo_charge_indicator() -> void:
+    var charging: bool = player.torpedo_charging
+    torpedo_aim.add_theme_color_override(
+        "font_color",
+        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+    )
+    torpedo_charge_indicator.position = (
+        torpedo_aim.position + torpedo_aim.size * 0.5
+        - torpedo_charge_indicator.size * 0.5
+    )
+    torpedo_charge_indicator.set_charge_progress(player.torpedo_charge_ratio())
+    torpedo_charge_indicator.visible = charging and torpedo_aim.visible
 
 
 func _weapon_impact_point(origin: Vector3, direction: Vector3, range_m: float) -> Vector3:

@@ -2,17 +2,23 @@ extends Node3D
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 const StarbaseTarget = preload("res://scripts/starbase_target.gd")
+const SensorGlobeDisplay = preload("res://scripts/sensor_globe_display.gd")
+const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
 const STARBASE_SCENE = preload("res://generated/scenes/starbase_86_v1.tscn")
 const PIRATE_SCENE = preload("res://generated/scenes/pirate_flyer_mk1.tscn")
+const EARTH_STARFIGHTER_SCENE = preload(
+    "res://generated/scenes/earth_starfighter_docked_v1.tscn"
+)
 
 const STARBASE_CENTER := Vector3(0.0, 75.0, 0.0)
 const PLANET_POSITION := Vector3(680.0, 260.0, 3000.0)
-const OPEN_HANGAR_CENTER := Vector3(113.86, 10.5, -34.811)
-const OPEN_HANGAR_EXIT := Vector3(123.316, 10.5, -3.88)
-const PLAYER_HANGAR_START := Vector3(119.724, 10.5, -15.634)
+const OPEN_HANGAR_CENTER_FALLBACK := Vector3(113.86, 10.5, -34.811)
+const OPEN_HANGAR_ENTRANCE_FALLBACK := Vector3(104.404, 10.5, -65.741)
+const OPEN_HANGAR_EXIT_FALLBACK := Vector3(123.316, 10.5, -3.88)
+const PLAYER_HANGAR_START_RATIO := 0.62
 const HANGAR_SAFE_RADIUS_M := 32.0
 const PIRATE_RETREAT_HITS := 3.0
-const PIRATE_DESTROY_HITS := 7.0
+const PIRATE_DESTROY_HITS := 6.0
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
 
@@ -27,13 +33,21 @@ const OBJECTIVES := {
 
 var mission_state := "BRIEFING"
 var starbase: StaticBody3D
+var docked_starfighter: StaticBody3D
 var station_targets: Array[StaticBody3D] = []
 var targets_by_category: Dictionary = {}
 var pirates: Array[AnimatableBody3D] = []
 var player_attacker: AnimatableBody3D
 var station_weapon_timers: Dictionary = {}
+var station_shots_fired := 0
 var random := RandomNumberGenerator.new()
 var weapon_aim_enabled := true
+var open_hangar_center := OPEN_HANGAR_CENTER_FALLBACK
+var open_hangar_entrance := OPEN_HANGAR_ENTRANCE_FALLBACK
+var open_hangar_exit := OPEN_HANGAR_EXIT_FALLBACK
+var player_hangar_start := OPEN_HANGAR_CENTER_FALLBACK.lerp(
+    OPEN_HANGAR_EXIT_FALLBACK, PLAYER_HANGAR_START_RATIO
+)
 
 var hud: CanvasLayer
 var title_label: Label
@@ -48,9 +62,22 @@ var weapon_aim: Control
 var frap_aim_left: Label
 var frap_aim_right: Label
 var torpedo_aim: Label
+var torpedo_charge_indicator: Control
 var frap_origin_left: Node3D
 var frap_origin_right: Node3D
 var torpedo_origin: Node3D
+var systems_bars: Dictionary = {}
+var systems_value_labels: Dictionary = {}
+var systems_torpedo_label: Label
+var sensor_globe: Control
+var mission_screen_label: Label
+var station_report := "STARBASE 86 REPORTS ALL SYSTEMS OPERATIONAL."
+var starfield: MultiMeshInstance3D
+var solar_sun_disk: MeshInstance3D
+var hangar_steady_lights: Array[OmniLight3D] = []
+var hangar_emergency_lights: Array[OmniLight3D] = []
+var hangar_emergency_materials: Array[StandardMaterial3D] = []
+var hangar_strobe_clock := 0.0
 
 
 func _ready() -> void:
@@ -58,18 +85,24 @@ func _ready() -> void:
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
     torpedo_origin = player.find_child("torpedo_launcher", true, false) as Node3D
+    _configure_mission_cameras()
     _build_environment()
     _spawn_starbase()
+    _spawn_docked_starfighter()
+    _build_open_hangar_lighting()
     _build_station_targets()
     _position_player_in_open_hangar()
     _spawn_pirates()
     _build_hud()
     player.ship_disabled.connect(_on_player_disabled)
     _set_state("BRIEFING")
+    begin_mission()
     print("MISSION-003-RUNTIME-OK: Starbase Defense")
 
 
 func _process(delta: float) -> void:
+    _update_space_backdrop()
+    _update_hangar_emergency_lights(delta)
     if mission_state != "BRIEFING":
         _update_station_defense(delta)
         _maintain_player_attacker()
@@ -80,8 +113,6 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         match event.physical_keycode:
-            KEY_ENTER, KEY_KP_ENTER:
-                begin_mission()
             KEY_TAB:
                 weapon_aim_enabled = not weapon_aim_enabled
             KEY_R:
@@ -95,6 +126,8 @@ func begin_mission() -> void:
     _set_state("DEFEND")
     for pirate in pirates:
         pirate.ai_enabled = true
+    for weapon in targets_by_category.get("weapon", []):
+        station_weapon_timers[weapon.get_instance_id()] = random.randf_range(0.55, 1.1)
 
 
 func current_state() -> String:
@@ -103,9 +136,9 @@ func current_state() -> String:
 
 func _set_state(next_state: String) -> void:
     mission_state = next_state
-    if next_state == "FAILED" and _all_station_targets_disabled():
-        for pirate in _active_pirates(false):
-            pirate.assign_player_attack()
+    if next_state == "FAILED":
+        for pirate in _active_pirates():
+            pirate.assign_station_circle()
         player_attacker = null
 
 
@@ -129,16 +162,46 @@ func _build_environment() -> void:
     sun.light_energy = 1.65
     sun.shadow_enabled = true
     add_child(sun)
+    _build_visible_sun()
     _build_starfield()
     _build_planet_and_moon()
 
 
+func _configure_mission_cameras() -> void:
+    var cockpit_camera := player.find_child("cockpit_camera", true, false) as Camera3D
+    var debug_camera := player.find_child("DebugCamera", true, false) as Camera3D
+    if cockpit_camera:
+        cockpit_camera.far = 12000.0
+    if debug_camera:
+        debug_camera.far = 12000.0
+
+
+func _build_visible_sun() -> void:
+    solar_sun_disk = MeshInstance3D.new()
+    solar_sun_disk.name = "SolarSystemSun"
+    solar_sun_disk.add_to_group("mission_003_sun")
+    var sun_mesh := SphereMesh.new()
+    sun_mesh.radius = 74.0
+    sun_mesh.height = 148.0
+    sun_mesh.radial_segments = 24
+    sun_mesh.rings = 12
+    var sun_material := StandardMaterial3D.new()
+    sun_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    sun_material.albedo_color = Color(1.0, 0.86, 0.48)
+    sun_material.emission_enabled = true
+    sun_material.emission = Color(1.0, 0.68, 0.2)
+    sun_material.emission_energy_multiplier = 5.5
+    sun_mesh.material = sun_material
+    solar_sun_disk.mesh = sun_mesh
+    add_child(solar_sun_disk)
+
+
 func _build_starfield() -> void:
-    var stars := MultiMeshInstance3D.new()
-    stars.name = "Starfield"
+    starfield = MultiMeshInstance3D.new()
+    starfield.name = "Starfield"
     var star_mesh := SphereMesh.new()
-    star_mesh.radius = 0.72
-    star_mesh.height = 1.44
+    star_mesh.radius = 1.8
+    star_mesh.height = 3.6
     star_mesh.radial_segments = 4
     star_mesh.rings = 2
     var material := StandardMaterial3D.new()
@@ -160,8 +223,8 @@ func _build_starfield() -> void:
             star_random.randf_range(-1.0, 1.0),
             star_random.randf_range(-1.0, 1.0)
         ).normalized()
-        var distance := star_random.randf_range(5200.0, 6800.0)
-        var scale_value := star_random.randf_range(0.4, 1.25)
+        var distance := star_random.randf_range(2600.0, 4400.0)
+        var scale_value := star_random.randf_range(0.55, 1.45)
         multimesh.set_instance_transform(
             index,
             Transform3D(
@@ -169,8 +232,17 @@ func _build_starfield() -> void:
                 direction * distance
             )
         )
-    stars.multimesh = multimesh
-    add_child(stars)
+    starfield.multimesh = multimesh
+    add_child(starfield)
+
+
+func _update_space_backdrop() -> void:
+    if starfield:
+        starfield.global_position = player.global_position
+    if solar_sun_disk:
+        solar_sun_disk.global_position = (
+            player.global_position + Vector3(-1450.0, 920.0, 4200.0)
+        )
 
 
 func _build_planet_and_moon() -> void:
@@ -235,25 +307,123 @@ func _spawn_starbase() -> void:
     starbase.add_to_group("mission_003_starbase")
     add_child(starbase)
     starbase.global_position = Vector3.ZERO
+    var center_marker := starbase.find_child("hangar_1_volume_center", true, false) as Node3D
+    var entrance_marker := starbase.find_child("hangar_1_entrance", true, false) as Node3D
+    var exit_marker := starbase.find_child("hangar_1_exit", true, false) as Node3D
+    if center_marker != null and entrance_marker != null and exit_marker != null:
+        open_hangar_center = center_marker.global_position
+        open_hangar_entrance = entrance_marker.global_position
+        open_hangar_exit = exit_marker.global_position
+        player_hangar_start = open_hangar_center.lerp(
+            open_hangar_exit, PLAYER_HANGAR_START_RATIO
+        )
+
+
+func _spawn_docked_starfighter() -> void:
+    docked_starfighter = EARTH_STARFIGHTER_SCENE.instantiate() as StaticBody3D
+    docked_starfighter.name = "docked_earth_starfighter"
+    docked_starfighter.add_to_group("mission_003_docked_craft")
+    add_child(docked_starfighter)
+    var corridor_direction := (open_hangar_exit - open_hangar_entrance).normalized()
+    var lateral_direction := corridor_direction.cross(Vector3.UP).normalized()
+    var parking_position := (
+        open_hangar_center.lerp(open_hangar_entrance, 0.52)
+        + lateral_direction * 6.8
+    )
+    parking_position.y = 6.75
+    docked_starfighter.global_position = parking_position
+    docked_starfighter.look_at(parking_position + corridor_direction, Vector3.UP)
+    # The docked craft dresses the bay without narrowing the prototype's
+    # through-flight lane. Physical parking collision can follow with a
+    # purpose-built hangar navigation mesh.
+    docked_starfighter.collision_layer = 0
+    docked_starfighter.collision_mask = 0
+
+
+func _build_open_hangar_lighting() -> void:
+    var ceiling_offset := Vector3.UP * 4.25
+    var steady_positions := [
+        open_hangar_center.lerp(open_hangar_entrance, 0.58) + ceiling_offset,
+        open_hangar_center.lerp(open_hangar_exit, 0.68) + ceiling_offset,
+    ]
+    for index in steady_positions.size():
+        var steady := OmniLight3D.new()
+        steady.name = "OpenHangarSteadyLight%d" % (index + 1)
+        steady.light_color = Color(0.72, 0.86, 1.0)
+        steady.light_energy = 5.2
+        steady.omni_range = 31.0
+        steady.omni_attenuation = 0.72
+        steady.shadow_enabled = false
+        add_child(steady)
+        steady.global_position = steady_positions[index]
+        hangar_steady_lights.append(steady)
+
+    var corridor_direction := (open_hangar_exit - open_hangar_entrance).normalized()
+    var emergency_center := open_hangar_center + Vector3.UP * 4.65
+    var emergency_positions := [
+        emergency_center - corridor_direction * 3.0,
+        emergency_center + corridor_direction * 3.0,
+    ]
+    for index in emergency_positions.size():
+        var beacon := MeshInstance3D.new()
+        beacon.name = "OpenHangarEmergencyBeacon%d" % (index + 1)
+        var beacon_mesh := SphereMesh.new()
+        beacon_mesh.radius = 0.48
+        beacon_mesh.height = 0.96
+        beacon_mesh.radial_segments = 12
+        beacon_mesh.rings = 6
+        var beacon_material := StandardMaterial3D.new()
+        beacon_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+        beacon_material.albedo_color = Color(0.82, 0.015, 0.01)
+        beacon_material.emission_enabled = true
+        beacon_material.emission = Color(1.0, 0.01, 0.005)
+        beacon_material.emission_energy_multiplier = 2.0
+        beacon_mesh.material = beacon_material
+        beacon.mesh = beacon_mesh
+        add_child(beacon)
+        beacon.global_position = emergency_positions[index]
+        hangar_emergency_materials.append(beacon_material)
+
+        var emergency := OmniLight3D.new()
+        emergency.name = "OpenHangarEmergencyStrobe%d" % (index + 1)
+        emergency.light_color = Color(1.0, 0.015, 0.008)
+        emergency.light_energy = 0.35
+        emergency.omni_range = 24.0
+        emergency.omni_attenuation = 0.62
+        emergency.shadow_enabled = false
+        add_child(emergency)
+        emergency.global_position = emergency_positions[index]
+        hangar_emergency_lights.append(emergency)
+
+
+func _update_hangar_emergency_lights(delta: float) -> void:
+    hangar_strobe_clock = fmod(hangar_strobe_clock + delta, 1.4)
+    for index in hangar_emergency_lights.size():
+        var phase := fmod(hangar_strobe_clock + float(index) * 0.7, 1.4)
+        var pulse_on := phase < 0.14 or (phase >= 0.26 and phase < 0.40)
+        hangar_emergency_lights[index].light_energy = 13.0 if pulse_on else 0.35
+        hangar_emergency_materials[index].emission_energy_multiplier = (
+            12.0 if pulse_on else 2.0
+        )
 
 
 func _build_station_targets() -> void:
     targets_by_category = {"shield": [], "weapon": [], "hangar": []}
     var placements := {
         "shield": [
-            Vector3(0.0, 148.0, 8.0),
-            Vector3(68.0, 82.0, 24.0),
-            Vector3(-42.0, 24.0, 48.0),
+            Vector3(0.0, 145.0, 5.0),
+            Vector3(64.0, 78.0, 20.0),
+            Vector3(-38.0, 22.0, 44.0),
         ],
         "weapon": [
-            Vector3(-18.0, 150.0, -24.0),
-            Vector3(-78.0, 82.0, -18.0),
-            Vector3(38.0, 28.0, -72.0),
+            Vector3(-14.0, 146.0, -20.0),
+            Vector3(-72.0, 78.0, -15.0),
+            Vector3(34.0, 23.0, -66.0),
         ],
         "hangar": [
-            Vector3(113.86, 26.0, -34.811),
-            Vector3(-87.077, 26.0, -81.2),
-            Vector3(-26.783, 26.0, 116.011),
+            Vector3(113.86, 18.2, -34.811),
+            Vector3(-87.077, 18.2, -81.2),
+            Vector3(-26.783, 18.2, 116.011),
         ],
     }
     var colors := {
@@ -269,6 +439,7 @@ func _build_station_targets() -> void:
             add_child(target)
             target.configure(category, tiers[index], colors[category])
             target.global_position = placements[category][index]
+            target.target_damaged.connect(_on_station_target_damaged)
             target.target_disabled.connect(_on_station_target_disabled)
             station_targets.append(target)
             targets_by_category[category].append(target)
@@ -277,8 +448,8 @@ func _build_station_targets() -> void:
 
 
 func _position_player_in_open_hangar() -> void:
-    player.global_position = PLAYER_HANGAR_START
-    player.look_at(OPEN_HANGAR_EXIT, Vector3.UP)
+    player.global_position = player_hangar_start
+    player.look_at(open_hangar_exit, Vector3.UP)
     player.velocity = Vector3.ZERO
     player.throttle = 0.0
 
@@ -319,8 +490,8 @@ func _spawn_pirates() -> void:
 
 
 func _on_pirate_objective_completed(pirate: AnimatableBody3D) -> void:
-    if mission_state == "FAILED" and _all_station_targets_disabled():
-        pirate.assign_player_attack()
+    if mission_state == "FAILED":
+        pirate.assign_station_circle()
         return
     if not _player_attacker_is_active():
         player_attacker = pirate
@@ -339,11 +510,37 @@ func _on_pirate_destroyed(pirate: AnimatableBody3D) -> void:
     if player_attacker == pirate:
         player_attacker = null
         _maintain_player_attacker()
+    var destroyed_count := pirates.filter(
+        func(candidate: AnimatableBody3D) -> bool:
+            return candidate.destroyed
+    ).size()
+    station_report = "STARBASE 86 REPORTS %d PIRATE %s DESTROYED." % [
+        destroyed_count,
+        "FLYER" if destroyed_count == 1 else "FLYERS",
+    ]
     _evaluate_outcome()
 
 
 func _on_defense_perimeter_crossed(_pirate: AnimatableBody3D) -> void:
+    var retreat_count := pirates.filter(
+        func(candidate: AnimatableBody3D) -> bool:
+            return candidate.perimeter_crossed
+    ).size()
+    station_report = "STARBASE 86 REPORTS %d PIRATE %s %s RETREATED." % [
+        retreat_count,
+        "FLYER" if retreat_count == 1 else "FLYERS",
+        "HAS" if retreat_count == 1 else "HAVE",
+    ]
     _evaluate_outcome()
+
+
+func _on_station_target_damaged(target: StaticBody3D, _remaining_health: float) -> void:
+    var system_name: String = str({
+        "shield": "SHIELDS",
+        "weapon": "WEAPONS",
+        "hangar": "HANGARS",
+    }.get(target.system_category, target.system_category.to_upper()))
+    station_report = "STARBASE 86 REPORTS DAMAGE TO %s." % system_name
 
 
 func _on_station_target_disabled(_target: StaticBody3D) -> void:
@@ -356,7 +553,7 @@ func _on_player_disabled() -> void:
 
 
 func _maintain_player_attacker() -> void:
-    if mission_state == "BRIEFING" or _all_station_targets_disabled():
+    if mission_state != "DEFEND" or _all_station_targets_disabled():
         return
     if _player_attacker_is_active():
         return
@@ -423,7 +620,7 @@ func _evaluate_outcome() -> void:
 
 
 func is_player_in_safe_hangar() -> bool:
-    return player.global_position.distance_to(OPEN_HANGAR_CENTER) <= HANGAR_SAFE_RADIUS_M
+    return player.global_position.distance_to(open_hangar_center) <= HANGAR_SAFE_RADIUS_M
 
 
 func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> void:
@@ -436,6 +633,8 @@ func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> void:
     var exclusions: Array[RID] = []
     for other in pirates:
         exclusions.append(other.get_rid())
+    if target != player:
+        exclusions.append(starbase.get_rid())
     _spawn_combat_projectile(
         "pirate_plasma",
         pirate.global_position + direction.normalized() * 6.0,
@@ -476,10 +675,16 @@ func _update_station_defense(delta: float) -> void:
             station_weapon_timers[identifier] = timer
             continue
         var target: AnimatableBody3D = possible_targets[random.randi_range(0, possible_targets.size() - 1)]
+        var target_range: float = weapon.global_position.distance_to(
+            target.global_position
+        )
+        var aim_spread: float = _station_defense_spread_m(
+            target_range, weapon.effectiveness()
+        )
         var aim_error := Vector3(
-            random.randf_range(-15.0, 15.0),
-            random.randf_range(-10.0, 10.0),
-            random.randf_range(-15.0, 15.0)
+            random.randf_range(-aim_spread, aim_spread),
+            random.randf_range(-aim_spread * 0.68, aim_spread * 0.68),
+            random.randf_range(-aim_spread, aim_spread)
         )
         var direction: Vector3 = target.global_position + aim_error - weapon.global_position
         var exclusions: Array[RID] = [starbase.get_rid()]
@@ -494,9 +699,16 @@ func _update_station_defense(delta: float) -> void:
             weapon.get_rid(),
             exclusions
         )
+        station_shots_fired += 1
         station_weapon_timers[identifier] = lerpf(
             12.0, 5.2, weapon.effectiveness()
         ) + random.randf_range(0.0, 2.0)
+
+
+func _station_defense_spread_m(target_range: float, effectiveness: float) -> float:
+    var range_factor := clampf((target_range - 70.0) / 720.0, 0.0, 1.0)
+    var healthy_spread := lerpf(1.4, 23.0, range_factor)
+    return healthy_spread * lerpf(2.2, 1.0, clampf(effectiveness, 0.0, 1.0))
 
 
 func _spawn_combat_projectile(
@@ -519,23 +731,9 @@ func _build_hud() -> void:
     hud = CanvasLayer.new()
     hud.name = "HUD"
     add_child(hud)
-    _build_panel(Vector2(20.0, 20.0), Vector2(760.0, 126.0), Color(0.02, 0.035, 0.04, 0.9))
-    title_label = _build_label(Vector2(38.0, 32.0), Vector2(710.0, 25.0), 14, Color(0.38, 0.92, 0.67))
-    status_label = _build_label(Vector2(38.0, 59.0), Vector2(710.0, 24.0), 12, Color(0.92, 0.89, 0.79))
-    objective_label = _build_label(Vector2(38.0, 87.0), Vector2(710.0, 28.0), 13, Color(0.76, 0.84, 0.88))
-    var width := get_viewport().get_visible_rect().size.x
-    _build_panel(Vector2(width - 400.0, 20.0), Vector2(380.0, 146.0), Color(0.055, 0.032, 0.012, 0.9))
-    sensor_label = _build_label(Vector2(width - 382.0, 35.0), Vector2(350.0, 122.0), 13, Color(1.0, 0.63, 0.18))
-    _build_panel(Vector2(width - 400.0, 178.0), Vector2(380.0, 120.0), Color(0.018, 0.032, 0.07, 0.9))
-    weapons_label = _build_label(Vector2(width - 382.0, 190.0), Vector2(350.0, 102.0), 13, Color(0.42, 0.68, 1.0))
-    _build_panel(Vector2(20.0, 542.0), Vector2(430.0, 158.0), Color(0.02, 0.035, 0.04, 0.9))
-    flight_label = _build_label(Vector2(38.0, 557.0), Vector2(185.0, 132.0), 12, Color(0.38, 0.92, 0.67))
-    view_label = _build_label(Vector2(230.0, 557.0), Vector2(205.0, 132.0), 12, Color(0.92, 0.89, 0.79))
-    prompt_label = _build_label(Vector2(width * 0.5 - 325.0, 632.0), Vector2(650.0, 42.0), 18, Color(1.0, 0.68, 0.22))
-    prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    var help := _build_label(Vector2(width - 820.0, 680.0), Vector2(800.0, 30.0), 11, Color(0.68, 0.72, 0.72, 0.86))
-    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X stop · LMB drag steer · SPACE FRAPRAY · T TORPEDO · TAB aim · R restart"
-    help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _build_systems_screen()
+    _build_sensor_screen()
+    _build_mission_screen()
     weapon_aim = Control.new()
     weapon_aim.name = "WeaponAim"
     weapon_aim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -544,6 +742,127 @@ func _build_hud() -> void:
     frap_aim_left = _build_aim_label("FrapRayLeft", "•")
     frap_aim_right = _build_aim_label("FrapRayRight", "•")
     torpedo_aim = _build_aim_label("Torpedo", "×")
+    torpedo_charge_indicator = TorpedoChargeIndicator.new()
+    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
+    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
+    weapon_aim.add_child(torpedo_charge_indicator)
+
+
+func _build_instrument_screen(
+    screen_name: String, position_2d: Vector2, size_2d: Vector2
+) -> Control:
+    var screen := Panel.new()
+    screen.name = screen_name
+    screen.position = position_2d
+    screen.size = size_2d
+    screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color(0.0, 0.012, 0.006, 0.98)
+    style.border_color = Color(0.08, 0.72, 0.32, 0.92)
+    style.set_border_width_all(1)
+    style.corner_radius_top_left = 3
+    style.corner_radius_top_right = 3
+    style.corner_radius_bottom_left = 3
+    style.corner_radius_bottom_right = 3
+    screen.add_theme_stylebox_override("panel", style)
+    hud.add_child(screen)
+    return screen
+
+
+func _build_systems_screen() -> void:
+    var screen := _build_instrument_screen(
+        "LeftSystemsScreen", Vector2(340.0, 564.0), Vector2(184.0, 144.0)
+    )
+    var heading := _build_child_label(
+        screen, Vector2(8.0, 5.0), Vector2(168.0, 15.0), 10, Color(0.18, 1.0, 0.48)
+    )
+    heading.text = "SYSTEMS"
+    var rows := ["PWR", "THR", "SHD", "WPN"]
+    for index in rows.size():
+        var key: String = rows[index]
+        var bar := ProgressBar.new()
+        bar.position = Vector2(8.0, 23.0 + index * 28.0)
+        bar.size = Vector2(168.0, 22.0)
+        bar.min_value = 0.0
+        bar.max_value = 100.0
+        bar.value = 0.0
+        bar.show_percentage = false
+        bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        var background := StyleBoxFlat.new()
+        background.bg_color = Color(0.005, 0.045, 0.022, 1.0)
+        background.border_color = Color(0.06, 0.38, 0.19, 1.0)
+        background.set_border_width_all(1)
+        var fill := StyleBoxFlat.new()
+        fill.bg_color = Color(0.08, 0.58, 0.27, 0.82)
+        bar.add_theme_stylebox_override("background", background)
+        bar.add_theme_stylebox_override("fill", fill)
+        screen.add_child(bar)
+        systems_bars[key] = bar
+        var value_label := _build_child_label(
+            screen,
+            Vector2(14.0, 25.0 + index * 28.0),
+            Vector2(156.0, 18.0),
+            10,
+            Color(0.28, 1.0, 0.52)
+        )
+        value_label.text = "%s: --%%" % key
+        systems_value_labels[key] = value_label
+    systems_value_labels["WPN"].size.x = 94.0
+    systems_torpedo_label = _build_child_label(
+        screen,
+        Vector2(108.0, 109.0),
+        Vector2(62.0, 18.0),
+        10,
+        Color(0.28, 1.0, 0.52)
+    )
+    systems_torpedo_label.text = "TPD: 5"
+    systems_torpedo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+
+
+func _build_sensor_screen() -> void:
+    var screen := _build_instrument_screen(
+        "MiddleSensorScreen", Vector2(548.0, 548.0), Vector2(190.0, 160.0)
+    )
+    var heading := _build_child_label(
+        screen, Vector2(8.0, 5.0), Vector2(174.0, 15.0), 10, Color(0.18, 1.0, 0.48)
+    )
+    heading.text = "SENSO-GLOBE · 1000 M"
+    sensor_globe = SensorGlobeDisplay.new()
+    sensor_globe.name = "SensorGlobe"
+    sensor_globe.position = Vector2(9.0, 20.0)
+    sensor_globe.size = Vector2(172.0, 132.0)
+    screen.add_child(sensor_globe)
+    var contacts: Array[Node3D] = [starbase, docked_starfighter]
+    for pirate in pirates:
+        contacts.append(pirate)
+    sensor_globe.configure(player, contacts)
+
+
+func _build_mission_screen() -> void:
+    var screen := _build_instrument_screen(
+        "RightMissionScreen", Vector2(754.0, 564.0), Vector2(198.0, 144.0)
+    )
+    mission_screen_label = _build_child_label(
+        screen, Vector2(9.0, 7.0), Vector2(180.0, 130.0), 9, Color(0.22, 1.0, 0.5)
+    )
+    mission_screen_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+func _build_child_label(
+    parent: Control,
+    position_2d: Vector2,
+    size_2d: Vector2,
+    font_size: int,
+    color: Color
+) -> Label:
+    var label := Label.new()
+    label.position = position_2d
+    label.size = size_2d
+    label.add_theme_font_size_override("font_size", font_size)
+    label.add_theme_color_override("font_color", color)
+    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    parent.add_child(label)
+    return label
 
 
 func _build_panel(position_2d: Vector2, size_2d: Vector2, color: Color) -> void:
@@ -583,24 +902,24 @@ func _build_aim_label(label_name: String, value: String) -> Label:
 
 
 func _update_hud() -> void:
-    if title_label == null:
+    if mission_screen_label == null:
         return
-    title_label.text = "JOURNEYBLASTER · MISSION 003 · STARBASE DEFENSE PROTOTYPE V3"
-    status_label.text = "MISSION STATE · %s" % mission_state
-    objective_label.text = OBJECTIVES.get(mission_state, "")
-    sensor_label.text = _sensor_readout()
-    weapons_label.text = "%s\nAIM HUD  %s · TAB" % [
-        player.weapon_status_text(), "ON" if weapon_aim_enabled else "OFF"
-    ]
-    flight_label.text = "SHIP VECTOR\nSPEED  %03d m/s\nTHROTTLE  %s%%\nHULL  %03d\nTHRUST  %03d%%" % [
-        roundi(player.velocity.length()),
-        player.throttle_percent(),
-        roundi(player.hull_integrity),
-        roundi(player.thrust_efficiency() * 100.0),
-    ]
-    var pilot_view := player.find_child("SeatPivot", true, false)
-    view_label.text = "PILOT CHAIR\nVIEW  %s\nSHIP HEADING\nINDEPENDENT" % pilot_view.current_view_label()
-    prompt_label.text = _context_prompt()
+    var thrust_percent: int = player.throttle_percent()
+    var frapray_percent: int = floori(player.frapray_power_percent)
+    systems_bars["PWR"].value = 100.0
+    systems_value_labels["PWR"].text = "PWR: 100%"
+    systems_bars["THR"].value = thrust_percent
+    systems_value_labels["THR"].text = "THR: %03d%%" % thrust_percent
+    systems_bars["SHD"].value = 100.0
+    systems_value_labels["SHD"].text = "SHD: 100%"
+    systems_bars["WPN"].value = frapray_percent
+    systems_value_labels["WPN"].text = "WPN: %03d%%" % frapray_percent
+    systems_torpedo_label.text = "TPD: %d" % player.proton_torpedoes_remaining
+    mission_screen_label.text = ("MISSION 003 · %s\nOBJECTIVE\n%s\n\nREPORT\n%s" % [
+        mission_state,
+        OBJECTIVES.get(mission_state, ""),
+        station_report,
+    ]).to_upper()
     _update_weapon_aim()
 
 
@@ -629,8 +948,6 @@ func _sensor_readout() -> String:
 
 
 func _context_prompt() -> String:
-    if mission_state == "BRIEFING":
-        return "ENTER · BEGIN STARBASE DEFENSE"
     if mission_state == "COMPLETE":
         return "MISSION COMPLETE · R TO RESTART"
     if mission_state == "FAILED":
@@ -651,7 +968,31 @@ func _update_weapon_aim() -> void:
     var direction := -player.global_basis.z.normalized()
     _position_aim_marker(frap_aim_left, _weapon_impact_point(frap_origin_left.global_position, direction, 650.0), camera)
     _position_aim_marker(frap_aim_right, _weapon_impact_point(frap_origin_right.global_position, direction, 650.0), camera)
-    _position_aim_marker(torpedo_aim, _weapon_impact_point(torpedo_origin.global_position, direction, 700.0), camera)
+    var torpedo_point := _weapon_impact_point(
+        torpedo_origin.global_position, direction, 700.0
+    )
+    if (
+        player.torpedo_charging
+        and player.torpedo_acquired_target != null
+        and is_instance_valid(player.torpedo_acquired_target)
+    ):
+        torpedo_point = player.torpedo_acquired_target.global_position
+    _position_aim_marker(torpedo_aim, torpedo_point, camera)
+    _update_torpedo_charge_indicator()
+
+
+func _update_torpedo_charge_indicator() -> void:
+    var charging: bool = player.torpedo_charging
+    torpedo_aim.add_theme_color_override(
+        "font_color",
+        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+    )
+    torpedo_charge_indicator.position = (
+        torpedo_aim.position + torpedo_aim.size * 0.5
+        - torpedo_charge_indicator.size * 0.5
+    )
+    torpedo_charge_indicator.set_charge_progress(player.torpedo_charge_ratio())
+    torpedo_charge_indicator.visible = charging and torpedo_aim.visible
 
 
 func _weapon_impact_point(origin: Vector3, direction: Vector3, range_m: float) -> Vector3:

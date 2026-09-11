@@ -20,8 +20,9 @@ destruction, station loss, and player disablement.
 
 - The JB100 v38 starts inside Starbase 86 v1.1's real open hangar, facing its
   exit and the distant planet-and-moon vista.
-- `Enter` starts the attack while all established cockpit, chair, mouse-drag,
-  keyboard, FrapRay, proton-torpedo, and aiming-HUD controls remain intact.
+- The attack starts immediately while all established cockpit, chair,
+  mouse-drag, keyboard, FrapRay, proton-torpedo, and aiming-HUD controls remain
+  intact.
 - Three accepted Ellipso pirate flyers receive unique randomized subsystem
   objectives and randomized target order every run.
 - Nine unmarked starbase targets cover shields, weapons, and hangars without
@@ -34,8 +35,7 @@ destruction, station loss, and player disablement.
 - Starbase defensive weapons fire slowly and imperfectly at pirate flyers.
   Their projectiles can also strike the JB100 but cannot damage the station.
 - Each paired FrapRay volley counts as one shot. Three shots start a committed
-  retreat, seven destroy a flyer, and one torpedo plus three FrapRay shots also
-  destroys it.
+  retreat; six shots or two proton torpedoes destroy a flyer.
 - Retreat remains pursuable below JB100 maximum thrust. A flyer counts as
   driven off at 5,000 m and jumps at 6,000 m.
 - Each station target has three points. Disabled shields amplify subsequent
@@ -54,4 +54,3 @@ The connected production drive contains designated Starbase 86, Ventradi
 pirate-flyer, and generic pirate-vehicle placeholders. Prototype V1 uses the
 higher-quality local hero Starbase 86, JB100, and Ellipso flyer assets; the
 drive assets remain validated fallbacks.
-

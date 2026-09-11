@@ -7,6 +7,7 @@ var lifetime_s := 2.5
 var shooter_rid: RID
 var additional_exclusions: Array[RID] = []
 var vapor_clock := 0.0
+var acquired_target: Node3D
 
 
 func configure(
@@ -16,7 +17,8 @@ func configure(
     speed_mps: float,
     hit_damage: float,
     source_rid: RID,
-    extra_exclusions: Array[RID] = []
+    extra_exclusions: Array[RID] = [],
+    target: Node3D = null
 ) -> void:
     weapon_kind = kind
     position = start_position
@@ -24,6 +26,7 @@ func configure(
     damage = hit_damage
     shooter_rid = source_rid
     additional_exclusions = extra_exclusions.duplicate()
+    acquired_target = target
     basis = Basis.looking_at(direction.normalized(), Vector3.UP)
 
 
@@ -31,7 +34,7 @@ func _ready() -> void:
     add_to_group("weapon_projectile")
     if weapon_kind == "proton_torpedo":
         name = "ProtonTorpedo"
-        lifetime_s = 5.0
+        lifetime_s = 12.0
         _build_torpedo_visual()
         _spawn_vapor_puff()
     elif weapon_kind == "starbase_plasma":
@@ -50,6 +53,21 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+    if (
+        weapon_kind == "proton_torpedo"
+        and acquired_target != null
+        and is_instance_valid(acquired_target)
+        and acquired_target.visible
+    ):
+        var target_direction := (
+            acquired_target.global_position - global_position
+        ).normalized()
+        var speed := travel_velocity.length()
+        travel_velocity = travel_velocity.lerp(
+            target_direction * speed, clampf(delta * 8.0, 0.0, 1.0)
+        )
+        if travel_velocity.length_squared() > 0.01:
+            basis = Basis.looking_at(travel_velocity.normalized(), Vector3.UP)
     var start := global_position
     var finish := start + travel_velocity * delta
     var query := PhysicsRayQueryParameters3D.create(start, finish)

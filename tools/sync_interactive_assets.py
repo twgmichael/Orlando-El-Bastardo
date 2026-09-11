@@ -172,6 +172,8 @@ def render_wrapper(contract: dict[str, Any], staged_glb: str) -> str:
             lines.append(
                 f'metadata/effect_exclusion_clearance_m = {number(marker["clearance_m"])}'
             )
+        if "size" in marker:
+            lines.append(f"metadata/volume_size_m = {vector3(marker['size'])}")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -383,7 +385,7 @@ def render_mission_scene(mission: dict[str, Any], contracts: dict[str, dict[str,
             "offset_bottom = -20.0",
             'theme_override_colors/font_color = Color(0.68, 0.72, 0.72, 0.86)',
             "theme_override_font_sizes/font_size = 11",
-            'text = "W/S throttle · A/D or ←/→ turn · ↑/↓ pitch · Q/E roll · X dead stop · SPACE FRAPRAY · T TORPEDO\\nZ/C strafe · R/F lift · G interact · TAB aim HUD · RMB chair look · 1–5 views · L course lock · F3 exterior"',
+            'text = "W/S throttle · A/D or ←/→ turn · ↑/↓ pitch · Q/E roll · X recenter · ESC all stop · MOUSE steer · LMB FRAPRAY · HOLD/RELEASE RMB TORPEDO\\nZ/C strafe · R/F lift · G interact · TAB aim HUD · MMB chair look · -/+ views · L course lock · F3 exterior"',
             "horizontal_alignment = 2",
             "",
             '[node name="Prompt" type="Label" parent="HUD"]',

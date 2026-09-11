@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "earth_starfighter_docked_v1",
+  "asset_id": "ship_earth_starfighter_hero_A",
+  "display_name": "Earth Starfighter Docked",
+  "production_role": "hero",
+  "source": {
+    "config_asset_id": "ship_earth_starfighter_hero_A",
+    "expected_node": "ship_earth_starfighter_hero_A"
+  },
+  "runtime": {
+    "kind": "vehicle",
+    "root_node_type": "StaticBody3D",
+    "wrapper_scene": "res://generated/scenes/earth_starfighter_docked_v1.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "+X",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, 90.0, 0.0]
+  },
+  "visual": {
+    "scale": [1.0, 1.0, 1.0],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "docked_fighter_collision",
+      "kind": "box",
+      "position": [0.0, 1.5, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "size": [12.0, 3.0, 14.0]
+    }
+  ],
+  "markers": [],
+  "capabilities": ["collision"],
+  "notes": [
+    "Mission 003 parks this hero craft behind and to one side of the JB100 in the open hangar.",
+    "The prototype disables its collision layers so the visual dressing cannot obstruct the through-hangar flight lane."
+  ]
+}

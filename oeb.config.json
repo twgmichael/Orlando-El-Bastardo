@@ -107,7 +107,7 @@
       "source": "tools/build_jb100.py"
     },
     "prop_starbase_86_A": {
-      "file": "locations/starbase_86_v1.1.0/starbase_86_v1.1.0.glb",
+      "file": "locations/starbase_86_v1.1.1/starbase_86_v1.1.1.glb",
       "node": "prop_starbase_86_A",
       "kind": "prop",
       "status": "available",
@@ -119,13 +119,14 @@
         "exterior"
       ],
       "hero": true,
-      "version": "1.1.0",
+      "version": "1.1.1",
       "height_meters": 150.0,
       "hangar_states": "1:open;2:half-closed;3:closed",
       "hangar_doors_per_pod": 2,
       "hangar_face_direction": "opposed tangential; face planes parallel to spokes",
       "pod_construction": "rounded box with squashed top and bottom hemispheres",
-      "source": "user-annotated original pod restoration v005"
+      "hangar_interior": "flat open-ended rectangular box; 25.6875m wide x 8.4375m high x 53.625m long",
+      "source": "accepted flat-interior hangar correction v006"
     },
     "prop_pirate_flyer_A": {
       "file": "ships/ellipso_flyer_mk1.glb",

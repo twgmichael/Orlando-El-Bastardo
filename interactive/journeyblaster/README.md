@@ -1,7 +1,7 @@
 # JourneyBlaster Godot Runtime
 
-Current milestone: **Mission 003 Starbase Defense Prototype V3**
-(`mission-003-prototype-v3`), declared complete on
+Current milestone: **Mission 003 Starbase Defense Prototype V4**
+(`mission-003-prototype-v4`), declared complete on
 2026-09-09.
 
 This nested Godot 4 project is the first OEB interactive runtime. Canonical
@@ -45,21 +45,36 @@ chair views, hull-mounted Senso-Globe sensing, probe identification and data
 download, physical towing, return validation, and hyperspace completion.
 
 Controls are shown in the HUD. The primary keyboard bindings are `W/S`
-throttle, `A/D` or left/right arrows to turn, up/down arrows to pitch, `Q/E`
-roll, `Z/C` strafe, `R/F` lift, `Space` FrapRay, `T` proton torpedo, `G`
-interact, `X` dead stop, `1`–`5` chair views, right-mouse free chair rotation,
-`L` course lock, `Tab` aiming HUD, `H`
-hyperspace, and `F3` external debug view. Left-mouse drag and gamepad flight
-paths are also available.
+variable throttle, `1`–`5` fixed 10/30/50/80/100-percent thrust, `A/D` or
+left/right arrows to turn, up/down arrows to pitch, `Q/E` roll, `Z/C` strafe,
+`R/F` lift, `G` interact, `X` recenter mouse flight, `Esc` all stop,
+`-`/`+` chair-view cycling,
+middle-mouse free chair rotation, `L` course lock, `Tab` aiming HUD, `H`
+hyperspace, and `F3` external debug view. The JB100 continuously steers toward
+an internal virtual stick from relative mouse movement with no button held.
+The system cursor remains captured inside the game window. Left click fires a
+paired FrapRay volley. Hold right mouse for three seconds to build and acquire a
+target, then release to launch the proton torpedo. Gamepad flight paths are
+also available.
 
 Keyboard and arrow steering eases into and out of full deflection. Pitch, yaw,
 and roll are always relative to the JB100 itself, including after the ship
-rolls upside down. Left-mouse drag uses direct pixel sensitivity with a short
-smoothing filter; releasing and clicking again starts cleanly without stale
-motion or a slower second drag.
+rolls upside down. Mouse steering uses a bounded 180-pixel virtual stick, a 6%
+dead zone, a 2.2 response exponent, and automatic spring return for precise
+aiming without losing turn authority.
+Pressing `X` warps the pointer to the exact screen center and immediately
+clears residual mouse steering, leaving the JB100 pointed straight along its
+current heading. Startup, window exit, and focus loss also force the virtual
+stick to neutral so stale steering can never remain latched.
 
-Combat controls are `Space` for paired FrapRay blasts and `T` for a proton
-torpedo. FrapRay bolts are orange plasma energy. Proton torpedoes have a blue
+FrapRay power starts at 100 percent, each paired volley costs 10 percent, and
+the reserve recharges at two percent per second. Proton torpedoes start at
+five and count down as they launch. While a torpedo builds and acquires, the
+center red X turns blue and its circular charge indicator fills for three
+seconds; a full charge remains held until right mouse is released. Acquired
+torpedoes steer themselves toward their target at 260 m/s and pursue long
+enough that pirate flyers cannot escape by speed alone. FrapRay
+bolts are orange plasma energy. Proton torpedoes have a blue
 core and a fading white vapor trail. Large asteroids break into moving
 fragments; weapon hits vaporize the fragments into disappearing dust clouds.
 The aiming HUD projects the actual two cannon paths and center torpedo path;
@@ -81,15 +96,14 @@ command creates equivalent deterministic runtime sources under this project.
 
 ## Mission 002 controls and loop
 
-Mission 002 starts with `Enter`. Intercept the falling primary asteroid and
+Mission 002 begins immediately. Intercept the falling primary asteroid and
 close to placement range, then press `/` or `?` to switch from FrapRay to the
-reverse tow beam. Left-mouse drag always steers the JB100; the restored blue
+reverse tow beam. Mouse position always steers the JB100; the restored blue
 circle shows where the ship-forward tow beam will strike. Aim it over a blue
 torus and press `Space` to shoot the beam and attach a charge. Press `/` or `?`
 again to switch back to FrapRay; `T` continues to launch proton torpedoes.
 
-The three-minute charge-placement window begins when `Enter` starts the
-mission; time spent reading the briefing does not consume it.
+The three-minute charge-placement window begins as soon as the mission loads.
 
 After placing all three charges, retreat to the displayed safe distance and
 press `G` to detonate. Chase the resulting major fragments with `Space`
@@ -102,18 +116,23 @@ Failure preserves free flight and `R` restarts.
 
 ## Mission 003 controls and loop
 
-Mission 003 starts with `Enter`, with the JB100 inside Starbase 86's open
-hangar and facing the launch exit. Use the established mouse-drag or keyboard
-flight controls to launch, `Space` for paired FrapRay fire, `T` for proton
-torpedoes, and `Tab` for the actual weapon-path HUD.
+Mission 003 begins immediately, with the JB100 inside Starbase 86's open
+hangar and facing the launch exit. Use the established mouse-follow or keyboard
+flight controls to launch, click left for paired FrapRay fire, hold right mouse
+to launch a proton torpedo, and use `Tab` for the actual weapon-path HUD.
 
 Three Ellipso pirate flyers attack nine hidden station damage locations. Their
 objectives, target order, and health are not exposed. Three FrapRay shots drive
-a flyer into a committed retreat, seven destroy it, and one torpedo plus three
-FrapRay shots also destroys it. Starbase defensive bolts can hit the pirates
+a flyer into a committed retreat; six FrapRay volleys or two torpedoes destroy
+it. Starbase defensive bolts can hit the pirates
 or the JB100; each hit on the JB100 removes 10 of its 100 thrust points.
+
+The right cockpit screen reports live shield, weapon, and hangar damage plus
+pirate retreats and destruction. The Senso-Globe shows pirate flyers in red
+and Starbase 86 and other friendly contacts in blue.
 
 Destroy all three flyers or drive each beyond 5,000 m to complete the mission.
 The open hangar is safe from deliberate pirate pursuit. Losing all nine
 station targets or all JB100 thrust fails the mission without ending the
-current battle; `R` restarts.
+current scene; surviving pirates disengage and circle Starbase 86 while the
+pilot remains free to fly or observe. `R` restarts.

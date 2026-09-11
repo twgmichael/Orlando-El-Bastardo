@@ -7,11 +7,11 @@ receding past the station.  There are no engine flares, bloom, motion blur,
 volumetrics, lens effects, or other action effects.
 
 Outputs:
-    scene_versions/space_station_86_bugblatter_flyby_v005.blend
-    out/space_station_86_bugblatter_flyby_v005.mp4
-    out/space_station_86_bugblatter_flyby_v005_preview/*.png (with --preview)
-    scene_versions/space_station_86_bugblatter_flyby_v005_final.blend
-    out/space_station_86_bugblatter_flyby_v005_final.mp4 (with --final)
+    scene_versions/space_station_86_bugblatter_flyby_v006.blend
+    out/space_station_86_bugblatter_flyby_v006.mp4
+    out/space_station_86_bugblatter_flyby_v006_preview/*.png (with --preview)
+    scene_versions/space_station_86_bugblatter_flyby_v006_final.blend
+    out/space_station_86_bugblatter_flyby_v006_final.mp4 (with --final)
 """
 
 from __future__ import annotations
@@ -36,13 +36,13 @@ SHIP_PATH = (
     / "bugblatter_interceptor_v1.0.0"
     / "bugblatter_interceptor_v1.0.0.glb"
 )
-BLEND_PATH = ROOT / "scene_versions" / "space_station_86_bugblatter_flyby_v005.blend"
-MOVIE_PATH = ROOT / "out" / "space_station_86_bugblatter_flyby_v005.mp4"
-FRAME_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v005_frames"
-PREVIEW_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v005_preview"
-FINAL_BLEND_PATH = ROOT / "scene_versions" / "space_station_86_bugblatter_flyby_v005_final.blend"
-FINAL_MOVIE_PATH = ROOT / "out" / "space_station_86_bugblatter_flyby_v005_final.mp4"
-FINAL_FRAME_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v005_final_frames"
+BLEND_PATH = ROOT / "scene_versions" / "space_station_86_bugblatter_flyby_v006.blend"
+MOVIE_PATH = ROOT / "out" / "space_station_86_bugblatter_flyby_v006.mp4"
+FRAME_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v006_frames"
+PREVIEW_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v006_preview"
+FINAL_BLEND_PATH = ROOT / "scene_versions" / "space_station_86_bugblatter_flyby_v006_final.blend"
+FINAL_MOVIE_PATH = ROOT / "out" / "space_station_86_bugblatter_flyby_v006_final.mp4"
+FINAL_FRAME_DIR = ROOT / "out" / "space_station_86_bugblatter_flyby_v006_final_frames"
 
 FPS = 30
 FRAME_START = 1
@@ -103,32 +103,83 @@ def add_uv_sphere(name, location, scale, mat, segments=48, rings=24):
 
 
 def add_half_uv_sphere(name, location, scale, mat, *, upper: bool, segments=64, rings=32):
-    """Add a true upper or lower squashed hemisphere with a flat equator."""
-    bpy.ops.mesh.primitive_uv_sphere_add(
-        segments=segments,
-        ring_count=rings,
-        location=location,
-    )
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = scale
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    assign(obj, mat)
+    """Build a deterministic half ellipsoid with a flat equator cap.
 
-    bpy.context.view_layer.objects.active = obj
-    obj.select_set(True)
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.mesh.bisect(
-        plane_co=(0.0, 0.0, 0.0),
-        plane_no=(0.0, 0.0, 1.0),
-        clear_inner=upper,
-        clear_outer=not upper,
-        use_fill=True,
-    )
-    bpy.ops.object.mode_set(mode="OBJECT")
-    for polygon in obj.data.polygons:
-        polygon.use_smooth = True
+    The previous edit-mode bisect used a world-space Z=0 plane.  Because the
+    top dome lives entirely above that plane, it remained a full ovaloid and
+    intruded into the hangar.  Generating only the required latitude range
+    makes the dome independent of object position and Blender operator state.
+    """
+    vertices = []
+    faces = []
+    curved_face_count = 0
+    ring_count = max(2, rings // 2)
+    z_sign = 1.0 if upper else -1.0
+
+    for ring in range(ring_count):
+        latitude = (math.pi * 0.5) * ring / ring_count
+        radius = math.cos(latitude)
+        z = z_sign * math.sin(latitude) * scale[2]
+        for segment in range(segments):
+            angle = math.tau * segment / segments
+            vertices.append((
+                math.cos(angle) * radius * scale[0],
+                math.sin(angle) * radius * scale[1],
+                z,
+            ))
+
+    for ring in range(ring_count - 1):
+        current = ring * segments
+        following = (ring + 1) * segments
+        for segment in range(segments):
+            next_segment = (segment + 1) % segments
+            if upper:
+                faces.append((
+                    current + segment,
+                    current + next_segment,
+                    following + next_segment,
+                    following + segment,
+                ))
+            else:
+                faces.append((
+                    current + segment,
+                    following + segment,
+                    following + next_segment,
+                    current + next_segment,
+                ))
+            curved_face_count += 1
+
+    pole = len(vertices)
+    vertices.append((0.0, 0.0, z_sign * scale[2]))
+    last_ring = (ring_count - 1) * segments
+    for segment in range(segments):
+        next_segment = (segment + 1) % segments
+        if upper:
+            faces.append((last_ring + segment, last_ring + next_segment, pole))
+        else:
+            faces.append((last_ring + segment, pole, last_ring + next_segment))
+        curved_face_count += 1
+
+    cap_center = len(vertices)
+    vertices.append((0.0, 0.0, 0.0))
+    for segment in range(segments):
+        next_segment = (segment + 1) % segments
+        if upper:
+            faces.append((cap_center, next_segment, segment))
+        else:
+            faces.append((cap_center, segment, next_segment))
+
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.location = location
+    assign(obj, mat)
+    for index, polygon in enumerate(mesh.polygons):
+        polygon.use_smooth = index < curved_face_count
+    obj["construction"] = "deterministic half ellipsoid with flat equator"
+    obj["equator_is_flat"] = True
     return obj
 
 
@@ -202,7 +253,7 @@ def cut_hangar_tunnel(pod_object, pod_center: Vector, theta: float) -> None:
     )
     cutter = bpy.context.object
     cutter.name = f"{pod_object.name}_hangar_tunnel_cutter"
-    cutter.scale = (0.80, 1.90, 0.29)
+    cutter.scale = (0.80, 1.90, 0.335)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     modifier = pod_object.modifiers.new("tangent_hangar_tunnel", "BOOLEAN")
     modifier.operation = "DIFFERENCE"
@@ -211,6 +262,60 @@ def cut_hangar_tunnel(pod_object, pod_center: Vector, theta: float) -> None:
     bpy.context.view_layer.objects.active = pod_object
     bpy.ops.object.modifier_apply(modifier=modifier.name)
     bpy.data.objects.remove(cutter, do_unlink=True)
+
+
+def add_open_box_hangar_shell(name, pod_center, theta, mat):
+    """Create one manifold, open-ended rectangular interior tube.
+
+    Local X is radial, local Y is the fly-through/tangent axis, and local Z is
+    vertical.  The four walls have solid thickness and terminate in flat rims;
+    there are deliberately no end caps or curved surfaces inside the passage.
+    """
+    shell_center = tuple(pod_center)
+    outer_x, inner_x = 0.80, 0.685
+    outer_z, inner_z = 0.335, 0.225
+    half_length = 1.43
+    # Loop order: lower-left, lower-right, upper-right, upper-left.
+    outer_loop = (
+        (-outer_x, -outer_z),
+        (outer_x, -outer_z),
+        (outer_x, outer_z),
+        (-outer_x, outer_z),
+    )
+    inner_loop = (
+        (-inner_x, -inner_z),
+        (inner_x, -inner_z),
+        (inner_x, inner_z),
+        (-inner_x, inner_z),
+    )
+    vertices = []
+    for y in (-half_length, half_length):
+        vertices.extend((x, y, z) for x, z in outer_loop)
+        vertices.extend((x, y, z) for x, z in inner_loop)
+
+    faces = []
+    for corner in range(4):
+        nxt = (corner + 1) % 4
+        # Outer and inner longitudinal faces.
+        faces.append((corner, 8 + corner, 8 + nxt, nxt))
+        faces.append((4 + corner, 4 + nxt, 12 + nxt, 12 + corner))
+        # Flat wall rim at both open ends.
+        faces.append((corner, nxt, 4 + nxt, 4 + corner))
+        faces.append((8 + corner, 12 + corner, 12 + nxt, 8 + nxt))
+
+    mesh = bpy.data.meshes.new(f"{name}_mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.location = shell_center
+    obj.rotation_euler.z = theta
+    assign(obj, mat)
+    obj["interior_type"] = "open rectangular box"
+    obj["clear_width_unscaled"] = inner_x * 2.0
+    obj["clear_height_unscaled"] = inner_z * 2.0
+    obj["clear_length_unscaled"] = half_length * 2.0
+    return obj
 
 
 def add_opposed_hangar_faces(
@@ -280,31 +385,37 @@ def add_opposed_hangar_faces(
         mark["door_side"] = f"opposed tangent {side}"
         parts.append(mark)
 
+        semantic_role = "entrance" if side == "A" else "exit"
+        semantic_mark = bpy.data.objects.new(
+            f"station_pod_{index}_hangar_{semantic_role}_mark",
+            None,
+        )
+        bpy.context.scene.collection.objects.link(semantic_mark)
+        semantic_mark.location = mark.location.copy()
+        semantic_mark.rotation_mode = "QUATERNION"
+        semantic_mark.rotation_quaternion = mark.rotation_quaternion.copy()
+        semantic_mark["hangar_role"] = semantic_role
+        semantic_mark["hangar_state"] = state
+        parts.append(semantic_mark)
+
         if side == "A":
             legacy = bpy.data.objects.new(f"station_pod_{index}_hangar_mark", None)
             bpy.context.scene.collection.objects.link(legacy)
-            legacy.matrix_world = mark.matrix_world.copy()
+            legacy.location = mark.location.copy()
+            legacy.rotation_mode = "QUATERNION"
+            legacy.rotation_quaternion = mark.rotation_quaternion.copy()
             legacy["hangar_state"] = state
             legacy["door_side"] = "opposed tangent A (legacy primary mark)"
             parts.append(legacy)
 
-    # Dark inner wall strips make the real through-tunnel readable without
-    # blocking the opening on either side.
-    parts.extend([
-        add_box(f"station_pod_{index}_hangar_liner_left",
-                local_point(-0.74, 0.0, 0.0),
-                (0.055, 1.43, 0.27), dark, rotation_z=theta),
-        add_box(f"station_pod_{index}_hangar_liner_right",
-                local_point(0.74, 0.0, 0.0),
-                (0.055, 1.43, 0.27), dark, rotation_z=theta),
-        add_box(f"station_pod_{index}_hangar_liner_top",
-                local_point(0.0, 0.0, 0.28),
-                (0.74, 1.43, 0.055), dark, rotation_z=theta),
-        add_box(f"station_pod_{index}_hangar_liner_bottom",
-                local_point(0.0, 0.0, -0.28),
-                (0.74, 1.43, 0.055), dark, rotation_z=theta),
-    ])
-
+    volume_mark = bpy.data.objects.new(f"station_pod_{index}_hangar_volume_mark", None)
+    bpy.context.scene.collection.objects.link(volume_mark)
+    volume_mark.location = pod_center
+    volume_mark.rotation_euler.z = theta
+    volume_mark["hangar_role"] = "volume_center"
+    volume_mark["clear_dimensions_unscaled"] = (1.37, 2.86, 0.45)
+    volume_mark["hangar_state"] = state
+    parts.append(volume_mark)
 
 def cylinder_between(name, start: Vector, end: Vector, radius: float, mat):
     delta = end - start
@@ -391,6 +502,12 @@ def build_station() -> bpy.types.Object:
             bevel=0.18,
         )
         cut_hangar_tunnel(pod_body, pod_center, theta)
+        parts.append(add_open_box_hangar_shell(
+            f"station_pod_{index}_hangar_open_box_interior",
+            pod_center,
+            theta,
+            dark,
+        ))
 
         pod_top = add_half_uv_sphere(
             f"station_pod_{index}_squashed_top_hemisphere",
@@ -718,7 +835,7 @@ def render_movie(scene, frame_dir=FRAME_DIR, movie_path=MOVIE_PATH, crf=18) -> N
 
 def render_final(scene) -> None:
     # Resolution and encode quality only; all scene content and animation remain
-    # identical to the approved v005 preview.
+    # identical to the approved v006 preview.
     scene.render.resolution_x = 1920
     scene.render.resolution_y = 1440
     scene.render.resolution_percentage = 100

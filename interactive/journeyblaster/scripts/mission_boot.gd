@@ -1,5 +1,7 @@
 extends Node3D
 
+const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
+
 const STATE_OBJECTIVES := {
     "BRIEFING": "Bring the JB100 online and enter the asteroid field.",
     "LOCATE": "Use the hull-mounted Senso-Globes to locate the unknown signal.",
@@ -50,6 +52,7 @@ var weapon_aim: Control
 var frap_aim_left: Label
 var frap_aim_right: Label
 var torpedo_aim: Label
+var torpedo_charge_indicator: Control
 var frap_origin_left: Node3D
 var frap_origin_right: Node3D
 var torpedo_origin: Node3D
@@ -68,6 +71,7 @@ func _ready() -> void:
     _build_probe_beacon()
     _build_tow_beam()
     _set_state("BRIEFING")
+    begin_mission()
     print("MISSION-001-RUNTIME-OK: %s" % mission_data.get("title", "untitled"))
 
 
@@ -85,8 +89,6 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         match event.physical_keycode:
-            KEY_ENTER, KEY_KP_ENTER:
-                begin_mission()
             KEY_G:
                 request_interaction()
             KEY_H:
@@ -99,10 +101,7 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event is InputEventJoypadButton and event.pressed:
         match event.button_index:
             JOY_BUTTON_A:
-                if mission_state == "BRIEFING":
-                    begin_mission()
-                else:
-                    request_interaction()
+                request_interaction()
             JOY_BUTTON_Y:
                 request_hyperspace()
 
@@ -165,6 +164,10 @@ func _resolve_runtime_nodes() -> bool:
     frap_aim_left = get_node_or_null("HUD/WeaponAim/FrapRayLeft") as Label
     frap_aim_right = get_node_or_null("HUD/WeaponAim/FrapRayRight") as Label
     torpedo_aim = get_node_or_null("HUD/WeaponAim/Torpedo") as Label
+    torpedo_charge_indicator = TorpedoChargeIndicator.new()
+    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
+    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
+    weapon_aim.add_child(torpedo_charge_indicator)
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
     torpedo_origin = player.find_child("torpedo_launcher", true, false) as Node3D
@@ -516,9 +519,30 @@ func _update_weapon_aim() -> void:
     var left_point := _weapon_impact_point(frap_origin_left.global_position, fire_direction, 610.0)
     var right_point := _weapon_impact_point(frap_origin_right.global_position, fire_direction, 610.0)
     var torpedo_point := _weapon_impact_point(torpedo_origin.global_position, fire_direction, 690.0)
+    if (
+        player.torpedo_charging
+        and player.torpedo_acquired_target != null
+        and is_instance_valid(player.torpedo_acquired_target)
+    ):
+        torpedo_point = player.torpedo_acquired_target.global_position
     _position_weapon_marker(frap_aim_left, left_point, camera)
     _position_weapon_marker(frap_aim_right, right_point, camera)
     _position_weapon_marker(torpedo_aim, torpedo_point, camera)
+    _update_torpedo_charge_indicator()
+
+
+func _update_torpedo_charge_indicator() -> void:
+    var charging: bool = player.torpedo_charging
+    torpedo_aim.add_theme_color_override(
+        "font_color",
+        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+    )
+    torpedo_charge_indicator.position = (
+        torpedo_aim.position + torpedo_aim.size * 0.5
+        - torpedo_charge_indicator.size * 0.5
+    )
+    torpedo_charge_indicator.set_charge_progress(player.torpedo_charge_ratio())
+    torpedo_charge_indicator.visible = charging and torpedo_aim.visible
 
 
 func _weapon_impact_point(origin: Vector3, direction: Vector3, range_m: float) -> Vector3:

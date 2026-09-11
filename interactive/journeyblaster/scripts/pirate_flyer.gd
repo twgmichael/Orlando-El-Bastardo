@@ -8,7 +8,7 @@ signal flyer_destroyed(flyer: AnimatableBody3D)
 signal defense_perimeter_crossed(flyer: AnimatableBody3D)
 
 const RETREAT_HITS := 3.0
-const DESTROY_HITS := 7.0
+const DESTROY_HITS := 6.0
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
 const RUN_INGRESS_DISTANCE_M := 235.0
@@ -30,6 +30,7 @@ var completed_primary_objective := false
 var damage_taken := 0.0
 var frapray_hits := 0.0
 var proton_torpedo_hit := false
+var proton_torpedo_hits := 0
 var destroyed := false
 var perimeter_crossed := false
 var hyperspace_departed := false
@@ -100,6 +101,9 @@ func _physics_process(delta: float) -> void:
         return
     if behavior in ["RETREAT", "DRIVEN_OFF"]:
         _advance_retreat(delta)
+        return
+    if behavior == "CIRCLE_STATION":
+        _advance_holding_pattern(delta)
         return
     if behavior == "ATTACK_PLAYER" and runtime.is_player_in_safe_hangar():
         _advance_holding_pattern(delta)
@@ -266,6 +270,13 @@ func assign_player_attack() -> void:
     _prepare_attack_run()
 
 
+func assign_station_circle() -> void:
+    behavior = "CIRCLE_STATION"
+    current_target = null
+    target_queue.clear()
+    run_shot_fired = true
+
+
 func assign_pile_on(targets: Array[StaticBody3D]) -> void:
     behavior = "PILE_ON"
     target_queue = targets.duplicate()
@@ -334,7 +345,8 @@ func apply_weapon_hit(
         frapray_hits += 1.0
     elif weapon_kind == "proton_torpedo":
         proton_torpedo_hit = true
-    damage_taken = frapray_hits + (4.0 if proton_torpedo_hit else 0.0)
+        proton_torpedo_hits += 1
+    damage_taken = frapray_hits + float(proton_torpedo_hits) * 3.0
     CombatEffects.spawn_dust_cloud(get_parent(), hit_position, 0.42, 5)
     if damage_taken >= DESTROY_HITS:
         _destroy_flyer(weapon_kind, impact_direction)

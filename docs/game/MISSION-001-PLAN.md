@@ -205,7 +205,8 @@ These values are gameplay defaults, not OEB canon:
 | FrapRay blasters | `Space` | X |
 | Proton torpedo | `T` | Right-stick press |
 | Toggle weapon aiming HUD | `Tab` | — |
-| Chair view detents | `1`–`5`; `V` cycles; `Home` returns forward | D-pad and shoulders |
+| Thrust presets | `1`–`5` set 10%, 30%, 50%, 80%, and 100% | — |
+| Chair view detents | `-`/`+` cycle backward/forward; `V` advances; `Home` returns forward | D-pad and shoulders |
 | Free chair rotation | Right-mouse drag | View detents in prototype |
 | External debug camera | `F3` | — |
 | Hyperspace | `H` | Y |

@@ -31,12 +31,197 @@
       "rotation_degrees": [0.0, 0.0, 0.0],
       "radius": 17.0,
       "height": 150.0
+    },
+    {
+      "shape_id": "hangar_1_ceiling_collision",
+      "kind": "box",
+      "position": [113.860035, 15.75, -34.810506],
+      "rotation_degrees": [0.0, 17.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_1_floor_collision",
+      "kind": "box",
+      "position": [113.860035, 5.25, -34.810506],
+      "rotation_degrees": [0.0, 17.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_1_port_wall_collision",
+      "kind": "box",
+      "position": [127.17359, 10.5, -38.880868],
+      "rotation_degrees": [0.0, 17.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_1_starboard_wall_collision",
+      "kind": "box",
+      "position": [100.54648, 10.5, -30.740144],
+      "rotation_degrees": [0.0, 17.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_2_ceiling_collision",
+      "kind": "box",
+      "position": [-87.0768, 15.75, -81.20043],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_2_floor_collision",
+      "kind": "box",
+      "position": [-87.0768, 5.25, -81.20043],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_2_port_wall_collision",
+      "kind": "box",
+      "position": [-97.258615, 10.5, -90.695126],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_2_starboard_wall_collision",
+      "kind": "box",
+      "position": [-76.894985, 10.5, -71.705734],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_2_a_left_door_collision",
+      "kind": "box",
+      "position": [-100.926805, 10.5, -52.326823],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [6.375, 9.375, 2.0625]
+    },
+    {
+      "shape_id": "hangar_2_a_right_door_collision",
+      "kind": "box",
+      "position": [-114.913945, 10.5, -65.370041],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [6.375, 9.375, 2.0625]
+    },
+    {
+      "shape_id": "hangar_2_b_left_door_collision",
+      "kind": "box",
+      "position": [-59.239655, 10.5, -97.030818],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [6.375, 9.375, 2.0625]
+    },
+    {
+      "shape_id": "hangar_2_b_right_door_collision",
+      "kind": "box",
+      "position": [-73.226795, 10.5, -110.074036],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [6.375, 9.375, 2.0625]
+    },
+    {
+      "shape_id": "hangar_3_ceiling_collision",
+      "kind": "box",
+      "position": [-26.783235, 15.75, 116.010936],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_3_floor_collision",
+      "kind": "box",
+      "position": [-26.783235, 5.25, 116.010936],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [30.0, 2.0625, 53.625]
+    },
+    {
+      "shape_id": "hangar_3_port_wall_collision",
+      "kind": "box",
+      "position": [-29.914975, 10.5, 129.575994],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_3_starboard_wall_collision",
+      "kind": "box",
+      "position": [-23.651494, 10.5, 102.445878],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [2.15625, 12.5625, 53.625]
+    },
+    {
+      "shape_id": "hangar_3_a_closed_door_collision",
+      "kind": "box",
+      "position": [2.99595, 10.5, 122.886002],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [25.5, 9.375, 2.0625]
+    },
+    {
+      "shape_id": "hangar_3_b_closed_door_collision",
+      "kind": "box",
+      "position": [-56.56242, 10.5, 109.135869],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [25.5, 9.375, 2.0625]
     }
   ],
-  "markers": [],
+  "markers": [
+    {
+      "marker_id": "hangar_1_volume_center",
+      "role": "hangar_volume_center",
+      "position": [113.860035, 10.5, -34.810506],
+      "rotation_degrees": [0.0, 17.0, 0.0],
+      "size": [25.6875, 8.4375, 53.625]
+    },
+    {
+      "marker_id": "hangar_1_entrance",
+      "role": "hangar_entrance",
+      "position": [104.403638, 10.5, -65.740988],
+      "rotation_degrees": [0.0, 17.0, 0.0]
+    },
+    {
+      "marker_id": "hangar_1_exit",
+      "role": "hangar_exit",
+      "position": [123.316432, 10.5, -3.880024],
+      "rotation_degrees": [0.0, 197.0, 0.0]
+    },
+    {
+      "marker_id": "hangar_2_volume_center",
+      "role": "hangar_volume_center",
+      "position": [-87.0768, 10.5, -81.20043],
+      "rotation_degrees": [0.0, 137.0, 0.0],
+      "size": [25.6875, 8.4375, 53.625]
+    },
+    {
+      "marker_id": "hangar_2_entrance",
+      "role": "hangar_entrance",
+      "position": [-109.135185, 10.5, -57.545708],
+      "rotation_degrees": [0.0, 137.0, 0.0]
+    },
+    {
+      "marker_id": "hangar_2_exit",
+      "role": "hangar_exit",
+      "position": [-65.018416, 10.5, -104.855151],
+      "rotation_degrees": [0.0, 317.0, 0.0]
+    },
+    {
+      "marker_id": "hangar_3_volume_center",
+      "role": "hangar_volume_center",
+      "position": [-26.783235, 10.5, 116.010936],
+      "rotation_degrees": [0.0, 257.0, 0.0],
+      "size": [25.6875, 8.4375, 53.625]
+    },
+    {
+      "marker_id": "hangar_3_entrance",
+      "role": "hangar_entrance",
+      "position": [4.731547, 10.5, 123.286697],
+      "rotation_degrees": [0.0, 257.0, 0.0]
+    },
+    {
+      "marker_id": "hangar_3_exit",
+      "role": "hangar_exit",
+      "position": [-58.298017, 10.5, 108.735175],
+      "rotation_degrees": [0.0, 77.0, 0.0]
+    }
+  ],
   "capabilities": ["obstacle", "collision"],
   "notes": [
-    "Mission 003 uses the production v1.1.0 Starbase 86 model with its first opposed hangar tunnel fully open.",
-    "Runtime subsystem targets provide localized collision and damage while the central capsule keeps the navigation proxy inexpensive."
+    "Mission 003 uses production v1.1.1 with a flat-ceiling open-box passage in Hangar 1.",
+    "Each hangar has ceiling, floor, and side-wall collision; the half-closed and closed pods also have door-leaf collision.",
+    "Hangar volume, entrance, and exit markers are generated into the runtime wrapper so missions do not depend on duplicated hard-coded coordinates."
   ]
 }

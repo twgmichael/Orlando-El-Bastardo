@@ -31,9 +31,9 @@ Player promise:
 
 Canonical plan: [`docs/game/MISSION-001-PLAN.md`](docs/game/MISSION-001-PLAN.md)
 
-Current milestone: **Mission 003 Starbase Defense Prototype V3**, declared
+Current milestone: **Mission 003 Starbase Defense Prototype V4**, declared
 complete on 2026-09-09. Milestone record:
-[`docs/game/MISSION-003-PROTOTYPE-V3.md`](docs/game/MISSION-003-PROTOTYPE-V3.md)
+[`docs/game/MISSION-003-PROTOTYPE-V4.md`](docs/game/MISSION-003-PROTOTYPE-V4.md)
 
 ### Phase 1 — Contracts and project boot
 
@@ -216,8 +216,8 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   flyers pile onto surviving station targets, with replacement behavior.
 - [x] Add slow, imperfect starbase defensive fire that can hit pirates or the
   JB100 but cannot damage the station.
-- [x] Drive flyers off after three paired FrapRay shots, destroy them after
-  seven, or destroy them with one torpedo plus three FrapRay shots.
+- [x] Drive flyers off after three paired FrapRay shots, and destroy them
+  after six paired shots or two proton torpedoes.
 - [x] Count flyers as driven off at 5,000 m and show their hyperspace departure
   at 6,000 m while keeping retreat speed pursuable.
 - [x] Scale station-weapon effectiveness with health and amplify weapon/hangar
@@ -247,6 +247,54 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   blend evasive steering into the current pass.
 - [x] Add runtime coverage for continuous fly-past geometry, one shot per pass,
   and defensive-fire avoidance.
+
+### Starbase Defense Prototype V4 — Cockpit instrumentation mockup
+
+- [x] Move mission telemetry from large floating HUD panels onto overlays fitted
+  to the JB100's left, middle, and right cockpit screens.
+- [x] Add four green-on-black systems bars: PWR and SHD begin at 100%, THR
+  tracks commanded throttle, and WPN tracks rechargeable FrapRay power beside
+  a live five-torpedo TPD counter.
+- [x] Add a primitive XYZ Senso-Globe displaying contacts within 1,000 meters.
+- [x] Move briefing, mission state, and current objective text to the right
+  screen while preserving only weapon targeting marks in the forward view.
+- [x] Render all cockpit instrumentation text in uppercase.
+- [x] Center two red emergency ceiling strobes six meters apart and preserve
+  two steady open-bay lights.
+- [x] Park an Earth Starfighter behind the JB100 without blocking the open
+  hangar's through-flight lane.
+- [x] Hide and tighten station damage volumes, restore camera-relative stars,
+  and add a visible solar-system sun.
+- [x] Scale station-defense accuracy by pirate range while keeping defensive
+  fire avoidance inside committed strafing behavior.
+- [x] Remap `1`–`5` to fixed thrust presets and `-`/`+` to the ordered cockpit
+  view cycle.
+- [x] Begin Missions 001, 002, and 003 immediately without an Enter gate.
+- [x] Map stationary left click to FrapRay, left drag to steering, held right
+  click to torpedo load/fire, middle drag to chair look, and `Esc` to all stop.
+- [x] Give FrapRay a 100% reserve, 10% paired-volley cost, and 2%/s recharge;
+  begin with five torpedoes.
+- [x] Replace held-button mouse steering with continuous pointer-follow
+  steering; reserve left click for FrapRay and require a three-second right
+  click hold to charge/acquire, followed by release to launch a torpedo.
+- [x] Replace absolute cursor latching with a bounded relative virtual stick,
+  captured cursor, automatic spring return, and forced neutral on startup,
+  focus loss, or window exit.
+- [x] Map `X` to center the mouse-flight control and immediately clear residual
+  turn input while preserving `Esc` as all stop.
+- [x] Turn the center torpedo X blue during its build-up and surround it with a
+  circular three-second fill indicator.
+- [x] Persistently acquire a target near the torpedo reticle, snap the lock
+  marker to it, and give the launched torpedo fast, long-lived homing pursuit.
+- [x] Add right-screen reports for shield, weapon, and hangar damage plus
+  pirate retreats and destruction.
+- [x] Color hostile Senso-Globe contacts red and friendly contacts blue.
+- [x] Add an amber Senso-Globe arrow projected along the JB100's local forward
+  axis and label it `F`.
+- [x] Balance pirate defeat at three FrapRay volleys to retreat and six
+  FrapRay volleys or two torpedoes to destroy.
+- [x] On mission failure, make every surviving pirate disengage from the JB100
+  and circle Starbase 86 without firing.
 
 ## Explicit Mission 001 non-goals
 
