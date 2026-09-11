@@ -4,6 +4,8 @@ signal impact(speed_mps: float, collider: Object)
 signal weapon_fired(weapon_kind: String)
 signal hull_damaged(remaining_integrity: float, weapon_kind: String)
 signal ship_disabled()
+signal shields_changed(remaining_percent: float, source_kind: String)
+signal shields_depleted(source_kind: String)
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 const DISPLAY_SETTINGS_PATH := "user://journeyblaster_display.cfg"
@@ -65,6 +67,9 @@ var proton_torpedoes_fired := 0
 var hull_integrity := 100.0
 var hull_integrity_max := 100.0
 var disabled_in_space := false
+var shield_tracking_enabled := false
+var shield_percent := 100.0
+var shield_max_percent := 100.0
 var mouse_capture_prompt: Label
 
 @onready var frapray_left := get_node_or_null("frap_hardpoint_left") as Node3D
@@ -92,6 +97,11 @@ func _physics_process(delta: float) -> void:
         100.0,
         frapray_power_percent + frapray_recharge_percent_per_second * delta
     )
+    if shield_tracking_enabled and shield_percent < shield_max_percent:
+        shield_percent = minf(
+            shield_max_percent,
+            shield_percent + frapray_recharge_percent_per_second * delta
+        )
     frapray_cooldown_remaining = maxf(0.0, frapray_cooldown_remaining - delta)
     torpedo_cooldown_remaining = maxf(0.0, torpedo_cooldown_remaining - delta)
     if torpedo_charging:
@@ -205,6 +215,8 @@ func _unhandled_input(event: InputEvent) -> void:
                 set_throttle_preset(0.80)
             KEY_5:
                 set_throttle_preset(1.00)
+            KEY_QUOTELEFT:
+                set_throttle_preset(-0.25)
             KEY_L:
                 course_lock = not course_lock
             KEY_ESCAPE:
@@ -654,6 +666,10 @@ func apply_weapon_hit(
 ) -> void:
     if disabled_in_space:
         return
+    if shield_tracking_enabled:
+        var shield_damage := 25.0 if weapon_kind == "pirate_torpedo" else 10.0
+        apply_shield_damage(shield_damage, weapon_kind)
+        return
     hull_integrity = maxf(0.0, hull_integrity - damage)
     hull_damaged.emit(hull_integrity, weapon_kind)
     if hull_integrity <= 0.0:
@@ -676,7 +692,27 @@ func dead_stop() -> void:
 func set_throttle_preset(value: float) -> void:
     if not controls_enabled or disabled_in_space:
         return
-    throttle = clampf(value, 0.0, 1.0)
+    throttle = clampf(value, -0.25, 1.0)
+
+
+func enable_shield_tracking() -> void:
+    shield_tracking_enabled = true
+    shield_percent = shield_max_percent
+    shields_changed.emit(shield_percent, "reset")
+
+
+func apply_shield_damage(amount: float, source_kind: String) -> void:
+    if not shield_tracking_enabled or amount <= 0.0:
+        return
+    var previous := shield_percent
+    shield_percent = maxf(0.0, shield_percent - amount)
+    shields_changed.emit(shield_percent, source_kind)
+    if previous > 0.0 and shield_percent <= 0.0:
+        shields_depleted.emit(source_kind)
+
+
+func shield_level_percent() -> int:
+    return roundi(shield_percent)
 
 
 func _key_axis(negative_key: Key, positive_key: Key) -> float:

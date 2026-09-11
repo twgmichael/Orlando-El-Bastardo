@@ -18,6 +18,10 @@ const RUN_WAYPOINT_RADIUS_M := 18.0
 const RUN_FIRE_RANGE_M := 168.0
 const FORWARD_FIRE_CONE_DEG := 3.0
 const STARBASE_KEEP_OUT_RADIUS_M := 185.0
+const REAR_TORPEDO_CONE_DEG := 10.0
+const REAR_TORPEDO_MIN_RANGE_M := 35.0
+const REAR_TORPEDO_MAX_RANGE_M := 650.0
+const REAR_TORPEDO_LOCK_TIME_S := 2.0
 
 var runtime: Node3D
 var player: CharacterBody3D
@@ -51,6 +55,9 @@ var run_strafe_direction := Vector3.FORWARD
 var run_shot_fired := false
 var completed_attack_runs := 0
 var defense_evading := false
+var torpedoes_remaining := 3
+var rear_torpedo_lock_time := 0.0
+var forward_torpedo_lock_time := 0.0
 
 
 func _ready() -> void:
@@ -103,6 +110,7 @@ func randomize_target_order(random: RandomNumberGenerator) -> void:
 func _physics_process(delta: float) -> void:
     if destroyed or not ai_enabled:
         return
+    _update_pursuit_torpedoes(delta)
     if behavior in ["RETREAT", "DRIVEN_OFF"]:
         _advance_retreat(delta)
         return
@@ -172,6 +180,51 @@ func _physics_process(delta: float) -> void:
         if runtime.fire_pirate_weapon(self, attack_target):
             run_shot_fired = true
             _begin_post_fire_evasion()
+
+
+func _update_pursuit_torpedoes(delta: float) -> void:
+    if (
+        torpedoes_remaining <= 0
+        or runtime.mission_state != "DEFEND"
+        or runtime.is_player_in_safe_hangar()
+        or player.disabled_in_space
+    ):
+        rear_torpedo_lock_time = 0.0
+        forward_torpedo_lock_time = 0.0
+        return
+    var to_player := player.global_position - global_position
+    var player_range := to_player.length()
+    var in_range: bool = (
+        player_range >= REAR_TORPEDO_MIN_RANGE_M
+        and player_range <= REAR_TORPEDO_MAX_RANGE_M
+    )
+    var to_player_direction := to_player.normalized()
+    var rear_alignment := global_basis.z.normalized().dot(to_player_direction)
+    var forward_alignment := (-global_basis.z).normalized().dot(to_player_direction)
+    var alignment_threshold := cos(deg_to_rad(REAR_TORPEDO_CONE_DEG))
+    rear_torpedo_lock_time = (
+        rear_torpedo_lock_time + delta
+        if in_range and rear_alignment >= alignment_threshold
+        else maxf(0.0, rear_torpedo_lock_time - delta * 1.5)
+    )
+    forward_torpedo_lock_time = (
+        forward_torpedo_lock_time + delta
+        if in_range and forward_alignment >= alignment_threshold
+        else maxf(0.0, forward_torpedo_lock_time - delta * 1.5)
+    )
+    if rear_torpedo_lock_time >= REAR_TORPEDO_LOCK_TIME_S:
+        if runtime.fire_pirate_torpedo(self, global_basis.z.normalized()):
+            rear_torpedo_lock_time = 0.0
+            forward_torpedo_lock_time = 0.0
+    elif forward_torpedo_lock_time >= REAR_TORPEDO_LOCK_TIME_S:
+        if runtime.fire_pirate_torpedo(self, -global_basis.z.normalized()):
+            rear_torpedo_lock_time = 0.0
+            forward_torpedo_lock_time = 0.0
+
+
+func _update_rear_torpedo(delta: float) -> void:
+    # Compatibility entry point retained for focused runtime tests.
+    _update_pursuit_torpedoes(delta)
 
 
 func _current_attack_position() -> Vector3:

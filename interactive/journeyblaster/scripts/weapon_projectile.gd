@@ -10,6 +10,7 @@ var shooter_rid: RID
 var additional_exclusions: Array[RID] = []
 var vapor_clock := 0.0
 var acquired_target: Node3D
+var vapor_puffs: Array[MeshInstance3D] = []
 
 
 func configure(
@@ -39,6 +40,11 @@ func _ready() -> void:
         lifetime_s = 12.0
         _build_torpedo_visual()
         _spawn_vapor_puff()
+    elif weapon_kind == "pirate_torpedo":
+        name = "PirateRearTorpedo"
+        lifetime_s = 6.0
+        _build_pirate_torpedo_visual()
+        _spawn_vapor_puff()
     elif weapon_kind == "starbase_plasma":
         name = "StarbaseDefenseBolt"
         _build_colored_bolt(
@@ -61,6 +67,15 @@ func _physics_process(delta: float) -> void:
         and is_instance_valid(acquired_target)
         and acquired_target.visible
     ):
+        if (
+            acquired_target.is_in_group("mission_003_pirate")
+            and bool(acquired_target.get("destroyed"))
+        ):
+            _finish_impact(null, global_position)
+            return
+        if global_position.distance_to(acquired_target.global_position) <= 2.8:
+            _finish_impact(acquired_target, acquired_target.global_position)
+            return
         var target_direction := (
             acquired_target.global_position - global_position
         ).normalized()
@@ -84,7 +99,7 @@ func _physics_process(delta: float) -> void:
         return
     global_position = finish
     lifetime_s -= delta
-    if weapon_kind == "proton_torpedo":
+    if weapon_kind in ["proton_torpedo", "pirate_torpedo"]:
         vapor_clock -= delta
         if vapor_clock <= 0.0:
             vapor_clock = 0.045
@@ -94,12 +109,17 @@ func _physics_process(delta: float) -> void:
 
 
 func _finish_impact(collider: Object, impact_position: Vector3) -> void:
-    if weapon_kind == "proton_torpedo":
+    if weapon_kind in ["proton_torpedo", "pirate_torpedo"]:
         # Hide the projectile immediately; queue_free() is deferred until the
         # end of the frame and otherwise leaves a frozen blue core at impact.
         visible = false
         set_physics_process(false)
+        for puff in vapor_puffs:
+            if is_instance_valid(puff):
+                puff.queue_free()
+        vapor_puffs.clear()
         CombatEffects.spawn_torpedo_impact_flash(get_parent(), impact_position)
+        CombatEffects.spawn_dust_cloud(get_parent(), impact_position, 0.84, 10)
     if collider and collider.has_method("apply_weapon_hit"):
         collider.apply_weapon_hit(
             damage,
@@ -181,6 +201,31 @@ func _build_torpedo_visual() -> void:
     add_child(light)
 
 
+func _build_pirate_torpedo_visual() -> void:
+    var core := MeshInstance3D.new()
+    core.name = "RedRearTorpedoCore"
+    var mesh := SphereMesh.new()
+    mesh.radius = 0.34
+    mesh.height = 0.68
+    mesh.radial_segments = 10
+    mesh.rings = 5
+    var material := StandardMaterial3D.new()
+    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    material.albedo_color = Color(1.0, 0.12, 0.035)
+    material.emission_enabled = true
+    material.emission = Color(1.0, 0.025, 0.008)
+    material.emission_energy_multiplier = 9.0
+    mesh.material = material
+    core.mesh = mesh
+    add_child(core)
+    var light := OmniLight3D.new()
+    light.name = "RedRearTorpedoGlow"
+    light.light_color = Color(1.0, 0.08, 0.025)
+    light.light_energy = 5.0
+    light.omni_range = 9.0
+    add_child(light)
+
+
 func _spawn_vapor_puff() -> void:
     if not is_inside_tree():
         return
@@ -201,6 +246,7 @@ func _spawn_vapor_puff() -> void:
     mesh.material = material
     puff.mesh = mesh
     get_parent().add_child(puff)
+    vapor_puffs.append(puff)
     puff.global_position = global_position + global_basis.z * 0.34
     puff.scale = Vector3.ONE * 0.55
     var tween := puff.create_tween().set_parallel(true)

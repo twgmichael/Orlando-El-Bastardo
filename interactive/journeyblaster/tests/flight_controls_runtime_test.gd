@@ -108,6 +108,13 @@ func _run() -> void:
         if not is_equal_approx(player.throttle, preset):
             fail("numeric thrust preset did not set the requested throttle")
             return
+    var reverse_event := InputEventKey.new()
+    reverse_event.physical_keycode = KEY_QUOTELEFT
+    reverse_event.pressed = true
+    player._unhandled_input(reverse_event)
+    if not is_equal_approx(player.throttle, -0.25):
+        fail("backtick did not set fixed negative twenty-five percent thrust")
+        return
 
     var chair := player.find_child("SeatPivot", true, false)
     chair.snap_to_preset(0)
@@ -146,6 +153,25 @@ func _run() -> void:
     player.controls_enabled = true
     if not is_equal_approx(player.frapray_power_percent, 92.0):
         fail("FrapRay power did not recharge at two percent per second")
+        return
+    player.enable_shield_tracking()
+    player.apply_weapon_hit(
+        10.0, "pirate_plasma", player.global_position, Vector3.FORWARD
+    )
+    player.apply_weapon_hit(
+        10.0, "pirate_torpedo", player.global_position, Vector3.FORWARD
+    )
+    if (
+        not is_equal_approx(player.shield_percent, 65.0)
+        or not is_equal_approx(player.hull_integrity, 100.0)
+    ):
+        fail("active shields did not absorb plasma and pirate-torpedo damage")
+        return
+    player.controls_enabled = false
+    player._physics_process(1.0)
+    player.controls_enabled = true
+    if not is_equal_approx(player.shield_percent, 67.0):
+        fail("shields did not recharge at the FrapRay two-percent rate")
         return
 
     player.torpedo_cooldown_remaining = 0.0
@@ -212,6 +238,7 @@ func _run() -> void:
         fail("released proton torpedo did not retain its acquired target")
         return
     var impact_flashes_before := get_nodes_in_group("torpedo_impact_flash").size()
+    var damage_clouds_before := get_nodes_in_group("combat_dust_cloud").size()
     var launched_torpedo := launched_torpedoes[-1] as Node3D
     launched_torpedo.call(
         "_finish_impact", null, launched_torpedo.global_position
@@ -221,8 +248,18 @@ func _run() -> void:
         or not launched_torpedo.is_queued_for_deletion()
         or get_nodes_in_group("torpedo_impact_flash").size()
         != impact_flashes_before + 1
+        or get_nodes_in_group("combat_dust_cloud").size()
+        != damage_clouds_before + 1
+        or not launched_torpedo.vapor_puffs.is_empty()
     ):
         fail("torpedo impact did not flash and remove its projectile immediately")
+        return
+    var impact_flash := get_nodes_in_group("torpedo_impact_flash")[-1] as Node3D
+    var impact_light := impact_flash.get_node_or_null(
+        "ImpactBurstLight"
+    ) as OmniLight3D
+    if impact_light == null or impact_light.light_energy < 70.0:
+        fail("torpedo impact flash was not enlarged and brightened")
         return
 
     if player.mouse_capture_prompt == null:

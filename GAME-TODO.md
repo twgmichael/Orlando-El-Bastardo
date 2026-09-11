@@ -217,9 +217,13 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
 - [x] Restrict pirate weapons to fixed forward fire: flyers must make a
   nose-on station approach, align within three degrees, fire along their
   actual forward axis, and then break into the evasive portion of the pass.
+- [x] Give each pirate flyer three torpedoes; each may launch straight forward
+  or aft only at JB100 after a two-second alignment.
 - [x] Keep every pirate outside a conservative 185 m Starbase collision
   envelope and route post-shot egress laterally around the station rather than
   through its core, hangar supports, or structural struts.
+- [x] Add dedicated top and bottom Starbase weapon arcs, linked to the existing
+  damageable weapon systems, to punish polar loitering dead zones.
 - [x] Let one objective-complete flyer attack the JB100 only while all three
   pirates remain combat-capable; below three, return every survivor to station
   attack, with the final pirate making accelerated strafing runs.
@@ -233,8 +237,10 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   at 6,000 m while keeping retreat speed pursuable.
 - [x] Scale station-weapon effectiveness with health and amplify weapon/hangar
   damage for each disabled shield generator.
-- [x] Reduce JB100 thrust by 10 percent per hostile or friendly hit until it is
-  dead in space.
+- [x] Track live JB100 shields: plasma costs 10%, pirate torpedoes cost 25%,
+  flyer/starbase collisions cost 50%, recharge is 2%/s, and zero shields fails
+  the mission while preserving post-failure flight.
+- [x] Map backtick to a fixed 25-percent reverse-thrust preset.
 - [x] Preserve the established HUD, controls, weapon reticles, safe-hangar,
   post-failure free-flight, and `R` restart conventions.
 - [x] Add end-to-end automated coverage for hero assets, hangar launch, hidden
@@ -304,10 +310,16 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   target leaves reliable lock range, then restore their size when it returns.
 - [x] On torpedo impact, hide and remove the projectile immediately and replace
   its endpoint with a brief, intense blue-white flash.
+- [x] Add torpedo proximity cleanup for disabled targets, triple the impact
+  flash's size and brightness, and double the accompanying damage cloud.
 - [x] Persistently acquire a target near the torpedo reticle, snap the lock
   marker to it, and give the launched torpedo fast, long-lived homing pursuit.
 - [x] Add right-screen reports for shield, weapon, and hangar damage plus
   pirate retreats and destruction.
+- [x] Replace the overwriteable report with a same-frame three-event station
+  alert queue covering actual hits, system disablement, retreats, and kills.
+- [x] Compact and clip the right-screen alert feed so its three newest events
+  remain inside the cockpit display bezel.
 - [x] Color hostile Senso-Globe contacts red and friendly contacts blue.
 - [x] Add an amber Senso-Globe arrow projected along the JB100's local forward
   axis and label it `F`.

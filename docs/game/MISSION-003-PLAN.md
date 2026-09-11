@@ -147,6 +147,12 @@ its hull: it must fly a nose-on approach, bring the target within a three-degree
 forward firing cone, launch the bolt along its actual forward axis, and only
 then break sideways into the evasive portion of its pass.
 
+Each pirate flyer carries three torpedoes and can launch them straight forward
+or backward, but only at the JB100. A launch requires the JB100 to remain
+between 35 m and 650 m inside a narrow ten-degree fore or aft corridor for two
+seconds. Pirate torpedoes travel at 190 m/s without guidance, so breaking
+off-axis defeats them; prolonged nose-on or tail-on pursuit is dangerous.
+
 Pirate navigation treats Starbase 86 as a conservative 185 m spherical
 keep-out volume enclosing its core, hangar supports, and structural struts.
 Attackers fire before reaching that envelope, then take an exterior lateral
@@ -204,7 +210,7 @@ Recommended success condition:
 Confirmed failure conditions:
 
 - all nine starbase damage targets are disabled
-- the JB100 reaches zero hull/thrust points
+- the JB100 reaches zero shields
 
 Failure preserves the current battle and free-flight controls. If the station
 is lost, all surviving attackers turn on the JB100. `R` restarts the demo.
@@ -270,10 +276,14 @@ steering response into their current attack run without abandoning the run.
 
 The large floating telemetry panels are replaced in Mission 003 by overlays
 fitted to the JB100's three modeled cockpit screens. The left screen presents
-PWR, THR, SHD, and WPN bars. PWR and SHD begin at 100%, THR follows commanded
+PWR, THR, SHD, and WPN bars. PWR begins at 100%, THR follows commanded
 throttle, and WPN follows a 100% FrapRay reserve that spends 10% per paired
 volley and recharges at 2% per second; a right-aligned TPD counter starts at
-five. The middle screen presents a primitive 1,000-meter XYZ Senso-Globe with
+five. SHD reports the JB100's live shield reserve: station or pirate plasma
+costs 10%, a pirate torpedo costs 25%, and colliding with a flyer or the
+starbase costs 50%. Shields recharge at the same 2% per second as WPN, and
+reaching zero fails the mission. The middle screen presents a primitive
+1,000-meter XYZ Senso-Globe with
 hostiles red and friendlies blue, and the right screen carries mission
 briefing, state, and current objective text. All display text is uppercase and
 green on black; only weapon targeting marks remain projected into the forward
@@ -304,7 +314,9 @@ it approaches and passes the 1,000 m reliable-lock boundary, then grow back to
 full size when the target returns safely within range.
 On impact, the torpedo core disappears immediately and produces a bright,
 blue-white quarter-second flash; no projectile mesh remains parked at the hit
-point.
+point. A proximity cleanup also detonates JB100 torpedoes that reach an already
+destroyed or collision-disabled target. The flash is three times larger and
+brighter than the initial effect, and its damage cloud is twice as large.
 Mouse steering now uses captured relative motion to push a bounded 180-pixel
 virtual stick. A 6% dead zone and 2.2 response exponent provide careful
 long-range aiming; a 200 ms spring return neutralizes the stick when motion
@@ -317,9 +329,14 @@ FrapRay bolt is tracked as one hit: three bolt impacts drive off a pirate, six
 destroy it, one torpedo plus three bolt hits destroys it, and two torpedoes
 destroy it.
 
-The right cockpit screen maintains a live Starbase 86 report line. Actual
-pirate hits produce category-specific damage reports for shields, weapons, or
-hangars; perimeter crossings and flyer destruction report updated counts. The
+The right cockpit screen maintains an immediate three-event station alert
+queue instead of one overwriteable report line. Actual pirate impacts post
+category-specific shield, weapon, or hangar damage alerts in the same frame;
+system disablement, perimeter crossings, and flyer destruction post distinct
+events without erasing the preceding alert. The cockpit presentation removes
+the repeated `STATION REPORTS` prefix, uses compact type, and clips to the
+physical display bezel so the three newest alerts never spill into the cockpit.
+The
 Senso-Globe renders pirate contacts red and Starbase 86 and friendly craft
 blue. An unlabeled amber vector crosses the globe center collinearly with its
 drawn Z axis; its arrowhead indicates positive Z without pointing at the axis
@@ -328,3 +345,6 @@ label.
 After Mission 003 fails for any reason, every surviving pirate disengages from
 the JB100, ceases firing, and circles Starbase 86 indefinitely. The player can
 continue flying or watching the aftermath until restarting with `R`.
+
+Backtick (`` ` ``) selects a fixed 25-percent reverse-thrust preset. This sits
+alongside the existing `1`–`5` forward presets and `Tab` all-stop command.

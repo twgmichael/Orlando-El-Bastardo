@@ -45,7 +45,8 @@ chair views, hull-mounted Senso-Globe sensing, probe identification and data
 download, physical towing, return validation, and hyperspace completion.
 
 Controls are shown in the HUD. The primary keyboard bindings are `W/S`
-variable throttle, `1`–`5` fixed 10/30/50/80/100-percent thrust, `A/D` or
+variable throttle, backtick (`` ` ``) fixed 25-percent reverse thrust, `1`–`5`
+fixed 10/30/50/80/100-percent forward thrust, `A/D` or
 left/right arrows to turn, up/down arrows to pitch, `Q/E` roll, `Z/C` strafe,
 `R/F` lift, `G` interact, `X` recenter mouse flight, `Tab` all stop, `Esc`
 release mouse, `Control-Command-F` fullscreen, `-`/`+` chair-view cycling, middle-mouse free
@@ -126,9 +127,15 @@ to launch a proton torpedo, and use `\` for the actual weapon-path HUD.
 
 Three Ellipso pirate flyers attack nine hidden station damage locations. Their
 objectives, target order, and health are not exposed. Three FrapRay shots drive
-a flyer into a committed retreat; six FrapRay volleys or two torpedoes destroy
-it. Starbase defensive bolts can hit the pirates
-or the JB100; each hit on the JB100 removes 10 of its 100 thrust points.
+a flyer into a committed retreat; six individual bolt hits, one torpedo plus
+three bolt hits, or two torpedoes destroy it. Starbase defensive bolts can hit
+the pirates or the JB100.
+
+The JB100 begins with 100-percent shields. Station and pirate plasma hits remove
+10 percent, pirate torpedoes remove 25 percent, and collisions with a flyer or
+Starbase 86 remove 50 percent. Shields recharge at two percent per second, the
+same rate as FrapRay power. Reaching zero shields fails the mission while
+preserving free flight; the left cockpit screen reports the live SHD value.
 
 The right cockpit screen reports live shield, weapon, and hangar damage plus
 pirate retreats and destruction. The Senso-Globe shows pirate flyers in red
@@ -136,6 +143,6 @@ and Starbase 86 and other friendly contacts in blue.
 
 Destroy all three flyers or drive each beyond 5,000 m to complete the mission.
 The open hangar is safe from deliberate pirate pursuit. Losing all nine
-station targets or all JB100 thrust fails the mission without ending the
+station targets or all JB100 shields fails the mission without ending the
 current scene; surviving pirates disengage and circle Starbase 86 while the
 pilot remains free to fly or observe. `R` restarts.

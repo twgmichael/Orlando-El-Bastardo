@@ -24,6 +24,7 @@ const HYPERSPACE_RANGE_M := 6000.0
 const PLAYER_ATTACK_MIN_ACTIVE_PIRATES := 3
 const LAST_PIRATE_STATION_AGGRESSION := 1.6
 const STATION_FRIENDLY_FIRE_ODDS := 20
+const STATION_ALERT_HISTORY_SIZE := 3
 
 const OBJECTIVES := {
     "BRIEFING": "Launch from Starbase 86 and repel three attacking pirate flyers.",
@@ -40,10 +41,12 @@ var docked_starfighter: StaticBody3D
 var station_targets: Array[StaticBody3D] = []
 var targets_by_category: Dictionary = {}
 var pirates: Array[AnimatableBody3D] = []
+var station_polar_weapon_emitters: Array[Node3D] = []
 var player_attacker: AnimatableBody3D
 var station_weapon_timers: Dictionary = {}
 var station_shots_fired := 0
 var station_friendly_fire_shots := 0
+var pirate_torpedoes_fired := 0
 var random := RandomNumberGenerator.new()
 var weapon_aim_enabled := true
 var open_hangar_center := OPEN_HANGAR_CENTER_FALLBACK
@@ -75,13 +78,15 @@ var systems_value_labels: Dictionary = {}
 var systems_torpedo_label: Label
 var sensor_globe: Control
 var mission_screen_label: Label
-var station_report := "STARBASE 86 REPORTS ALL SYSTEMS OPERATIONAL."
+var station_report := "STATION REPORTS ALL SYSTEMS OPERATIONAL."
+var station_alerts: Array[String] = ["STATION REPORTS ALL SYSTEMS OPERATIONAL."]
 var starfield: MultiMeshInstance3D
 var solar_sun_disk: MeshInstance3D
 var hangar_steady_lights: Array[OmniLight3D] = []
 var hangar_emergency_lights: Array[OmniLight3D] = []
 var hangar_emergency_materials: Array[StandardMaterial3D] = []
 var hangar_strobe_clock := 0.0
+var player_collision_damage_cooldown_s := 0.0
 
 
 func _ready() -> void:
@@ -95,16 +100,23 @@ func _ready() -> void:
     _spawn_docked_starfighter()
     _build_open_hangar_lighting()
     _build_station_targets()
+    _build_station_polar_weapon_arcs()
     _position_player_in_open_hangar()
     _spawn_pirates()
     _build_hud()
+    player.enable_shield_tracking()
     player.ship_disabled.connect(_on_player_disabled)
+    player.shields_depleted.connect(_on_player_shields_depleted)
+    player.impact.connect(_on_player_impact)
     _set_state("BRIEFING")
     begin_mission()
     print("MISSION-003-RUNTIME-OK: Starbase Defense")
 
 
 func _process(delta: float) -> void:
+    player_collision_damage_cooldown_s = maxf(
+        0.0, player_collision_damage_cooldown_s - delta
+    )
     _update_space_backdrop()
     _update_hangar_emergency_lights(delta)
     if mission_state != "BRIEFING":
@@ -130,7 +142,7 @@ func begin_mission() -> void:
     _set_state("DEFEND")
     for pirate in pirates:
         pirate.ai_enabled = true
-    for weapon in targets_by_category.get("weapon", []):
+    for weapon in _station_defense_mounts():
         station_weapon_timers[weapon.get_instance_id()] = random.randf_range(0.55, 1.1)
 
 
@@ -453,6 +465,33 @@ func _build_station_targets() -> void:
                 station_weapon_timers[target.get_instance_id()] = random.randf_range(2.0, 5.0)
 
 
+func _build_station_polar_weapon_arcs() -> void:
+    var polar_mounts := [
+        {
+            "name": "TopPolarDefenseEmitter",
+            "position": STARBASE_CENTER + Vector3(0.0, 118.0, 0.0),
+            "arc": "top",
+            "system": targets_by_category["weapon"][0],
+        },
+        {
+            "name": "BottomPolarDefenseEmitter",
+            "position": STARBASE_CENTER + Vector3(0.0, -118.0, 0.0),
+            "arc": "bottom",
+            "system": targets_by_category["weapon"][2],
+        },
+    ]
+    for definition in polar_mounts:
+        var emitter := Node3D.new()
+        emitter.name = definition["name"]
+        emitter.set_meta("polar_arc", definition["arc"])
+        emitter.set_meta("linked_weapon_system", definition["system"])
+        emitter.add_to_group("mission_003_polar_weapon_arc")
+        add_child(emitter)
+        emitter.global_position = definition["position"]
+        station_polar_weapon_emitters.append(emitter)
+        station_weapon_timers[emitter.get_instance_id()] = random.randf_range(1.0, 2.2)
+
+
 func _position_player_in_open_hangar() -> void:
     player.global_position = player_hangar_start
     player.look_at(open_hangar_exit, Vector3.UP)
@@ -527,10 +566,10 @@ func _on_pirate_destroyed(pirate: AnimatableBody3D) -> void:
         func(candidate: AnimatableBody3D) -> bool:
             return candidate.destroyed
     ).size()
-    station_report = "STARBASE 86 REPORTS %d PIRATE %s DESTROYED." % [
+    _post_station_alert("STATION REPORTS %d PIRATE %s DESTROYED." % [
         destroyed_count,
         "FLYER" if destroyed_count == 1 else "FLYERS",
-    ]
+    ])
     _evaluate_outcome()
 
 
@@ -539,11 +578,11 @@ func _on_defense_perimeter_crossed(_pirate: AnimatableBody3D) -> void:
         func(candidate: AnimatableBody3D) -> bool:
             return candidate.perimeter_crossed
     ).size()
-    station_report = "STARBASE 86 REPORTS %d PIRATE %s %s RETREATED." % [
+    _post_station_alert("STATION REPORTS %d PIRATE %s %s RETREATED." % [
         retreat_count,
         "FLYER" if retreat_count == 1 else "FLYERS",
         "HAS" if retreat_count == 1 else "HAVE",
-    ]
+    ])
     _evaluate_outcome()
 
 
@@ -553,16 +592,51 @@ func _on_station_target_damaged(target: StaticBody3D, _remaining_health: float) 
         "weapon": "WEAPONS",
         "hangar": "HANGARS",
     }.get(target.system_category, target.system_category.to_upper()))
-    station_report = "STARBASE 86 REPORTS DAMAGE TO %s." % system_name
+    _post_station_alert("STATION REPORTS DAMAGE TO %s." % system_name)
 
 
-func _on_station_target_disabled(_target: StaticBody3D) -> void:
+func _on_station_target_disabled(target: StaticBody3D) -> void:
+    var system_name: String = str({
+        "shield": "SHIELD",
+        "weapon": "WEAPON",
+        "hangar": "HANGAR",
+    }.get(target.system_category, target.system_category.to_upper()))
+    _post_station_alert("STATION REPORTS %s SYSTEM DISABLED." % system_name)
     _evaluate_outcome()
+
+
+func _post_station_alert(message: String) -> void:
+    station_report = message
+    station_alerts.push_front(message)
+    if station_alerts.size() > STATION_ALERT_HISTORY_SIZE:
+        station_alerts.resize(STATION_ALERT_HISTORY_SIZE)
+    _refresh_mission_screen()
 
 
 func _on_player_disabled() -> void:
     if mission_state != "COMPLETE":
         _set_state("FAILED")
+
+
+func _on_player_shields_depleted(_source_kind: String) -> void:
+    if mission_state != "COMPLETE":
+        _set_state("FAILED")
+
+
+func _on_player_impact(_speed_mps: float, collider: Object) -> void:
+    if player_collision_damage_cooldown_s > 0.0 or collider == null:
+        return
+    if not collider is Node:
+        return
+    var collider_node := collider as Node
+    if not (
+        collider_node.is_in_group("mission_003_pirate")
+        or collider_node.is_in_group("mission_003_starbase")
+        or collider_node.is_in_group("mission_003_station_target")
+    ):
+        return
+    player_collision_damage_cooldown_s = 0.8
+    player.apply_shield_damage(50.0, "collision")
 
 
 func _maintain_player_attacker() -> void:
@@ -697,6 +771,39 @@ func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> bool:
     return true
 
 
+func fire_pirate_torpedo(
+    pirate: AnimatableBody3D, launch_direction: Vector3
+) -> bool:
+    if (
+        mission_state != "DEFEND"
+        or pirate.destroyed
+        or pirate.torpedoes_remaining <= 0
+    ):
+        return false
+    var direction := launch_direction.normalized()
+    var exclusions: Array[RID] = [starbase.get_rid()]
+    for other in pirates:
+        exclusions.append(other.get_rid())
+    for station_target in station_targets:
+        exclusions.append(station_target.get_rid())
+    _spawn_combat_projectile(
+        "pirate_torpedo",
+        pirate.global_position + direction * 6.0,
+        direction,
+        190.0,
+        10.0,
+        pirate.get_rid(),
+        exclusions
+    )
+    pirate.torpedoes_remaining -= 1
+    pirate_torpedoes_fired += 1
+    return true
+
+
+func fire_pirate_rear_torpedo(pirate: AnimatableBody3D) -> bool:
+    return fire_pirate_torpedo(pirate, pirate.global_basis.z.normalized())
+
+
 func _pirate_station_damage(target: Node3D) -> float:
     if target.system_category == "shield":
         return 1.0
@@ -717,10 +824,11 @@ func _update_station_defense(delta: float) -> void:
     var possible_targets := _active_pirates()
     if possible_targets.is_empty():
         return
-    for weapon in targets_by_category.get("weapon", []):
-        if weapon.disabled:
+    for weapon_mount in _station_defense_mounts():
+        var weapon_system := _weapon_system_for_mount(weapon_mount)
+        if weapon_system == null or weapon_system.disabled:
             continue
-        var identifier: int = weapon.get_instance_id()
+        var identifier: int = weapon_mount.get_instance_id()
         var timer: float = station_weapon_timers.get(identifier, 0.0) - delta
         if timer > 0.0:
             station_weapon_timers[identifier] = timer
@@ -735,37 +843,74 @@ func _update_station_defense(delta: float) -> void:
             target = player
             station_friendly_fire_shots += 1
         else:
-            target = possible_targets[
-                random.randi_range(0, possible_targets.size() - 1)
+            var arc_targets := _targets_for_weapon_arc(
+                weapon_mount, possible_targets
+            )
+            target = arc_targets[
+                random.randi_range(0, arc_targets.size() - 1)
             ]
-        var target_range: float = weapon.global_position.distance_to(
+        var target_range: float = weapon_mount.global_position.distance_to(
             target.global_position
         )
         var aim_spread: float = _station_defense_spread_m(
-            target_range, weapon.effectiveness()
+            target_range, weapon_system.effectiveness()
         )
         var aim_error := Vector3(
             random.randf_range(-aim_spread, aim_spread),
             random.randf_range(-aim_spread * 0.68, aim_spread * 0.68),
             random.randf_range(-aim_spread, aim_spread)
         )
-        var direction: Vector3 = target.global_position + aim_error - weapon.global_position
+        var direction: Vector3 = (
+            target.global_position + aim_error - weapon_mount.global_position
+        )
         var exclusions: Array[RID] = [starbase.get_rid()]
         for station_target in station_targets:
             exclusions.append(station_target.get_rid())
         _spawn_combat_projectile(
             "starbase_plasma",
-            weapon.global_position + direction.normalized() * 7.0,
+            weapon_mount.global_position + direction.normalized() * 7.0,
             direction.normalized(),
             155.0,
             10.0 if friendly_fire else 0.8,
-            weapon.get_rid(),
+            weapon_system.get_rid(),
             exclusions
         )
         station_shots_fired += 1
         station_weapon_timers[identifier] = lerpf(
-            12.0, 5.2, weapon.effectiveness()
+            12.0, 5.2, weapon_system.effectiveness()
         ) + random.randf_range(0.0, 2.0)
+
+
+func _station_defense_mounts() -> Array[Node3D]:
+    var mounts: Array[Node3D] = []
+    for weapon in targets_by_category.get("weapon", []):
+        mounts.append(weapon)
+    mounts.append_array(station_polar_weapon_emitters)
+    return mounts
+
+
+func _weapon_system_for_mount(mount: Node3D) -> StaticBody3D:
+    if mount.has_meta("linked_weapon_system"):
+        var linked_system: Variant = mount.get_meta("linked_weapon_system")
+        if linked_system is StaticBody3D:
+            return linked_system as StaticBody3D
+    return mount as StaticBody3D
+
+
+func _targets_for_weapon_arc(
+    mount: Node3D, possible_targets: Array[AnimatableBody3D]
+) -> Array[AnimatableBody3D]:
+    var arc_name := str(mount.get_meta("polar_arc", ""))
+    if arc_name.is_empty():
+        return possible_targets
+    var arc_targets: Array[AnimatableBody3D] = []
+    for pirate in possible_targets:
+        var above_center := pirate.global_position.y >= STARBASE_CENTER.y
+        if (arc_name == "top" and above_center) or (
+            arc_name == "bottom" and not above_center
+        ):
+            arc_targets.append(pirate)
+    return possible_targets if arc_targets.is_empty() else arc_targets
 
 
 func _station_defense_spread_m(target_range: float, effectiveness: float) -> float:
@@ -905,10 +1050,13 @@ func _build_mission_screen() -> void:
     var screen := _build_instrument_screen(
         "RightMissionScreen", Vector2(754.0, 564.0), Vector2(198.0, 144.0)
     )
+    screen.clip_contents = true
     mission_screen_label = _build_child_label(
-        screen, Vector2(9.0, 7.0), Vector2(180.0, 130.0), 9, Color(0.22, 1.0, 0.5)
+        screen, Vector2(9.0, 7.0), Vector2(180.0, 130.0), 8, Color(0.22, 1.0, 0.5)
     )
     mission_screen_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    mission_screen_label.clip_text = true
+    mission_screen_label.add_theme_constant_override("line_spacing", -1)
 
 
 func _build_child_label(
@@ -968,22 +1116,33 @@ func _update_hud() -> void:
     if mission_screen_label == null:
         return
     var thrust_percent: int = player.throttle_percent()
+    var shield_percent: int = player.shield_level_percent()
     var frapray_percent: int = floori(player.frapray_power_percent)
     systems_bars["PWR"].value = 100.0
     systems_value_labels["PWR"].text = "PWR: 100%"
     systems_bars["THR"].value = thrust_percent
     systems_value_labels["THR"].text = "THR: %03d%%" % thrust_percent
-    systems_bars["SHD"].value = 100.0
-    systems_value_labels["SHD"].text = "SHD: 100%"
+    systems_bars["SHD"].value = shield_percent
+    systems_value_labels["SHD"].text = "SHD: %03d%%" % shield_percent
     systems_bars["WPN"].value = frapray_percent
     systems_value_labels["WPN"].text = "WPN: %03d%%" % frapray_percent
     systems_torpedo_label.text = "TPD: %d" % player.proton_torpedoes_remaining
-    mission_screen_label.text = ("MISSION 003 · %s\nOBJECTIVE\n%s\n\nREPORT\n%s" % [
+    _refresh_mission_screen()
+    _update_weapon_aim()
+
+
+func _refresh_mission_screen() -> void:
+    if mission_screen_label == null:
+        return
+    var compact_alerts: Array[String] = []
+    for alert in station_alerts:
+        compact_alerts.append(alert.trim_prefix("STATION REPORTS "))
+    var alert_feed := "\n".join(compact_alerts)
+    mission_screen_label.text = ("MISSION 003 · %s\nOBJECTIVE\n%s\n\nALERTS\n%s" % [
         mission_state,
         OBJECTIVES.get(mission_state, ""),
-        station_report,
+        alert_feed,
     ]).to_upper()
-    _update_weapon_aim()
 
 
 func _sensor_readout() -> String:

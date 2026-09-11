@@ -122,6 +122,15 @@ func _run() -> void:
     if runtime.pirates.size() != 3:
         fail("three pirate flyers were not spawned")
         return
+    if (
+        runtime.station_polar_weapon_emitters.size() != 2
+        or runtime.station_polar_weapon_emitters[0].global_position.y
+        <= runtime.STARBASE_CENTER.y
+        or runtime.station_polar_weapon_emitters[1].global_position.y
+        >= runtime.STARBASE_CENTER.y
+    ):
+        fail("top and bottom Starbase defense arcs are missing")
+        return
     if get_nodes_in_group("mission_003_planet").size() != 1:
         fail("distant planet backdrop is missing")
         return
@@ -212,6 +221,9 @@ func _run() -> void:
     for pirate in runtime.pirates:
         if pirate.get_meta("asset_id", "") != "prop_pirate_flyer_A":
             fail("Mission 003 did not use the registered Ellipso flyer model")
+            return
+        if pirate.torpedoes_remaining != 3:
+            fail("each pirate did not begin with three personal torpedoes")
             return
         if not pirate.ai_enabled:
             fail("pirate AI did not activate immediately on load")
@@ -364,6 +376,61 @@ func _run() -> void:
     ):
         fail("pirate plasma did not leave along the flyer's forward axis")
         return
+    var pursuit_pirate := runtime.pirates[1] as AnimatableBody3D
+    var player_position_before_rear_test: Vector3 = player.global_position
+    var pirate_rear_direction := pursuit_pirate.global_basis.z.normalized()
+    pursuit_pirate.torpedoes_remaining = 3
+    player.global_position = pursuit_pirate.global_position + pirate_rear_direction * 120.0
+    pursuit_pirate.rear_torpedo_lock_time = (
+        pursuit_pirate.REAR_TORPEDO_LOCK_TIME_S - 0.01
+    )
+    var pirate_torpedoes_before: int = runtime.pirate_torpedoes_fired
+    pursuit_pirate.call("_update_rear_torpedo", 0.02)
+    var rear_projectiles := get_nodes_in_group("weapon_projectile").filter(
+        func(projectile: Node) -> bool:
+            return projectile.weapon_kind == "pirate_torpedo"
+    )
+    if (
+        runtime.pirate_torpedoes_fired != pirate_torpedoes_before + 1
+        or pursuit_pirate.torpedoes_remaining != 2
+        or rear_projectiles.is_empty()
+        or rear_projectiles[-1].acquired_target != null
+        or rear_projectiles[-1].travel_velocity.normalized().dot(
+            pirate_rear_direction
+        ) < 0.999
+    ):
+        fail("pirate torpedo did not launch straight aft from the shared magazine")
+        return
+    var pirate_forward_direction := -pursuit_pirate.global_basis.z.normalized()
+    player.global_position = (
+        pursuit_pirate.global_position + pirate_forward_direction * 120.0
+    )
+    pursuit_pirate.forward_torpedo_lock_time = (
+        pursuit_pirate.REAR_TORPEDO_LOCK_TIME_S - 0.01
+    )
+    pursuit_pirate.call("_update_pursuit_torpedoes", 0.02)
+    var pirate_torpedoes := get_nodes_in_group("weapon_projectile").filter(
+        func(projectile: Node) -> bool:
+            return projectile.weapon_kind == "pirate_torpedo"
+    )
+    if (
+        runtime.pirate_torpedoes_fired != pirate_torpedoes_before + 2
+        or pursuit_pirate.torpedoes_remaining != 1
+        or pirate_torpedoes[-1].travel_velocity.normalized().dot(
+            pirate_forward_direction
+        ) < 0.999
+    ):
+        fail("pirate could not fire its unguided torpedo straight forward at JB100")
+        return
+    if (
+        not runtime.fire_pirate_torpedo(pursuit_pirate, pirate_rear_direction)
+        or pursuit_pirate.torpedoes_remaining != 0
+        or runtime.fire_pirate_torpedo(pursuit_pirate, pirate_rear_direction)
+        or runtime.pirates[0].torpedoes_remaining != 3
+    ):
+        fail("pirate did not own exactly three fore/aft torpedoes")
+        return
+    player.global_position = player_position_before_rear_test
     var no_exclusions: Array[RID] = []
     runtime.call(
         "_spawn_combat_projectile",
@@ -383,17 +450,33 @@ func _run() -> void:
     var shield := runtime.targets_by_category["shield"][0] as StaticBody3D
     var weapon := runtime.targets_by_category["weapon"][0] as StaticBody3D
     shield.apply_weapon_hit(1.0, "pirate_plasma", shield.global_position, Vector3.ZERO)
-    if runtime.station_report != "STARBASE 86 REPORTS DAMAGE TO SHIELDS.":
+    if (
+        runtime.station_report != "STATION REPORTS DAMAGE TO SHIELDS."
+        or not runtime.mission_screen_label.text.contains(
+            "DAMAGE TO SHIELDS."
+        )
+    ):
         fail("right cockpit report did not announce live shield damage")
         return
     runtime.call("_on_station_target_damaged", weapon, 2.0)
-    if runtime.station_report != "STARBASE 86 REPORTS DAMAGE TO WEAPONS.":
+    if (
+        runtime.station_report != "STATION REPORTS DAMAGE TO WEAPONS."
+        or not runtime.mission_screen_label.text.contains(
+            "DAMAGE TO WEAPONS."
+        )
+    ):
         fail("right cockpit report did not announce live weapons damage")
         return
     runtime.call(
         "_on_station_target_damaged", runtime.targets_by_category["hangar"][0], 2.0
     )
-    if runtime.station_report != "STARBASE 86 REPORTS DAMAGE TO HANGARS.":
+    if (
+        runtime.station_report != "STATION REPORTS DAMAGE TO HANGARS."
+        or runtime.station_alerts.size() != 3
+        or not runtime.mission_screen_label.text.contains(
+            "DAMAGE TO SHIELDS."
+        )
+    ):
         fail("right cockpit report did not announce live hangar damage")
         return
     if not is_equal_approx(shield.effectiveness(), 2.0 / 3.0):
@@ -424,7 +507,7 @@ func _run() -> void:
     if not retreating.perimeter_crossed:
         fail("a retreating flyer did not count as driven off at 5,000 m")
         return
-    if runtime.station_report != "STARBASE 86 REPORTS 1 PIRATE FLYER HAS RETREATED.":
+    if runtime.station_report != "STATION REPORTS 1 PIRATE FLYER HAS RETREATED.":
         fail("right cockpit report did not announce a pirate retreat")
         return
 
@@ -449,17 +532,48 @@ func _run() -> void:
         fail("two torpedoes and three neutralized flyers did not complete")
         return
 
-    player.apply_weapon_hit(
-        10.0, "starbase_plasma", player.global_position, Vector3.FORWARD
+    runtime.queue_free()
+    await process_frame
+    var shield_runtime := await _spawn_runtime()
+    shield_runtime.begin_mission()
+    for pirate in shield_runtime.pirates:
+        pirate.ai_enabled = false
+    var shield_player := shield_runtime.player as CharacterBody3D
+    shield_player.apply_weapon_hit(
+        1.0, "starbase_plasma", shield_player.global_position, Vector3.FORWARD
+    )
+    shield_player.apply_weapon_hit(
+        1.0, "pirate_torpedo", shield_player.global_position, Vector3.FORWARD
     )
     if (
-        not is_equal_approx(player.hull_integrity, 90.0)
-        or not is_equal_approx(player.thrust_efficiency(), 0.9)
+        not is_equal_approx(shield_player.shield_percent, 65.0)
+        or not is_equal_approx(shield_player.hull_integrity, 100.0)
     ):
-        fail("friendly fire did not remove ten hull and thrust points")
+        fail("JB100 shields did not absorb ten-point plasma and 25-point torpedo hits")
         return
-
-    runtime.queue_free()
+    shield_player.controls_enabled = false
+    shield_player._physics_process(1.0)
+    shield_player.controls_enabled = true
+    if not is_equal_approx(shield_player.shield_percent, 67.0):
+        fail("JB100 shields did not recharge at two percent per second")
+        return
+    shield_player.shield_percent = 100.0
+    shield_runtime.call("_on_player_impact", 20.0, shield_runtime.pirates[0])
+    shield_runtime.call("_on_player_impact", 20.0, shield_runtime.pirates[0])
+    if not is_equal_approx(shield_player.shield_percent, 50.0):
+        fail("pirate collision did not remove 50 shields with impact debounce")
+        return
+    shield_runtime.player_collision_damage_cooldown_s = 0.0
+    shield_runtime.call("_on_player_impact", 20.0, shield_runtime.starbase)
+    shield_runtime.call("_update_hud")
+    if (
+        shield_runtime.current_state() != "FAILED"
+        or not is_zero_approx(shield_player.shield_percent)
+        or shield_runtime.systems_value_labels["SHD"].text != "SHD: 000%"
+    ):
+        fail("total shield loss did not fail Mission 003 and update its SHD display")
+        return
+    shield_runtime.queue_free()
     await process_frame
     var failed_runtime := await _spawn_runtime()
     failed_runtime.begin_mission()
@@ -486,15 +600,6 @@ func _run() -> void:
     ):
         fail("post-failure station circle did not move peacefully around Starbase 86")
         return
-    var failed_player := failed_runtime.player as CharacterBody3D
-    for hit in 10:
-        failed_player.apply_weapon_hit(
-            10.0, "pirate_plasma", failed_player.global_position, Vector3.FORWARD
-        )
-    if not failed_player.disabled_in_space or not is_zero_approx(failed_player.thrust_efficiency()):
-        fail("ten combat hits did not leave the JB100 dead in space")
-        return
-
     print(
         "MISSION-003-RUNTIME-OK: hangar launch + hidden objectives + fuzzy pirates + "
         + "friendly fire + retreat/destruction + station defense"

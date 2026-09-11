@@ -24,7 +24,7 @@ static func spawn_torpedo_impact_flash(
     material.albedo_color = Color(0.82, 0.93, 1.0, 1.0)
     material.emission_enabled = true
     material.emission = Color(0.3, 0.68, 1.0)
-    material.emission_energy_multiplier = 14.0
+    material.emission_energy_multiplier = 42.0
     material.set_flag(BaseMaterial3D.FLAG_DONT_RECEIVE_SHADOWS, true)
     mesh.material = material
     flare.mesh = mesh
@@ -34,13 +34,13 @@ static func spawn_torpedo_impact_flash(
     var light := OmniLight3D.new()
     light.name = "ImpactBurstLight"
     light.light_color = Color(0.62, 0.84, 1.0)
-    light.light_energy = 24.0
-    light.omni_range = 24.0
+    light.light_energy = 72.0
+    light.omni_range = 48.0
     light.shadow_enabled = false
     flash.add_child(light)
 
     var tween := flash.create_tween().set_parallel(true)
-    tween.tween_property(flare, "scale", Vector3.ONE * 3.8, 0.22).set_trans(
+    tween.tween_property(flare, "scale", Vector3.ONE * 11.4, 0.22).set_trans(
         Tween.TRANS_QUAD
     ).set_ease(Tween.EASE_OUT)
     tween.tween_property(flare, "transparency", 1.0, 0.24)

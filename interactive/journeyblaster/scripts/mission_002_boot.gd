@@ -715,7 +715,7 @@ func _build_hud() -> void:
     prompt_label = _build_label(Vector2(viewport_width * 0.5 - 330.0, 638.0), Vector2(660.0, 42.0), 18, Color(1.0, 0.68, 0.22))
     prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var help := _build_label(Vector2(viewport_width - 850.0, 684.0), Vector2(830.0, 25.0), 11, Color(0.68, 0.72, 0.72, 0.86))
-    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X recenter · TAB stop · ESC mouse · ⌃⌘F fullscreen · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
+    help.text = "W/S throttle · ` reverse 25% · arrows/A/D steer · Q/E roll · X recenter · TAB stop · ESC mouse · ⌃⌘F fullscreen · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
     help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
     weapon_aim = Control.new()
