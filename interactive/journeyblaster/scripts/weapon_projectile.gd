@@ -1,5 +1,7 @@
 extends Node3D
 
+const CombatEffects = preload("res://scripts/combat_effects.gd")
+
 var weapon_kind := "frapray"
 var travel_velocity := Vector3.ZERO
 var damage := 1.0
@@ -78,14 +80,7 @@ func _physics_process(delta: float) -> void:
     var result := get_world_3d().direct_space_state.intersect_ray(query)
     if not result.is_empty():
         var collider: Object = result.get("collider")
-        if collider and collider.has_method("apply_weapon_hit"):
-            collider.apply_weapon_hit(
-                damage,
-                weapon_kind,
-                result.get("position", finish),
-                travel_velocity.normalized()
-            )
-        queue_free()
+        _finish_impact(collider, result.get("position", finish))
         return
     global_position = finish
     lifetime_s -= delta
@@ -96,6 +91,23 @@ func _physics_process(delta: float) -> void:
             _spawn_vapor_puff()
     if lifetime_s <= 0.0:
         queue_free()
+
+
+func _finish_impact(collider: Object, impact_position: Vector3) -> void:
+    if weapon_kind == "proton_torpedo":
+        # Hide the projectile immediately; queue_free() is deferred until the
+        # end of the frame and otherwise leaves a frozen blue core at impact.
+        visible = false
+        set_physics_process(false)
+        CombatEffects.spawn_torpedo_impact_flash(get_parent(), impact_position)
+    if collider and collider.has_method("apply_weapon_hit"):
+        collider.apply_weapon_hit(
+            damage,
+            weapon_kind,
+            impact_position,
+            travel_velocity.normalized()
+        )
+    queue_free()
 
 
 func _build_frapray_visual() -> void:

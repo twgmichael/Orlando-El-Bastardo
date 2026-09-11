@@ -140,6 +140,12 @@ func _run() -> void:
         fail("visible sun or camera-relative starfield is missing")
         return
     if (
+        runtime.starfield.cast_shadow
+        != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+    ):
+        fail("starfield geometry still casts shadows inside the backdrop")
+        return
+    if (
         runtime.get_node_or_null("HUD/LeftSystemsScreen") == null
         or runtime.get_node_or_null("HUD/MiddleSensorScreen/SensorGlobe") == null
         or runtime.get_node_or_null("HUD/RightMissionScreen") == null
@@ -225,6 +231,12 @@ func _run() -> void:
     ):
         fail("station defense did not become more accurate at close range")
         return
+    if (
+        runtime.call("_station_defense_spread_m", 30.0, 1.0) >= 0.5
+        or runtime.STATION_FRIENDLY_FIRE_ODDS != 20
+    ):
+        fail("station defense lacks close-range precision or 1-in-20 friendly fire")
+        return
     var categories: Dictionary = {}
     var initial_pirate_positions: Array[Vector3] = []
     for pirate in runtime.pirates:
@@ -246,18 +258,62 @@ func _run() -> void:
         if pirate.attack_run_phase != "INGRESS":
             fail("pirate did not begin by flying to a strafing-run ingress point")
             return
+        var assigned_target := pirate.current_target as Node3D
         var ingress_direction: Vector3 = (
-            pirate.run_fire_point - pirate.run_ingress_point
+            assigned_target.global_position - pirate.run_ingress_point
         ).normalized()
-        var egress_direction: Vector3 = (
-            pirate.run_egress_point - pirate.run_fire_point
+        var target_direction: Vector3 = (
+            assigned_target.global_position - pirate.run_ingress_point
         ).normalized()
-        if ingress_direction.dot(egress_direction) < 0.8:
-            fail("pirate strafing lane did not continue past its target")
+        if ingress_direction.dot(target_direction) < 0.99:
+            fail("pirate attack ingress was not nose-on to its station target")
+            return
+        if (
+            pirate.run_egress_point.distance_to(runtime.STARBASE_CENTER)
+            < pirate.STARBASE_KEEP_OUT_RADIUS_M
+        ):
+            fail("pirate egress waypoint crossed the Starbase keep-out volume")
+            return
+        var clamped_core_point: Vector3 = pirate.call(
+            "_enforce_starbase_keep_out", runtime.STARBASE_CENTER
+        )
+        if (
+            clamped_core_point.distance_to(runtime.STARBASE_CENTER)
+            < pirate.STARBASE_KEEP_OUT_RADIUS_M - 0.01
+        ):
+            fail("pirate movement could enter the Starbase core")
             return
     if categories.size() != 3:
         fail("pirates did not begin with one hidden objective category each")
         return
+
+    var initial_attacker := runtime.pirates[0] as AnimatableBody3D
+    var removed_pirate := runtime.pirates[1] as AnimatableBody3D
+    var second_removed_pirate := runtime.pirates[2] as AnimatableBody3D
+    initial_attacker.completed_primary_objective = true
+    runtime.call("_on_pirate_objective_completed", initial_attacker)
+    if initial_attacker.behavior != "ATTACK_PLAYER":
+        fail("a sole JB100 attacker was not assigned while all three pirates remained")
+        return
+    removed_pirate.destroyed = true
+    runtime.call("_maintain_player_attacker")
+    if initial_attacker.behavior == "ATTACK_PLAYER" or runtime.player_attacker != null:
+        fail("pirate continued attacking JB100 after the force fell below three")
+        return
+    second_removed_pirate.destroyed = true
+    runtime.call("_maintain_player_attacker")
+    if (
+        initial_attacker.behavior != "PILE_ON"
+        or not is_equal_approx(
+            initial_attacker.station_attack_aggression,
+            runtime.LAST_PIRATE_STATION_AGGRESSION
+        )
+    ):
+        fail("the final pirate did not intensify its station strafing runs")
+        return
+    removed_pirate.destroyed = false
+    second_removed_pirate.destroyed = false
+    initial_attacker.assign_pile_on(runtime.call("_remaining_station_targets"), 1.0)
 
     var strafing_pirate := runtime.pirates[0] as AnimatableBody3D
     strafing_pirate.ai_enabled = true
@@ -265,7 +321,31 @@ func _run() -> void:
     strafing_pirate.run_shot_fired = false
     strafing_pirate.fire_timer = 0.0
     strafing_pirate.global_position = strafing_pirate.run_fire_point
+    var pirate_target := strafing_pirate.call("_attack_target_node") as Node3D
+    var target_direction: Vector3 = (
+        pirate_target.global_position - strafing_pirate.global_position
+    ).normalized()
+    var sideways_direction := target_direction.cross(Vector3.UP).normalized()
+    if sideways_direction.length_squared() < 0.01:
+        sideways_direction = Vector3.RIGHT
+    strafing_pirate.flight_velocity = sideways_direction * strafing_pirate.preferred_speed
+    strafing_pirate.look_at(
+        strafing_pirate.global_position + sideways_direction, Vector3.UP
+    )
     var projectile_count_before := get_nodes_in_group("weapon_projectile").size()
+    strafing_pirate.call("_physics_process", 0.001)
+    if (
+        get_nodes_in_group("weapon_projectile").size() != projectile_count_before
+        or strafing_pirate.run_shot_fired
+    ):
+        fail("sideways pirate fired without pointing its nose at the station target")
+        return
+    strafing_pirate.global_position = strafing_pirate.run_fire_point
+    target_direction = (
+        pirate_target.global_position - strafing_pirate.global_position
+    ).normalized()
+    strafing_pirate.flight_velocity = target_direction * strafing_pirate.preferred_speed
+    strafing_pirate.look_at(pirate_target.global_position, Vector3.UP)
     strafing_pirate.call("_physics_process", 0.001)
     var projectile_count_after_shot := get_nodes_in_group("weapon_projectile").size()
     strafing_pirate.call("_physics_process", 0.001)
@@ -274,6 +354,15 @@ func _run() -> void:
         or get_nodes_in_group("weapon_projectile").size() != projectile_count_after_shot
     ):
         fail("pirate did not fire exactly once during a strafing pass")
+        return
+    var pirate_bolt := get_nodes_in_group("weapon_projectile")[-1] as Node3D
+    if (
+        pirate_bolt.weapon_kind != "pirate_plasma"
+        or pirate_bolt.travel_velocity.normalized().dot(
+            -strafing_pirate.global_basis.z.normalized()
+        ) < 0.999
+    ):
+        fail("pirate plasma did not leave along the flyer's forward axis")
         return
     var no_exclusions: Array[RID] = []
     runtime.call(
@@ -316,12 +405,18 @@ func _run() -> void:
         return
 
     var retreating := runtime.pirates[0] as AnimatableBody3D
-    for hit in 6:
+    for hit in 2:
         retreating.apply_weapon_hit(
             0.8, "frapray", retreating.global_position, Vector3.FORWARD
         )
+    if retreating.destroyed or retreating.behavior == "RETREAT":
+        fail("two individual FrapRay bolts incorrectly drove off a flyer")
+        return
+    retreating.apply_weapon_hit(
+        0.8, "frapray", retreating.global_position, Vector3.FORWARD
+    )
     if retreating.destroyed or retreating.behavior != "RETREAT":
-        fail("three paired FrapRay shots did not start a retreat")
+        fail("three individual FrapRay bolt hits did not start a retreat")
         return
     retreating.sync_to_physics = false
     retreating.global_position = runtime.STARBASE_CENTER + Vector3(0.0, 0.0, -5100.0)
@@ -334,21 +429,24 @@ func _run() -> void:
         return
 
     var mixed_kill := runtime.pirates[1] as AnimatableBody3D
-    for hit in 2:
+    mixed_kill.apply_weapon_hit(
+        3.2, "proton_torpedo", mixed_kill.global_position, Vector3.FORWARD
+    )
+    for hit in 3:
         mixed_kill.apply_weapon_hit(
-            3.2, "proton_torpedo", mixed_kill.global_position, Vector3.FORWARD
+            0.8, "frapray", mixed_kill.global_position, Vector3.FORWARD
         )
     if not mixed_kill.destroyed:
-        fail("two proton torpedoes did not destroy a flyer")
+        fail("one torpedo plus three individual FrapRay hits did not destroy a flyer")
         return
 
-    var frapray_kill := runtime.pirates[2] as AnimatableBody3D
-    for hit in 12:
-        frapray_kill.apply_weapon_hit(
-            0.8, "frapray", frapray_kill.global_position, Vector3.FORWARD
+    var torpedo_kill := runtime.pirates[2] as AnimatableBody3D
+    for hit in 2:
+        torpedo_kill.apply_weapon_hit(
+            3.2, "proton_torpedo", torpedo_kill.global_position, Vector3.FORWARD
         )
-    if not frapray_kill.destroyed or runtime.current_state() != "COMPLETE":
-        fail("six FrapRay shots and three neutralized flyers did not complete")
+    if not torpedo_kill.destroyed or runtime.current_state() != "COMPLETE":
+        fail("two torpedoes and three neutralized flyers did not complete")
         return
 
     player.apply_weapon_hit(

@@ -136,7 +136,7 @@ hyperspace completion.
 - [x] Break destroyed large asteroids into three moving, shootable fragments.
 - [x] Vaporize fragments into expanding, disappearing dust clouds.
 - [x] Add weapon readiness, torpedo ammunition, and controls to the HUD.
-- [x] Replace the fixed green plus with a `Tab`-toggleable aiming HUD that
+- [x] Replace the fixed green plus with a toggleable aiming HUD that
   projects the actual twin FrapRay and center torpedo firing paths, using red
   dots for the two FrapRay impacts and a small red X for the center aim point.
 - [x] Move course lock to `L` and make `X` immediately zero throttle and
@@ -206,18 +206,29 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
 - [x] Start the JB100 v38 inside Starbase 86 v1.1's real open hangar and face
   the player toward a readable launch exit.
 - [x] Present a lightweight distant planet, atmosphere, moon, and starfield.
+- [x] Make every procedural starfield purely emissive and disable both shadow
+  casting and shadow reception on its backdrop geometry.
 - [x] Spawn three accepted Ellipso pirate flyers with unique randomized hidden
   subsystem objectives and randomized target order.
 - [x] Add three shield, three weapon, and three hangar damage locations without
   exposing station or flyer health to the pilot.
 - [x] Implement fuzzy objective flight, attack runs, JB100 avoidance,
   flyer separation, and individual behavioral variation.
-- [x] Make the first objective-complete flyer attack the JB100 while later
-  flyers pile onto surviving station targets, with replacement behavior.
-- [x] Add slow, imperfect starbase defensive fire that can hit pirates or the
-  JB100 but cannot damage the station.
-- [x] Drive flyers off after three paired FrapRay shots, and destroy them
-  after six paired shots or two proton torpedoes.
+- [x] Restrict pirate weapons to fixed forward fire: flyers must make a
+  nose-on station approach, align within three degrees, fire along their
+  actual forward axis, and then break into the evasive portion of the pass.
+- [x] Keep every pirate outside a conservative 185 m Starbase collision
+  envelope and route post-shot egress laterally around the station rather than
+  through its core, hangar supports, or structural struts.
+- [x] Let one objective-complete flyer attack the JB100 only while all three
+  pirates remain combat-capable; below three, return every survivor to station
+  attack, with the final pirate making accelerated strafing runs.
+- [x] Add imperfect, close-range-accurate starbase defensive fire with a
+  one-in-twenty chance of deliberately targeting the exposed JB100; station
+  fire cannot damage the station itself.
+- [x] Count the two projectiles in every FrapRay volley independently: three
+  bolt hits drive off a flyer; six bolt hits, one torpedo plus three bolt hits,
+  or two torpedoes destroy it.
 - [x] Count flyers as driven off at 5,000 m and show their hyperspace departure
   at 6,000 m while keeping retreat speed pursuable.
 - [x] Scale station-weapon effectiveness with health and amplify weapon/hangar
@@ -271,7 +282,7 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   view cycle.
 - [x] Begin Missions 001, 002, and 003 immediately without an Enter gate.
 - [x] Map stationary left click to FrapRay, left drag to steering, held right
-  click to torpedo load/fire, middle drag to chair look, and `Esc` to all stop.
+  click to torpedo load/fire and middle drag to chair look.
 - [x] Give FrapRay a 100% reserve, 10% paired-volley cost, and 2%/s recharge;
   begin with five torpedoes.
 - [x] Replace held-button mouse steering with continuous pointer-follow
@@ -281,9 +292,18 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   captured cursor, automatic spring return, and forced neutral on startup,
   focus loss, or window exit.
 - [x] Map `X` to center the mouse-flight control and immediately clear residual
-  turn input while preserving `Esc` as all stop.
+  turn input.
+- [x] Map `Tab` to all stop, `Esc` to release mouse capture, and the next safe
+  click to recapture without firing; move aiming-HUD toggle to `\`.
+- [x] Add a macOS-standard `Control-Command-F` fullscreen shortcut with no
+  visible button, persist fullscreen preference, show `CLICK TO RESUME FLIGHT`,
+  and release capture on focus loss.
 - [x] Turn the center torpedo X blue during its build-up and surround it with a
   circular three-second fill indicator.
+- [x] Scale the blue torpedo lock reticle and charge ring down as a tracked
+  target leaves reliable lock range, then restore their size when it returns.
+- [x] On torpedo impact, hide and remove the projectile immediately and replace
+  its endpoint with a brief, intense blue-white flash.
 - [x] Persistently acquire a target near the torpedo reticle, snap the lock
   marker to it, and give the launched torpedo fast, long-lived homing pursuit.
 - [x] Add right-screen reports for shield, weapon, and hangar damage plus
@@ -291,8 +311,9 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
 - [x] Color hostile Senso-Globe contacts red and friendly contacts blue.
 - [x] Add an amber Senso-Globe arrow projected along the JB100's local forward
   axis and label it `F`.
-- [x] Balance pirate defeat at three FrapRay volleys to retreat and six
-  FrapRay volleys or two torpedoes to destroy.
+- [x] Balance pirate defeat using individual projectile impacts rather than
+  paired volleys: three FrapRay bolts to retreat; six bolts, one torpedo plus
+  three bolts, or two torpedoes to destroy.
 - [x] On mission failure, make every surviving pirate disengage from the JB100
   and circle Starbase 86 without firing.
 

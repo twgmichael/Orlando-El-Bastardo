@@ -47,10 +47,10 @@ download, physical towing, return validation, and hyperspace completion.
 Controls are shown in the HUD. The primary keyboard bindings are `W/S`
 variable throttle, `1`–`5` fixed 10/30/50/80/100-percent thrust, `A/D` or
 left/right arrows to turn, up/down arrows to pitch, `Q/E` roll, `Z/C` strafe,
-`R/F` lift, `G` interact, `X` recenter mouse flight, `Esc` all stop,
-`-`/`+` chair-view cycling,
-middle-mouse free chair rotation, `L` course lock, `Tab` aiming HUD, `H`
-hyperspace, and `F3` external debug view. The JB100 continuously steers toward
+`R/F` lift, `G` interact, `X` recenter mouse flight, `Tab` all stop, `Esc`
+release mouse, `Control-Command-F` fullscreen, `-`/`+` chair-view cycling, middle-mouse free
+chair rotation, `L` course lock, `\` aiming HUD, `H` hyperspace, and `F3`
+external debug view. The JB100 continuously steers toward
 an internal virtual stick from relative mouse movement with no button held.
 The system cursor remains captured inside the game window. Left click fires a
 paired FrapRay volley. Hold right mouse for three seconds to build and acquire a
@@ -65,7 +65,10 @@ aiming without losing turn authority.
 Pressing `X` warps the pointer to the exact screen center and immediately
 clears residual mouse steering, leaving the JB100 pointed straight along its
 current heading. Startup, window exit, and focus loss also force the virtual
-stick to neutral so stale steering can never remain latched.
+stick to neutral so stale steering can never remain latched. When released,
+the overlay reads `CLICK TO RESUME FLIGHT`; the next click recaptures the mouse
+without firing. The macOS-standard `Control-Command-F` shortcut toggles display
+mode with no visible HUD button, and the preference persists between sessions.
 
 FrapRay power starts at 100 percent, each paired volley costs 10 percent, and
 the reserve recharges at two percent per second. Proton torpedoes start at
@@ -78,7 +81,7 @@ bolts are orange plasma energy. Proton torpedoes have a blue
 core and a fading white vapor trail. Large asteroids break into moving
 fragments; weapon hits vaporize the fragments into disappearing dust clouds.
 The aiming HUD projects the actual two cannon paths and center torpedo path;
-the FrapRay paths use red dots and the center target uses a small red X. `Tab`
+the FrapRay paths use red dots and the center target uses a small red X. `\`
 toggles them together. The tow beam extends and latches over 1.8 seconds, then
 holds the captured distance while the probe trails naturally as the JB100
 pivots and changes course. A centered 3.25 m ship-effect bubble hides tow and
@@ -119,7 +122,7 @@ Failure preserves free flight and `R` restarts.
 Mission 003 begins immediately, with the JB100 inside Starbase 86's open
 hangar and facing the launch exit. Use the established mouse-follow or keyboard
 flight controls to launch, click left for paired FrapRay fire, hold right mouse
-to launch a proton torpedo, and use `Tab` for the actual weapon-path HUD.
+to launch a proton torpedo, and use `\` for the actual weapon-path HUD.
 
 Three Ellipso pirate flyers attack nine hidden station damage locations. Their
 objectives, target order, and health are not exposed. Three FrapRay shots drive

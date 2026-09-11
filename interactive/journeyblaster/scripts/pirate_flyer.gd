@@ -7,8 +7,8 @@ signal retreat_started(flyer: AnimatableBody3D)
 signal flyer_destroyed(flyer: AnimatableBody3D)
 signal defense_perimeter_crossed(flyer: AnimatableBody3D)
 
-const RETREAT_HITS := 3.0
-const DESTROY_HITS := 6.0
+const RETREAT_HITS := 3
+const DESTROY_HITS := 6
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
 const RUN_INGRESS_DISTANCE_M := 235.0
@@ -16,6 +16,8 @@ const RUN_EGRESS_DISTANCE_M := 335.0
 const RUN_CLEARANCE_M := 54.0
 const RUN_WAYPOINT_RADIUS_M := 18.0
 const RUN_FIRE_RANGE_M := 168.0
+const FORWARD_FIRE_CONE_DEG := 3.0
+const STARBASE_KEEP_OUT_RADIUS_M := 185.0
 
 var runtime: Node3D
 var player: CharacterBody3D
@@ -28,7 +30,8 @@ var behavior := "ATTACK_STATION"
 var ai_enabled := false
 var completed_primary_objective := false
 var damage_taken := 0.0
-var frapray_hits := 0.0
+var frapray_hits := 0
+var station_weapon_hits := 0
 var proton_torpedo_hit := false
 var proton_torpedo_hits := 0
 var destroyed := false
@@ -37,6 +40,7 @@ var hyperspace_departed := false
 var flight_velocity := Vector3.ZERO
 var fire_timer := 2.0
 var preferred_speed := 54.0
+var station_attack_aggression := 1.0
 var wobble_phase := 0.0
 var personality_offset := Vector3.ZERO
 var attack_run_phase := "INGRESS"
@@ -143,11 +147,15 @@ func _physics_process(delta: float) -> void:
     defense_evading = defense_avoidance.length_squared() > 0.0001
     if defense_evading:
         desired_direction = (desired_direction + defense_avoidance * 2.6).normalized()
-    var desired_velocity := desired_direction * preferred_speed
+    var attack_speed_scale := (
+        station_attack_aggression if behavior in ["ATTACK_STATION", "PILE_ON"] else 1.0
+    )
+    var desired_velocity := desired_direction * preferred_speed * attack_speed_scale
     flight_velocity = flight_velocity.lerp(
         desired_velocity, clampf(delta * 1.35, 0.0, 1.0)
     )
-    global_position += flight_velocity * delta
+    var proposed_position := global_position + flight_velocity * delta
+    global_position = _enforce_starbase_keep_out(proposed_position)
     if flight_velocity.length() > 0.5:
         look_at(global_position + flight_velocity, Vector3.UP)
 
@@ -159,14 +167,20 @@ func _physics_process(delta: float) -> void:
         and fire_timer <= 0.0
         and attack_target != null
         and global_position.distance_to(attack_target.global_position) <= RUN_FIRE_RANGE_M
+        and can_fire_forward_at(attack_target)
     ):
-        run_shot_fired = true
-        runtime.fire_pirate_weapon(self, attack_target)
+        if runtime.fire_pirate_weapon(self, attack_target):
+            run_shot_fired = true
+            _begin_post_fire_evasion()
 
 
 func _current_attack_position() -> Vector3:
     if attack_run_phase == "INGRESS":
         return run_ingress_point
+    if not run_shot_fired:
+        var target := _attack_target_node()
+        if target != null:
+            return target.global_position
     return run_egress_point
 
 
@@ -201,22 +215,69 @@ func _prepare_attack_run() -> void:
         tangent = -tangent
     run_strafe_direction = tangent
     var vertical_variation := Vector3.UP * personality_offset.y * 0.35
-    run_fire_point = target.global_position + outward * RUN_CLEARANCE_M
+    run_fire_point = target.global_position + outward * RUN_FIRE_RANGE_M * 0.92
+    var run_distance_scale := 1.0 / station_attack_aggression
+    # Approach nose-first down the target's outward normal. During STRAFE,
+    # _current_attack_position keeps the nose on the target until the shot.
     run_ingress_point = (
-        run_fire_point
-        - run_strafe_direction * RUN_INGRESS_DISTANCE_M
-        + outward * 48.0
+        target.global_position
+        + outward * (RUN_FIRE_RANGE_M + RUN_INGRESS_DISTANCE_M * run_distance_scale)
         + vertical_variation
     )
     run_egress_point = (
-        run_fire_point
-        + run_strafe_direction * RUN_EGRESS_DISTANCE_M
-        + outward * 82.0
+        target.global_position
+        + outward * (RUN_CLEARANCE_M + 70.0)
+        + run_strafe_direction * RUN_EGRESS_DISTANCE_M * run_distance_scale
         - vertical_variation
     )
     attack_run_phase = "INGRESS"
     run_shot_fired = false
-    fire_timer = minf(fire_timer, 1.25)
+    fire_timer = minf(fire_timer, 1.25 / station_attack_aggression)
+
+
+func can_fire_forward_at(target: Node3D) -> bool:
+    if target == null or not is_instance_valid(target):
+        return false
+    var to_target := target.global_position - global_position
+    if to_target.length_squared() < 0.01:
+        return false
+    return (-global_basis.z).normalized().dot(to_target.normalized()) >= cos(
+        deg_to_rad(FORWARD_FIRE_CONE_DEG)
+    )
+
+
+func _begin_post_fire_evasion() -> void:
+    var target := _attack_target_node()
+    if target == null:
+        return
+    var outward := target.global_position - station_center
+    if behavior == "ATTACK_PLAYER" or outward.length_squared() < 0.01:
+        outward = global_position - target.global_position
+    if outward.length_squared() < 0.01:
+        outward = Vector3.UP
+    outward = outward.normalized()
+    var run_distance_scale := 1.0 / station_attack_aggression
+    run_egress_point = (
+        target.global_position
+        + outward * (RUN_CLEARANCE_M + 70.0)
+        + run_strafe_direction * RUN_EGRESS_DISTANCE_M * run_distance_scale
+        - Vector3.UP * personality_offset.y * 0.35
+    )
+
+
+func _enforce_starbase_keep_out(proposed_position: Vector3) -> Vector3:
+    var proposed_offset := proposed_position - station_center
+    if proposed_offset.length() >= STARBASE_KEEP_OUT_RADIUS_M:
+        return proposed_position
+    var safe_normal := proposed_offset.normalized()
+    if safe_normal.length_squared() < 0.01:
+        safe_normal = (global_position - station_center).normalized()
+    if safe_normal.length_squared() < 0.01:
+        safe_normal = Vector3.UP
+    var inward_speed := flight_velocity.dot(safe_normal)
+    if inward_speed < 0.0:
+        flight_velocity -= safe_normal * inward_speed
+    return station_center + safe_normal * STARBASE_KEEP_OUT_RADIUS_M
 
 
 func _defense_fire_avoidance() -> Vector3:
@@ -265,6 +326,7 @@ func _select_next_station_target() -> void:
 
 func assign_player_attack() -> void:
     behavior = "ATTACK_PLAYER"
+    station_attack_aggression = 1.0
     current_target = null
     completed_attack_runs = 0
     _prepare_attack_run()
@@ -277,8 +339,11 @@ func assign_station_circle() -> void:
     run_shot_fired = true
 
 
-func assign_pile_on(targets: Array[StaticBody3D]) -> void:
+func assign_pile_on(
+    targets: Array[StaticBody3D], aggression: float = 1.0
+) -> void:
     behavior = "PILE_ON"
+    station_attack_aggression = maxf(1.0, aggression)
     target_queue = targets.duplicate()
     current_target = null
     _select_next_station_target()
@@ -300,7 +365,9 @@ func _advance_retreat(delta: float) -> void:
     flight_velocity = flight_velocity.lerp(
         retreat_direction * 76.0, clampf(delta * 1.6, 0.0, 1.0)
     )
-    global_position += flight_velocity * delta
+    global_position = _enforce_starbase_keep_out(
+        global_position + flight_velocity * delta
+    )
     if flight_velocity.length() > 0.5:
         look_at(global_position + flight_velocity, Vector3.UP)
     var station_distance := global_position.distance_to(station_center)
@@ -326,7 +393,9 @@ func _advance_holding_pattern(delta: float) -> void:
     flight_velocity = flight_velocity.lerp(
         direction * preferred_speed, clampf(delta, 0.0, 1.0)
     )
-    global_position += flight_velocity * delta
+    global_position = _enforce_starbase_keep_out(
+        global_position + flight_velocity * delta
+    )
     if flight_velocity.length() > 0.5:
         look_at(global_position + flight_velocity, Vector3.UP)
 
@@ -340,17 +409,24 @@ func apply_weapon_hit(
     if destroyed or hyperspace_departed:
         return
     if weapon_kind == "frapray":
-        frapray_hits += damage / 1.6
+        # Count physical bolts, independent of their numeric damage payload.
+        # One trigger pull launches two separately collidable bolts.
+        frapray_hits += 1
     elif weapon_kind == "starbase_plasma":
-        frapray_hits += 1.0
+        station_weapon_hits += 1
     elif weapon_kind == "proton_torpedo":
         proton_torpedo_hit = true
         proton_torpedo_hits += 1
-    damage_taken = frapray_hits + float(proton_torpedo_hits) * 3.0
+    var bolt_hits := frapray_hits + station_weapon_hits
+    damage_taken = float(bolt_hits) + float(proton_torpedo_hits) * 3.0
     CombatEffects.spawn_dust_cloud(get_parent(), hit_position, 0.42, 5)
-    if damage_taken >= DESTROY_HITS:
+    if (
+        proton_torpedo_hits >= 2
+        or (proton_torpedo_hits >= 1 and bolt_hits >= 3)
+        or bolt_hits >= DESTROY_HITS
+    ):
         _destroy_flyer(weapon_kind, impact_direction)
-    elif damage_taken >= RETREAT_HITS:
+    elif bolt_hits >= RETREAT_HITS:
         begin_retreat()
 
 

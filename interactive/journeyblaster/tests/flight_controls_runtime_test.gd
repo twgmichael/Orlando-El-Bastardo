@@ -51,6 +51,7 @@ func _run() -> void:
         fail("inverted ship-local yaw changed its turn magnitude")
         return
 
+    player.capture_mouse()
     var hover_motion := InputEventMouseMotion.new()
     hover_motion.relative = Vector2(45.0, -20.0)
     player._unhandled_input(hover_motion)
@@ -84,9 +85,12 @@ func _run() -> void:
     if (
         not player.mouse_virtual_displacement.is_zero_approx()
         or not player.mouse_flight_target.is_zero_approx()
+        or player.mouse_capture_active
+        or not player.mouse_capture_prompt.visible
     ):
-        fail("focus loss did not immediately neutralize mouse steering")
+        fail("focus loss did not neutralize steering and release the mouse")
         return
+    player.capture_mouse()
     player._unhandled_input(hover_motion)
     player._consume_mouse_rotation(1.0 / 60.0)
     player.recenter_mouse_flight(false)
@@ -163,6 +167,27 @@ func _run() -> void:
     ):
         fail("torpedo build-up did not hold fire and acquire the reticle target")
         return
+    lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -1200.0)
+    player.torpedo_lock_candidate = lock_target
+    player.torpedo_lock_distance_m = 1200.0
+    player.torpedo_acquired_target = null
+    var out_of_range_scale: float = player.torpedo_lock_reticle_scale()
+    if (
+        player.torpedo_acquired_target != null or out_of_range_scale >= 0.5
+    ):
+        fail("out-of-range torpedo target did not shrink and release its lock")
+        return
+    lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -850.0)
+    player.torpedo_lock_distance_m = 850.0
+    player.torpedo_acquired_target = lock_target
+    if (
+        player.torpedo_acquired_target != lock_target
+        or player.torpedo_lock_reticle_scale() <= out_of_range_scale
+    ):
+        fail("torpedo reticle did not grow again when its target returned in range")
+        return
+    lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -100.0)
+    player.call("_update_torpedo_acquisition")
     player._physics_process(0.02)
     if player.proton_torpedoes_remaining != 5 or not player.torpedo_charging:
         fail("fully charged torpedo fired before right mouse was released")
@@ -186,6 +211,26 @@ func _run() -> void:
     ):
         fail("released proton torpedo did not retain its acquired target")
         return
+    var impact_flashes_before := get_nodes_in_group("torpedo_impact_flash").size()
+    var launched_torpedo := launched_torpedoes[-1] as Node3D
+    launched_torpedo.call(
+        "_finish_impact", null, launched_torpedo.global_position
+    )
+    if (
+        launched_torpedo.visible
+        or not launched_torpedo.is_queued_for_deletion()
+        or get_nodes_in_group("torpedo_impact_flash").size()
+        != impact_flashes_before + 1
+    ):
+        fail("torpedo impact did not flash and remove its projectile immediately")
+        return
+
+    if player.mouse_capture_prompt == null:
+        fail("mouse-capture prompt is missing")
+        return
+    if player.get_node_or_null("DesktopControls/FullscreenButton") != null:
+        fail("fullscreen toggle must not be visible in the game HUD")
+        return
 
     player.throttle = 0.8
     player.velocity = Vector3(10.0, 0.0, 0.0)
@@ -193,13 +238,35 @@ func _run() -> void:
     escape.physical_keycode = KEY_ESCAPE
     escape.pressed = true
     player._unhandled_input(escape)
+    if (
+        not is_equal_approx(player.throttle, 0.8)
+        or not player.velocity.is_equal_approx(Vector3(10.0, 0.0, 0.0))
+        or player.mouse_capture_active
+        or not player.mouse_capture_prompt.visible
+    ):
+        fail("Escape did not release the mouse while preserving flight")
+        return
+    var shots_before_recapture: int = player.frapray_shots_fired
+    player.frapray_cooldown_remaining = 0.0
+    player._unhandled_input(left_down)
+    if (
+        not player.mouse_capture_active
+        or player.frapray_shots_fired != shots_before_recapture
+        or player.mouse_capture_prompt.visible
+    ):
+        fail("first click did not safely recapture flight without firing")
+        return
+    var tab_stop := InputEventKey.new()
+    tab_stop.physical_keycode = KEY_TAB
+    tab_stop.pressed = true
+    player._unhandled_input(tab_stop)
     if not is_zero_approx(player.throttle) or not player.velocity.is_zero_approx():
-        fail("Escape did not command all stop")
+        fail("Tab did not command all stop")
         return
 
     print(
         "FLIGHT-CONTROLS-RUNTIME-OK: smooth arrows + ship-local inverted axes + "
-        + "mouse-follow steering + X recenter + mouse weapons + Escape stop"
+        + "virtual stick + X recenter + mouse capture + Tab all stop"
     )
     runtime.queue_free()
     quit(0)

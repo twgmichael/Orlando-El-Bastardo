@@ -70,11 +70,11 @@ func _contact_color(contact: Node3D) -> Color:
 
 
 func _draw_forward_arrow(center: Vector2, radius: float) -> void:
-    # The Senso-Globe projects local X/Y/Z into an isometric screen view.
-    # JB100 forward is local -Z, so its arrow follows that same projection.
-    var forward_direction := Vector2(-0.38, -0.24).normalized()
-    var start := center + forward_direction * 5.0
-    var tip := center + forward_direction * radius * 0.72
+    # Draw the ship-forward vector collinearly through the globe's Z axis.
+    # Crossing the center reads as an axis vector, not a pointer to the label.
+    var forward_direction := Vector2(0.62, -0.44).normalized()
+    var start := center - forward_direction * radius * 0.48
+    var tip := center + forward_direction * radius * 0.48
     var side := Vector2(-forward_direction.y, forward_direction.x)
     var arrow_length := 7.0
     var arrow_width := 4.0
@@ -85,16 +85,6 @@ func _draw_forward_arrow(center: Vector2, radius: float) -> void:
             tip - forward_direction * arrow_length + side * arrow_width,
             tip - forward_direction * arrow_length - side * arrow_width,
         ]),
-        FORWARD_AMBER
-    )
-    var font := ThemeDB.fallback_font
-    draw_string(
-        font,
-        tip + forward_direction * 3.0 + Vector2(-3.0, 3.0),
-        "F",
-        HORIZONTAL_ALIGNMENT_LEFT,
-        -1.0,
-        9,
         FORWARD_AMBER
     )
 

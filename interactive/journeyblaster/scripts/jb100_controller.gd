@@ -6,6 +6,11 @@ signal hull_damaged(remaining_integrity: float, weapon_kind: String)
 signal ship_disabled()
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
+const DISPLAY_SETTINGS_PATH := "user://journeyblaster_display.cfg"
+const TORPEDO_LOCK_RANGE_M := 1000.0
+const TORPEDO_LOCK_WARNING_START_M := 700.0
+const TORPEDO_TRACKING_RANGE_M := 1400.0
+const TORPEDO_UNLOCKED_RETICLE_SCALE := 0.34
 
 @export var maximum_forward_speed_mps := 92.0
 @export var maximum_reverse_speed_mps := 18.0
@@ -42,6 +47,7 @@ var mouse_virtual_displacement := Vector2.ZERO
 var mouse_flight_target := Vector2.ZERO
 var mouse_rotation_step := Vector2.ZERO
 var mouse_motion_received := false
+var mouse_capture_active := false
 var pitch_input_smoothed := 0.0
 var yaw_input_smoothed := 0.0
 var roll_input_smoothed := 0.0
@@ -51,12 +57,15 @@ var torpedo_cooldown_remaining := 0.0
 var torpedo_charge_elapsed := 0.0
 var torpedo_charging := false
 var torpedo_acquired_target: Node3D
+var torpedo_lock_candidate: Node3D
+var torpedo_lock_distance_m := INF
 var proton_torpedoes_remaining := 5
 var frapray_shots_fired := 0
 var proton_torpedoes_fired := 0
 var hull_integrity := 100.0
 var hull_integrity_max := 100.0
 var disabled_in_space := false
+var mouse_capture_prompt: Label
 
 @onready var frapray_left := get_node_or_null("frap_hardpoint_left") as Node3D
 @onready var frapray_right := get_node_or_null("frap_hardpoint_right") as Node3D
@@ -69,6 +78,8 @@ var disabled_in_space := false
 func _ready() -> void:
     add_to_group("player_ship")
     proton_torpedoes_remaining = proton_torpedo_capacity
+    _build_desktop_shell()
+    _load_display_preference()
     var window := get_window()
     window.mouse_exited.connect(_on_flight_window_inactive)
     window.focus_exited.connect(_on_flight_window_inactive)
@@ -175,6 +186,14 @@ func _physics_process(delta: float) -> void:
         impact.emit(speed_before_move, collision.get_collider())
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
+        if (
+            event.physical_keycode == KEY_F
+            and event.ctrl_pressed
+            and event.meta_pressed
+        ):
+            toggle_fullscreen()
+            get_viewport().set_input_as_handled()
+            return
         match event.physical_keycode:
             KEY_1:
                 set_throttle_preset(0.10)
@@ -188,14 +207,23 @@ func _unhandled_input(event: InputEvent) -> void:
                 set_throttle_preset(1.00)
             KEY_L:
                 course_lock = not course_lock
-            KEY_BACKSPACE:
-                dead_stop()
             KEY_ESCAPE:
+                release_mouse_capture()
+                get_viewport().set_input_as_handled()
+            KEY_TAB:
                 dead_stop()
+                get_viewport().set_input_as_handled()
             KEY_X:
                 recenter_mouse_flight()
             KEY_SPACE:
                 fire_frapray()
+    elif (
+        event is InputEventMouseButton
+        and event.pressed
+        and not mouse_capture_active
+    ):
+        capture_mouse()
+        get_viewport().set_input_as_handled()
     elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
             fire_frapray()
@@ -206,6 +234,7 @@ func _unhandled_input(event: InputEvent) -> void:
             release_torpedo_charge()
     elif (
         event is InputEventMouseMotion
+        and mouse_capture_active
         and not mouse_flight_suppressed
     ):
         _push_mouse_flight_delta(event.relative)
@@ -292,12 +321,91 @@ func recenter_mouse_flight(warp_pointer := true) -> void:
 
 
 func _initialize_mouse_flight() -> void:
-    Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
     recenter_mouse_flight()
+    capture_mouse()
 
 
 func _on_flight_window_inactive() -> void:
     recenter_mouse_flight(false)
+    release_mouse_capture()
+
+
+func capture_mouse() -> void:
+    Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+    mouse_capture_active = true
+    mouse_flight_active = true
+    recenter_mouse_flight(false)
+    _update_desktop_shell()
+
+
+func release_mouse_capture() -> void:
+    Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+    mouse_capture_active = false
+    recenter_mouse_flight(false)
+    cancel_torpedo_charge()
+    _update_desktop_shell()
+
+
+func toggle_fullscreen() -> void:
+    var window := get_window()
+    var is_fullscreen := window.mode in [
+        Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN
+    ]
+    window.mode = Window.MODE_WINDOWED if is_fullscreen else Window.MODE_FULLSCREEN
+    _save_display_preference(not is_fullscreen)
+    _update_desktop_shell()
+
+
+func _load_display_preference() -> void:
+    var settings := ConfigFile.new()
+    if settings.load(DISPLAY_SETTINGS_PATH) != OK:
+        return
+    var prefer_fullscreen: bool = bool(
+        settings.get_value("display", "fullscreen", false)
+    )
+    get_window().mode = (
+        Window.MODE_FULLSCREEN if prefer_fullscreen else Window.MODE_WINDOWED
+    )
+
+
+func _save_display_preference(fullscreen: bool) -> void:
+    var settings := ConfigFile.new()
+    settings.set_value("display", "fullscreen", fullscreen)
+    settings.save(DISPLAY_SETTINGS_PATH)
+
+
+func _build_desktop_shell() -> void:
+    var layer := CanvasLayer.new()
+    layer.name = "DesktopControls"
+    layer.layer = 100
+    add_child(layer)
+
+    mouse_capture_prompt = Label.new()
+    mouse_capture_prompt.name = "MouseCapturePrompt"
+    mouse_capture_prompt.text = "CLICK TO RESUME FLIGHT"
+    mouse_capture_prompt.set_anchors_preset(Control.PRESET_CENTER)
+    mouse_capture_prompt.position = Vector2(-150.0, -30.0)
+    mouse_capture_prompt.size = Vector2(300.0, 60.0)
+    mouse_capture_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    mouse_capture_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    mouse_capture_prompt.add_theme_font_size_override("font_size", 18)
+    mouse_capture_prompt.add_theme_color_override(
+        "font_color", Color(0.3, 1.0, 0.62)
+    )
+    mouse_capture_prompt.add_theme_color_override(
+        "font_shadow_color", Color(0.0, 0.0, 0.0, 0.95)
+    )
+    mouse_capture_prompt.add_theme_constant_override("shadow_offset_x", 2)
+    mouse_capture_prompt.add_theme_constant_override("shadow_offset_y", 2)
+    mouse_capture_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    layer.add_child(mouse_capture_prompt)
+
+    _update_desktop_shell()
+
+
+func _update_desktop_shell() -> void:
+    if mouse_capture_prompt:
+        mouse_capture_prompt.visible = not mouse_capture_active
 
 
 func _apply_ship_rotation(
@@ -405,6 +513,8 @@ func cancel_torpedo_charge() -> void:
     torpedo_charging = false
     torpedo_charge_elapsed = 0.0
     torpedo_acquired_target = null
+    torpedo_lock_candidate = null
+    torpedo_lock_distance_m = INF
 
 
 func torpedo_charge_ratio() -> float:
@@ -413,8 +523,32 @@ func torpedo_charge_ratio() -> float:
     return clampf(torpedo_charge_elapsed / torpedo_charge_time_s, 0.0, 1.0)
 
 
+func torpedo_lock_reticle_scale() -> float:
+    if not torpedo_charging:
+        return 1.0
+    if torpedo_lock_candidate == null or not is_instance_valid(torpedo_lock_candidate):
+        return TORPEDO_UNLOCKED_RETICLE_SCALE
+    if torpedo_lock_distance_m > TORPEDO_LOCK_RANGE_M:
+        var beyond_ratio := clampf(
+            (torpedo_lock_distance_m - TORPEDO_LOCK_RANGE_M)
+            / (TORPEDO_TRACKING_RANGE_M - TORPEDO_LOCK_RANGE_M),
+            0.0,
+            1.0
+        )
+        return lerpf(0.46, TORPEDO_UNLOCKED_RETICLE_SCALE, beyond_ratio)
+    var warning_ratio := clampf(
+        (torpedo_lock_distance_m - TORPEDO_LOCK_WARNING_START_M)
+        / (TORPEDO_LOCK_RANGE_M - TORPEDO_LOCK_WARNING_START_M),
+        0.0,
+        1.0
+    )
+    return lerpf(1.0, 0.58, warning_ratio)
+
+
 func _update_torpedo_acquisition() -> void:
     torpedo_acquired_target = null
+    torpedo_lock_candidate = null
+    torpedo_lock_distance_m = INF
     var forward := -global_basis.z.normalized()
     var best_score := -INF
     var candidates: Array[Node] = []
@@ -428,15 +562,20 @@ func _update_torpedo_acquisition() -> void:
             continue
         var offset := candidate.global_position - global_position
         var distance := offset.length()
-        if distance <= 0.01 or distance > 1000.0:
+        if distance <= 0.01 or distance > TORPEDO_TRACKING_RANGE_M:
             continue
         var alignment := forward.dot(offset / distance)
         if alignment < cos(deg_to_rad(12.0)):
             continue
-        var score := alignment * 2.0 - distance / 1000.0
+        # Reticle proximity dominates range so a centered distant target does
+        # not lose its cue to a nearer contact near the cone edge.
+        var score := alignment * 100.0 - distance / TORPEDO_TRACKING_RANGE_M
         if score > best_score:
             best_score = score
-            torpedo_acquired_target = candidate
+            torpedo_lock_candidate = candidate
+            torpedo_lock_distance_m = distance
+    if torpedo_lock_distance_m <= TORPEDO_LOCK_RANGE_M:
+        torpedo_acquired_target = torpedo_lock_candidate
 
 
 func _spawn_projectile(

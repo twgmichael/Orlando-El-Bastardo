@@ -48,9 +48,10 @@ starbase defensive fire.
   fire from the starbase.
 - Starbase weapons are hazardous to everyone and can accidentally hit the
   JB100.
-- Three FrapRay hits cause a flyer to break off and flee.
-- Seven total FrapRay hits destroy a flyer.
-- One proton-torpedo hit followed by three FrapRay hits destroys a flyer.
+- Three individual FrapRay bolt hits cause a flyer to break off and flee.
+- Six individual FrapRay bolt hits destroy a flyer.
+- One proton-torpedo hit plus three individual FrapRay bolt hits destroys a
+  flyer; two proton torpedoes also destroy it.
 - There are nine fixed but unmarked starbase damage locations: three shield
   generators, three weapons, and three docking hangars distributed across the
   station's top, middle, bottom, and outer structures.
@@ -59,12 +60,13 @@ starbase defensive fire.
 - Each attacker receives a different subsystem category, randomized among the
   three flyers on every run. Target order within each category is also
   randomized.
-- The first flyer to complete its category becomes the sole JB100 attacker.
-  Later completed flyers reinforce attacks on surviving station targets. If
-  the JB100 attacker is destroyed or driven off, another eligible flyer takes
-  its place.
-- At most one flyer attacks the JB100 while the starbase remains operational.
-  If all nine station targets are disabled, every active flyer attacks it.
+- The first flyer to complete its category becomes the sole JB100 attacker
+  only while all three flyers remain combat-capable. Once the pirate force
+  falls below three, every survivor returns to attacking station systems.
+- The final surviving flyer makes faster, shorter, more frequent strafing runs
+  against the remaining station targets instead of pursuing the JB100.
+- If all nine station targets are disabled, every active flyer attacks the
+  disabled JB100 as part of the mission-failure aftermath.
 - Each disabled shield generator adds one point of damage to later pirate hits
   against weapons and hangars.
 - Weapon effectiveness scales with remaining health. Hangar effectiveness is
@@ -140,6 +142,17 @@ following a perfectly scripted path:
 5. Fire on its assigned objective when position and aim are acceptable.
 6. After sufficient damage, abandon the attack and flee the defense zone.
 
+Pirate weapons are fixed forward. A flyer cannot slew a shot independently of
+its hull: it must fly a nose-on approach, bring the target within a three-degree
+forward firing cone, launch the bolt along its actual forward axis, and only
+then break sideways into the evasive portion of its pass.
+
+Pirate navigation treats Starbase 86 as a conservative 185 m spherical
+keep-out volume enclosing its core, hangar supports, and structural struts.
+Attackers fire before reaching that envelope, then take an exterior lateral
+egress route. A final movement clamp prevents any AI state from entering the
+protected volume even if steering, evasion, or a large frame step points inward.
+
 Small random variations in preferred range, turn timing, attack angle, and
 evasion strength should make the flyers feel individually motivated without
 requiring advanced strategic AI.
@@ -152,10 +165,12 @@ sell the scale of the battle without solving the mission for the player.
 The defensive system should:
 
 - choose hostile flyers as intended targets
-- aim and fire lazily enough that attackers can evade it
+- aim and fire lazily enough that attackers can evade it, but become highly
+  accurate at very close range
 - use visible, readable firing lanes
 - damage hostile flyers on direct hits
-- also damage the JB100 if the player crosses a firing lane
+- deliberately misidentify and fire at the exposed JB100 on one out of twenty
+  station shots, in addition to accidental firing-lane hits
 - avoid perfect tracking or continuous fire
 
 Friendly fire should feel dangerous but legible. A brief targeting warning,
@@ -167,10 +182,13 @@ the player a fair chance to react.
 The first damage threshold changes behavior rather than immediately removing
 the target:
 
-- **Three FrapRay hits:** the flyer disengages from the starbase and begins a
-  committed retreat.
-- **Seven total FrapRay hits:** the flyer is destroyed.
-- **One proton torpedo plus three FrapRay hits:** the flyer is destroyed.
+- **Three individual FrapRay bolt hits:** the flyer disengages from the
+  starbase and begins a committed retreat. Because the JB100 fires two bolts
+  per trigger pull, a complete first volley counts as two of those hits.
+- **Six individual FrapRay bolt hits:** the flyer is destroyed.
+- **One proton torpedo plus three individual FrapRay bolt hits:** the flyer is
+  destroyed.
+- **Two proton torpedoes:** the flyer is destroyed.
 
 A retreating flyer no longer attacks the starbase. It remains physically
 present while escaping, allowing the pilot to decide whether to protect the
@@ -265,17 +283,28 @@ The open hangar uses two steady runtime lights and two red ceiling strobes
 centered six meters apart. An Earth Starfighter hero craft is parked behind and
 to one side of the JB100 without blocking the through-flight lane. Station
 damage volumes are surface-fitted and invisible, the starfield remains centered
-on the pilot, and a visible solar-system sun accompanies the directional light.
+on the pilot, cannot cast or receive shadows, and a visible solar-system sun
+accompanies the directional light.
 Station defensive accuracy now tightens with range while pirate projectile
 avoidance remains subordinate to committed strafing runs.
 
 All three prototype missions now begin immediately when loaded. In the shared
-flight controls, the ship continuously follows the visible mouse without a
-button hold, left click fires FrapRay, holding right mouse for three seconds
+flight controls, relative mouse motion drives a captured virtual stick without
+a button hold, left click fires FrapRay, holding right mouse for three seconds
 charges the torpedo and acquires a target under the reticle, releasing right
-mouse fires it, middle drag rotates the chair, and `Esc` commands all stop.
+mouse fires it, and middle drag rotates the chair. `Tab` commands all stop;
+`Esc` releases mouse capture without changing flight, and the next click
+recaptures without firing. `Control-Command-F` toggles fullscreen with no
+visible button, and the display-mode preference persists between sessions. The
+aiming HUD moves to `\`.
 During torpedo build-up, the center X changes from red to blue and a circular
 progress ring fills around it; the full charge remains held until release.
+The blue X and charge ring remain centered on a tracked target but shrink as
+it approaches and passes the 1,000 m reliable-lock boundary, then grow back to
+full size when the target returns safely within range.
+On impact, the torpedo core disappears immediately and produces a bright,
+blue-white quarter-second flash; no projectile mesh remains parked at the hit
+point.
 Mouse steering now uses captured relative motion to push a bounded 180-pixel
 virtual stick. A 6% dead zone and 2.2 response exponent provide careful
 long-range aiming; a 200 ms spring return neutralizes the stick when motion
@@ -283,16 +312,18 @@ stops. Startup, focus loss, and window exit forcibly clear steering, preventing
 the JB100 from continuing along stale input. Pressing `X` also recenters the
 virtual stick immediately. A torpedo searches a 12-degree forward acquisition cone, snaps
 its reticle onto the acquired target, launches at 260 m/s, and homes strongly
-for up to 12 seconds so a flyer cannot escape by speed alone. Three paired
-FrapRay volleys drive off a pirate; six paired volleys or two proton torpedoes
-destroy one.
+for up to 12 seconds so a flyer cannot escape by speed alone. Every physical
+FrapRay bolt is tracked as one hit: three bolt impacts drive off a pirate, six
+destroy it, one torpedo plus three bolt hits destroys it, and two torpedoes
+destroy it.
 
 The right cockpit screen maintains a live Starbase 86 report line. Actual
 pirate hits produce category-specific damage reports for shields, weapons, or
 hangars; perimeter crossings and flyer destruction report updated counts. The
 Senso-Globe renders pirate contacts red and Starbase 86 and friendly craft
-blue. An amber `F` arrow uses the globe's XYZ projection to indicate the
-JB100's local forward direction.
+blue. An unlabeled amber vector crosses the globe center collinearly with its
+drawn Z axis; its arrowhead indicates positive Z without pointing at the axis
+label.
 
 After Mission 003 fails for any reason, every surviving pirate disengages from
 the JB100, ceases firing, and circles Starbase 86 indefinitely. The player can

@@ -21,6 +21,9 @@ const PIRATE_RETREAT_HITS := 3.0
 const PIRATE_DESTROY_HITS := 6.0
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
+const PLAYER_ATTACK_MIN_ACTIVE_PIRATES := 3
+const LAST_PIRATE_STATION_AGGRESSION := 1.6
+const STATION_FRIENDLY_FIRE_ODDS := 20
 
 const OBJECTIVES := {
     "BRIEFING": "Launch from Starbase 86 and repel three attacking pirate flyers.",
@@ -40,6 +43,7 @@ var pirates: Array[AnimatableBody3D] = []
 var player_attacker: AnimatableBody3D
 var station_weapon_timers: Dictionary = {}
 var station_shots_fired := 0
+var station_friendly_fire_shots := 0
 var random := RandomNumberGenerator.new()
 var weapon_aim_enabled := true
 var open_hangar_center := OPEN_HANGAR_CENTER_FALLBACK
@@ -113,7 +117,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         match event.physical_keycode:
-            KEY_TAB:
+            KEY_BACKSLASH:
                 weapon_aim_enabled = not weapon_aim_enabled
             KEY_R:
                 if mission_state in ["COMPLETE", "FAILED"]:
@@ -199,6 +203,7 @@ func _build_visible_sun() -> void:
 func _build_starfield() -> void:
     starfield = MultiMeshInstance3D.new()
     starfield.name = "Starfield"
+    starfield.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     var star_mesh := SphereMesh.new()
     star_mesh.radius = 1.8
     star_mesh.height = 3.6
@@ -210,6 +215,7 @@ func _build_starfield() -> void:
     material.emission_enabled = true
     material.emission = Color(0.64, 0.77, 1.0)
     material.emission_energy_multiplier = 2.2
+    material.set_flag(BaseMaterial3D.FLAG_DONT_RECEIVE_SHADOWS, true)
     star_mesh.material = material
     var multimesh := MultiMesh.new()
     multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -493,11 +499,18 @@ func _on_pirate_objective_completed(pirate: AnimatableBody3D) -> void:
     if mission_state == "FAILED":
         pirate.assign_station_circle()
         return
-    if not _player_attacker_is_active():
+    var combat_pirates := _combat_capable_pirates()
+    if (
+        combat_pirates.size() >= PLAYER_ATTACK_MIN_ACTIVE_PIRATES
+        and not _player_attacker_is_active()
+    ):
         player_attacker = pirate
         pirate.assign_player_attack()
     else:
-        pirate.assign_pile_on(_remaining_station_targets())
+        var aggression := (
+            LAST_PIRATE_STATION_AGGRESSION if combat_pirates.size() == 1 else 1.0
+        )
+        pirate.assign_pile_on(_remaining_station_targets(), aggression)
 
 
 func _on_pirate_retreat_started(pirate: AnimatableBody3D) -> void:
@@ -555,6 +568,29 @@ func _on_player_disabled() -> void:
 func _maintain_player_attacker() -> void:
     if mission_state != "DEFEND" or _all_station_targets_disabled():
         return
+    var combat_pirates := _combat_capable_pirates()
+    if combat_pirates.size() < PLAYER_ATTACK_MIN_ACTIVE_PIRATES:
+        if _player_attacker_is_active():
+            var aggression := (
+                LAST_PIRATE_STATION_AGGRESSION
+                if combat_pirates.size() == 1
+                else 1.0
+            )
+            player_attacker.assign_pile_on(_remaining_station_targets(), aggression)
+        player_attacker = null
+        if combat_pirates.size() == 1:
+            var last_pirate := combat_pirates[0]
+            if (
+                last_pirate.behavior != "PILE_ON"
+                or not is_equal_approx(
+                    last_pirate.station_attack_aggression,
+                    LAST_PIRATE_STATION_AGGRESSION
+                )
+            ):
+                last_pirate.assign_pile_on(
+                    _remaining_station_targets(), LAST_PIRATE_STATION_AGGRESSION
+                )
+        return
     if _player_attacker_is_active():
         return
     player_attacker = null
@@ -568,6 +604,20 @@ func _maintain_player_attacker() -> void:
             player_attacker = pirate
             pirate.assign_player_attack()
             return
+
+
+func _combat_capable_pirates() -> Array[AnimatableBody3D]:
+    var combat_pirates: Array[AnimatableBody3D] = []
+    for pirate in pirates:
+        if (
+            pirate.destroyed
+            or pirate.perimeter_crossed
+            or pirate.hyperspace_departed
+            or pirate.behavior in ["RETREAT", "DRIVEN_OFF"]
+        ):
+            continue
+        combat_pirates.append(pirate)
+    return combat_pirates
 
 
 func _player_attacker_is_active() -> bool:
@@ -623,12 +673,12 @@ func is_player_in_safe_hangar() -> bool:
     return player.global_position.distance_to(open_hangar_center) <= HANGAR_SAFE_RADIUS_M
 
 
-func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> void:
+func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> bool:
     if mission_state == "BRIEFING" or pirate.destroyed:
-        return
-    var direction := target.global_position - pirate.global_position
-    if direction.length() <= 0.01:
-        return
+        return false
+    if not pirate.can_fire_forward_at(target):
+        return false
+    var direction := -pirate.global_basis.z.normalized()
     var damage := 10.0 if target == player else _pirate_station_damage(target)
     var exclusions: Array[RID] = []
     for other in pirates:
@@ -644,6 +694,7 @@ func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> void:
         pirate.get_rid(),
         exclusions
     )
+    return true
 
 
 func _pirate_station_damage(target: Node3D) -> float:
@@ -674,7 +725,19 @@ func _update_station_defense(delta: float) -> void:
         if timer > 0.0:
             station_weapon_timers[identifier] = timer
             continue
-        var target: AnimatableBody3D = possible_targets[random.randi_range(0, possible_targets.size() - 1)]
+        var target: Node3D
+        var friendly_fire: bool = (
+            random.randi_range(1, STATION_FRIENDLY_FIRE_ODDS) == 1
+            and not is_player_in_safe_hangar()
+            and not player.disabled_in_space
+        )
+        if friendly_fire:
+            target = player
+            station_friendly_fire_shots += 1
+        else:
+            target = possible_targets[
+                random.randi_range(0, possible_targets.size() - 1)
+            ]
         var target_range: float = weapon.global_position.distance_to(
             target.global_position
         )
@@ -695,7 +758,7 @@ func _update_station_defense(delta: float) -> void:
             weapon.global_position + direction.normalized() * 7.0,
             direction.normalized(),
             155.0,
-            0.8,
+            10.0 if friendly_fire else 0.8,
             weapon.get_rid(),
             exclusions
         )
@@ -706,8 +769,8 @@ func _update_station_defense(delta: float) -> void:
 
 
 func _station_defense_spread_m(target_range: float, effectiveness: float) -> float:
-    var range_factor := clampf((target_range - 70.0) / 720.0, 0.0, 1.0)
-    var healthy_spread := lerpf(1.4, 23.0, range_factor)
+    var range_factor := clampf((target_range - 20.0) / 770.0, 0.0, 1.0)
+    var healthy_spread := lerpf(0.15, 23.0, pow(range_factor, 1.65))
     return healthy_spread * lerpf(2.2, 1.0, clampf(effectiveness, 0.0, 1.0))
 
 
@@ -973,16 +1036,19 @@ func _update_weapon_aim() -> void:
     )
     if (
         player.torpedo_charging
-        and player.torpedo_acquired_target != null
-        and is_instance_valid(player.torpedo_acquired_target)
+        and player.torpedo_lock_candidate != null
+        and is_instance_valid(player.torpedo_lock_candidate)
     ):
-        torpedo_point = player.torpedo_acquired_target.global_position
+        torpedo_point = player.torpedo_lock_candidate.global_position
     _position_aim_marker(torpedo_aim, torpedo_point, camera)
     _update_torpedo_charge_indicator()
 
 
 func _update_torpedo_charge_indicator() -> void:
     var charging: bool = player.torpedo_charging
+    var lock_scale: float = player.torpedo_lock_reticle_scale()
+    torpedo_aim.pivot_offset = torpedo_aim.size * 0.5
+    torpedo_aim.scale = Vector2.ONE * lock_scale
     torpedo_aim.add_theme_color_override(
         "font_color",
         Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
@@ -991,6 +1057,8 @@ func _update_torpedo_charge_indicator() -> void:
         torpedo_aim.position + torpedo_aim.size * 0.5
         - torpedo_charge_indicator.size * 0.5
     )
+    torpedo_charge_indicator.pivot_offset = torpedo_charge_indicator.size * 0.5
+    torpedo_charge_indicator.scale = Vector2.ONE * lock_scale
     torpedo_charge_indicator.set_charge_progress(player.torpedo_charge_ratio())
     torpedo_charge_indicator.visible = charging and torpedo_aim.visible
 

@@ -154,7 +154,7 @@ func _unhandled_input(event: InputEvent) -> void:
                 if towbeam_mode and mission_state == "CHARGE_PLACEMENT":
                     fire_towbeam_charge()
                     get_viewport().set_input_as_handled()
-            KEY_TAB:
+            KEY_BACKSLASH:
                 weapon_aim_enabled = not weapon_aim_enabled
             KEY_R:
                 if mission_state in ["COMPLETE", "FAILED"]:
@@ -590,6 +590,7 @@ func _build_space_environment() -> void:
 func _build_starfield() -> void:
     var stars := MultiMeshInstance3D.new()
     stars.name = "Starfield"
+    stars.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
     var star_mesh := SphereMesh.new()
     star_mesh.radius = 0.5
     star_mesh.height = 1.0
@@ -601,6 +602,7 @@ func _build_starfield() -> void:
     material.emission_enabled = true
     material.emission = Color(0.68, 0.8, 1.0)
     material.emission_energy_multiplier = 2.0
+    material.set_flag(BaseMaterial3D.FLAG_DONT_RECEIVE_SHADOWS, true)
     star_mesh.material = material
     var multimesh := MultiMesh.new()
     multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -713,7 +715,7 @@ func _build_hud() -> void:
     prompt_label = _build_label(Vector2(viewport_width * 0.5 - 330.0, 638.0), Vector2(660.0, 42.0), 18, Color(1.0, 0.68, 0.22))
     prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     var help := _build_label(Vector2(viewport_width - 850.0, 684.0), Vector2(830.0, 25.0), 11, Color(0.68, 0.72, 0.72, 0.86))
-    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X recenter · ESC stop · mouse steer · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
+    help.text = "W/S throttle · arrows/A/D steer · Q/E roll · X recenter · TAB stop · ESC mouse · ⌃⌘F fullscreen · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
     help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
     weapon_aim = Control.new()
@@ -923,16 +925,19 @@ func _update_weapon_aim() -> void:
     )
     if (
         player.torpedo_charging
-        and player.torpedo_acquired_target != null
-        and is_instance_valid(player.torpedo_acquired_target)
+        and player.torpedo_lock_candidate != null
+        and is_instance_valid(player.torpedo_lock_candidate)
     ):
-        torpedo_point = player.torpedo_acquired_target.global_position
+        torpedo_point = player.torpedo_lock_candidate.global_position
     _position_aim_marker(torpedo_aim, torpedo_point, camera)
     _update_torpedo_charge_indicator()
 
 
 func _update_torpedo_charge_indicator() -> void:
     var charging: bool = player.torpedo_charging
+    var lock_scale: float = player.torpedo_lock_reticle_scale()
+    torpedo_aim.pivot_offset = torpedo_aim.size * 0.5
+    torpedo_aim.scale = Vector2.ONE * lock_scale
     torpedo_aim.add_theme_color_override(
         "font_color",
         Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
@@ -941,6 +946,8 @@ func _update_torpedo_charge_indicator() -> void:
         torpedo_aim.position + torpedo_aim.size * 0.5
         - torpedo_charge_indicator.size * 0.5
     )
+    torpedo_charge_indicator.pivot_offset = torpedo_charge_indicator.size * 0.5
+    torpedo_charge_indicator.scale = Vector2.ONE * lock_scale
     torpedo_charge_indicator.set_charge_progress(player.torpedo_charge_ratio())
     torpedo_charge_indicator.visible = charging and torpedo_aim.visible
 
