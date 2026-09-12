@@ -325,6 +325,10 @@ tow, and transitions Mission 001 to `FAILED`. The JB100 remains freely
 flyable in the failed mission scene; the HUD identifies the destroyed target
 and offers `R` to restart when the player chooses.
 
+Mission presentation uses the shared result language: large blue `GO` for the
+first three seconds, green `SUCCESS` when the probe recovery criteria are met,
+and red `FAILED` when the probe is destroyed.
+
 ## Demo Prototype V4 flight-control refinement — 2026-09-08
 
 Keyboard steering now ramps smoothly into and out of full pitch, yaw, and roll

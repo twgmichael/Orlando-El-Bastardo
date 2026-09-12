@@ -2,12 +2,18 @@ extends Node3D
 
 const CombatEffects = preload("res://scripts/combat_effects.gd")
 const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
+const MissionAnnouncementOverlay = preload(
+    "res://scripts/mission_announcement_overlay.gd"
+)
 const ASTEROID_SCENES := [
     preload("res://generated/scenes/asteroid_round_v1.tscn"),
     preload("res://generated/scenes/asteroid_cratered_v1.tscn"),
     preload("res://generated/scenes/asteroid_jagged_v1.tscn"),
     preload("res://generated/scenes/asteroid_oblong_v1.tscn"),
 ]
+const EXPLOSIVE_PACK_SCENE = preload(
+    "res://generated/scenes/explosive_pack_v1.tscn"
+)
 
 const PRIMARY_START := Vector3(0.0, 0.0, -250.0)
 const PLANET_CENTER := Vector3(0.0, -90.0, -1450.0)
@@ -44,6 +50,7 @@ var charge_phase_elapsed := 0.0
 var chase_elapsed := 0.0
 var primary_asteroid: StaticBody3D
 var charge_sites: Array[Node3D] = []
+var placed_charge_packs: Array[StaticBody3D] = []
 var charges_placed := 0
 var placement_cursor := Vector2.ZERO
 var placement_in_progress := false
@@ -79,6 +86,7 @@ var frap_aim_right: Label
 var torpedo_aim: Label
 var torpedo_charge_indicator: Control
 var weapon_aim: Control
+var mission_announcement: Label
 
 
 func _ready() -> void:
@@ -164,6 +172,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func begin_mission() -> void:
     if mission_state == "BRIEFING":
         _set_state("INTERCEPT")
+        mission_announcement.call("show_go")
 
 
 func request_interaction() -> void:
@@ -202,6 +211,11 @@ func _set_state(next_state: String) -> void:
         return
     mission_state = next_state
     state_elapsed = 0.0
+    if mission_announcement:
+        if next_state == "FAILED":
+            mission_announcement.call("show_failed")
+        elif next_state == "COMPLETE":
+            mission_announcement.call("show_success")
     if next_state not in ["INTERCEPT", "PLACEMENT_READY", "CHARGE_PLACEMENT"]:
         towbeam_mode = false
         player.set_frapray_fire_suppressed(false)
@@ -385,25 +399,43 @@ func _attach_charge_visual(site: Node3D) -> void:
     var target_visual := site.get_node_or_null("FractureTarget") as MeshInstance3D
     if target_visual:
         target_visual.visible = false
-    var charge := MeshInstance3D.new()
-    charge.name = "PlacedDemolitionCharge"
-    var mesh := BoxMesh.new()
-    mesh.size = Vector3(0.42, 0.16, 0.62)
-    var material := StandardMaterial3D.new()
-    material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-    material.albedo_color = Color(0.12, 0.46, 1.0)
-    material.emission_enabled = true
-    material.emission = Color(0.03, 0.26, 1.0)
-    material.emission_energy_multiplier = 6.0
-    mesh.material = material
-    charge.mesh = mesh
+    var charge := EXPLOSIVE_PACK_SCENE.instantiate() as StaticBody3D
+    charge.name = "PlacedExplosivePack"
+    charge.add_to_group("mission_002_explosive_pack")
+    charge.collision_layer = 0
+    charge.collision_mask = 0
     site.add_child(charge)
-    var light := OmniLight3D.new()
-    light.name = "ChargeArmedLight"
-    light.light_color = Color(0.08, 0.42, 1.0)
-    light.light_energy = 3.5
-    light.omni_range = 3.0
-    site.add_child(light)
+    var surface_normal := site.position.normalized()
+    charge.position = surface_normal * 0.012
+    charge.quaternion = Quaternion(Vector3.UP, surface_normal)
+    charge.scale = Vector3.ONE / primary_asteroid.scale.x
+    placed_charge_packs.append(charge)
+    _play_explosive_pack_animation(charge)
+
+
+func _play_explosive_pack_animation(charge: Node3D) -> void:
+    var animation_players: Array[Node] = charge.find_children(
+        "*", "AnimationPlayer", true, false
+    )
+    var animation_player := (
+        animation_players[0] as AnimationPlayer
+        if not animation_players.is_empty()
+        else null
+    )
+    if animation_player == null:
+        return
+    var clip := &"warning_beacons_alternate"
+    if not animation_player.has_animation(clip):
+        for candidate in animation_player.get_animation_list():
+            if candidate != &"RESET":
+                clip = candidate
+                break
+    if not animation_player.has_animation(clip):
+        return
+    var animation := animation_player.get_animation(clip)
+    animation.loop_mode = Animation.LOOP_LINEAR
+    animation_player.play(clip)
+    charge.set_meta("warning_animation", String(clip))
 
 
 func _build_placement_beam() -> void:
@@ -742,6 +774,9 @@ func _build_hud() -> void:
     placement_reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
     placement_reticle.add_to_group("mission_002_blue_reticle")
     hud.add_child(placement_reticle)
+    mission_announcement = MissionAnnouncementOverlay.new()
+    mission_announcement.name = "MissionAnnouncement"
+    hud.add_child(mission_announcement)
 
 
 func _build_panel(position_2d: Vector2, size_2d: Vector2, color: Color) -> ColorRect:
@@ -935,12 +970,13 @@ func _update_weapon_aim() -> void:
 
 func _update_torpedo_charge_indicator() -> void:
     var charging: bool = player.torpedo_charging
+    var hot: bool = charging and player.torpedo_has_live_lock()
     var lock_scale: float = player.torpedo_lock_reticle_scale()
     torpedo_aim.pivot_offset = torpedo_aim.size * 0.5
     torpedo_aim.scale = Vector2.ONE * lock_scale
     torpedo_aim.add_theme_color_override(
         "font_color",
-        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+        Color(0.12, 0.66, 1.0) if hot else Color(1.0, 0.12, 0.08)
     )
     torpedo_charge_indicator.position = (
         torpedo_aim.position + torpedo_aim.size * 0.5

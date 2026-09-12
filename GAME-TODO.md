@@ -35,6 +35,10 @@ Current milestone: **Mission 003 Starbase Defense Prototype V4**, declared
 complete on 2026-09-09. Milestone record:
 [`docs/game/MISSION-003-PROTOTYPE-V4.md`](docs/game/MISSION-003-PROTOTYPE-V4.md)
 
+- [x] Standardize mission announcements across all playable demos: large blue
+  `GO` for the first three seconds, persistent green `SUCCESS` on completion,
+  and persistent red `FAILED` on failure.
+
 ### Phase 1 — Contracts and project boot
 
 - [x] Define strict interactive-asset and interactive-mission schemas.
@@ -184,6 +188,9 @@ Canonical plan: [`docs/game/MISSION-002-PLAN.md`](docs/game/MISSION-002-PLAN.md)
   preserve mouse-drag ship steering in both modes.
 - [x] Project the blue circle along the JB100's actual forward tow-beam path
   and use `Space` to shoot a charge onto an acquired blue torus.
+- [x] Replace the procedural placed-charge box with the canonical one-meter
+  `prop_explosive_pack_A` Blender asset and play its synchronized alternating
+  warning-beacon animation after tow-beam attachment.
 - [x] Reserve `G` for detonation after all charges are placed and the JB100 has
   reached safe distance.
 - [x] Require a safe detonation distance after all three charges are placed.
@@ -218,20 +225,22 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   nose-on station approach, align within three degrees, fire along their
   actual forward axis, and then break into the evasive portion of the pass.
 - [x] Give each pirate flyer three torpedoes; each may launch straight forward
-  or aft only at JB100 after a two-second alignment.
+  or aft only at JB100 after a two-second alignment and only within 300 m.
+- [x] Give pirate torpedoes terminal guidance inside 100 m of the JB100 while
+  preserving their straight fore/aft launch vector outside that range.
 - [x] Keep every pirate outside a conservative 185 m Starbase collision
   envelope and route post-shot egress laterally around the station rather than
   through its core, hangar supports, or structural struts.
 - [x] Add dedicated top and bottom Starbase weapon arcs, linked to the existing
   damageable weapon systems, to punish polar loitering dead zones.
-- [x] Let one objective-complete flyer attack the JB100 only while all three
-  pirates remain combat-capable; below three, return every survivor to station
-  attack, with the final pirate making accelerated strafing runs.
+- [x] Keep exactly one flyer attacking the JB100 whenever at least one other
+  combat-capable flyer remains on station attack; send the final pirate back
+  to accelerated station strafing.
 - [x] Add imperfect, close-range-accurate starbase defensive fire with a
   one-in-twenty chance of deliberately targeting the exposed JB100; station
   fire cannot damage the station itself.
-- [x] Count the two projectiles in every FrapRay volley independently: three
-  bolt hits drive off a flyer; six bolt hits, one torpedo plus three bolt hits,
+- [x] Count the two projectiles in every FrapRay volley independently: six
+  bolt hits drive off a flyer; twelve bolt hits, one torpedo plus six bolt hits,
   or two torpedoes destroy it.
 - [x] Count flyers as driven off at 5,000 m and show their hyperspace departure
   at 6,000 m while keeping retreat speed pursuable.
@@ -243,6 +252,10 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
 - [x] Map backtick to a fixed 25-percent reverse-thrust preset.
 - [x] Preserve the established HUD, controls, weapon reticles, safe-hangar,
   post-failure free-flight, and `R` restart conventions.
+- [x] Show a large centered `FAILED` notice for every Mission 003 failure while
+  preserving post-failure free flight and cockpit instrumentation.
+- [x] Add a hidden post-success hangar re-entry event that launches the docked
+  Earth Starfighter into a continuous orbit around Starbase 86.
 - [x] Add end-to-end automated coverage for hero assets, hangar launch, hidden
   objectives, station systems, pirate damage states, retreat, friendly fire,
   success, station loss, and JB100 disablement.
@@ -308,6 +321,9 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   circular three-second fill indicator.
 - [x] Scale the blue torpedo lock reticle and charge ring down as a tracked
   target leaves reliable lock range, then restore their size when it returns.
+- [x] Require one target to remain continuously in view and reliable range for
+  the full three-second JB100 torpedo load/lock cycle; reset immediately on
+  range loss, break instantly on view loss, and prohibit all dumbfire.
 - [x] On torpedo impact, hide and remove the projectile immediately and replace
   its endpoint with a brief, intense blue-white flash.
 - [x] Add torpedo proximity cleanup for disabled targets, triple the impact
@@ -322,10 +338,20 @@ Canonical plan: [`docs/game/MISSION-003-PLAN.md`](docs/game/MISSION-003-PLAN.md)
   remain inside the cockpit display bezel.
 - [x] Color hostile Senso-Globe contacts red and friendly contacts blue.
 - [x] Add an amber Senso-Globe arrow projected along the JB100's local forward
-  axis and label it `F`.
+  axis without a text label.
+- [x] Correct the Senso-Globe coordinate convention to X lateral, Z vertical,
+  and Y front/back; map Godot local `-Z` forward toward display `+Y` for both
+  the amber arrow and sensor contacts.
+- [x] Remove destroyed pirate roots from the Senso-Globe immediately so combat
+  effect lifetime cannot leave red sensor ghosts.
+- [x] Make PWR a shared generator reserve driven by throttle, shield recovery,
+  and weapon recovery, with low PWR reducing thrust and both recharge rates.
 - [x] Balance pirate defeat using individual projectile impacts rather than
-  paired volleys: three FrapRay bolts to retreat; six bolts, one torpedo plus
-  three bolts, or two torpedoes to destroy.
+  paired volleys: six FrapRay bolts to retreat; twelve bolts, one torpedo plus
+  six bolts, or two torpedoes to destroy.
+- [x] Preserve JB100 weapon cadence and feel while doubling pirate durability
+  after playtesting showed the original three/six-bolt thresholds were too
+  fragile.
 - [x] On mission failure, make every surviving pirate disengage from the JB100
   and circle Starbase 86 without firing.
 

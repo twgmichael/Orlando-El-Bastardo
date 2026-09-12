@@ -135,7 +135,9 @@ pattern but quickly enough that course matching and position matter.
 - The ship-forward blue reticle must acquire the target before `Space` can
   place a charge.
 - The charge remains attached to the rotating asteroid at the selected surface
-  position.
+  position. The placed object is the canonical one-meter
+  `prop_explosive_pack_A` Blender asset, oriented to the local surface normal
+  and running its alternating warning-beacon loop while armed.
 - Moving out of range or losing line of sight breaks acquisition but does not
   remove charges already placed.
 - The ship-effect exclusion bubble continues to hide the beam inside the
@@ -273,6 +275,10 @@ Recommended failure condition:
 Failure should stop mission progression and preserve the consequences already
 visible in the scene, while leaving the JB100 flyable until the player presses
 `R` to restart.
+
+Mission presentation uses large blue `GO` for the first three seconds, green
+`SUCCESS` when every dangerous fragment is cleared, and red `FAILED` when a
+dangerous fragment breaches the atmospheric safety boundary.
 
 ## Open tuning questions
 

@@ -173,6 +173,23 @@ func _run() -> void:
     if not is_equal_approx(player.shield_percent, 67.0):
         fail("shields did not recharge at the FrapRay two-percent rate")
         return
+    player.enable_power_system()
+    player.power_percent = 50.0
+    player.throttle = 1.0
+    player.shield_percent = 90.0
+    player.frapray_power_percent = 90.0
+    player.controls_enabled = false
+    player._physics_process(1.0)
+    player.controls_enabled = true
+    if (
+        not is_equal_approx(player.power_percent, 47.0)
+        or not is_equal_approx(player.shield_percent, 91.5)
+        or not is_equal_approx(player.frapray_power_percent, 91.5)
+        or not is_equal_approx(player.thrust_efficiency(), 0.735)
+        or player.available_thrust_percent() != 74
+    ):
+        fail("shared PWR load did not slow thrust, shield, and weapon recovery")
+        return
 
     player.torpedo_cooldown_remaining = 0.0
     player.proton_torpedoes_remaining = 5
@@ -180,47 +197,59 @@ func _run() -> void:
     var lock_target := StaticBody3D.new()
     lock_target.add_to_group("destructible_asteroid")
     runtime.add_child(lock_target)
+    for target_group in ["destructible_asteroid", "destructible_probe"]:
+        for other_target in get_nodes_in_group(target_group):
+            if other_target != lock_target:
+                other_target.visible = false
     lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -100.0)
     var right_down := InputEventMouseButton.new()
     right_down.button_index = MOUSE_BUTTON_RIGHT
     right_down.pressed = true
+    var right_up := InputEventMouseButton.new()
+    right_up.button_index = MOUSE_BUTTON_RIGHT
+    right_up.pressed = false
     player._unhandled_input(right_down)
     player._physics_process(2.99)
     if (
         player.proton_torpedoes_remaining != 5
         or not player.torpedo_charging
         or player.torpedo_acquired_target != lock_target
+        or not is_equal_approx(player.torpedo_charge_elapsed, 2.99)
     ):
         fail("torpedo build-up did not hold fire and acquire the reticle target")
         return
+    lock_target.global_position = player.global_position + Vector3(100.0, 0.0, 0.0)
+    player.call("_update_torpedo_acquisition", 0.01)
+    if (
+        player.torpedo_acquired_target != null
+        or not is_zero_approx(player.torpedo_charge_elapsed)
+    ):
+        fail("torpedo lock did not break instantly when its target left the aiming view")
+        return
     lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -1200.0)
-    player.torpedo_lock_candidate = lock_target
-    player.torpedo_lock_distance_m = 1200.0
-    player.torpedo_acquired_target = null
+    player.call("_update_torpedo_acquisition", 0.01)
     var out_of_range_scale: float = player.torpedo_lock_reticle_scale()
     if (
-        player.torpedo_acquired_target != null or out_of_range_scale >= 0.5
+        player.torpedo_acquired_target != null
+        or not is_zero_approx(player.torpedo_charge_elapsed)
+        or out_of_range_scale >= 0.5
     ):
-        fail("out-of-range torpedo target did not shrink and release its lock")
+        fail("out-of-range target did not reset lock and charge immediately")
         return
-    lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -850.0)
-    player.torpedo_lock_distance_m = 850.0
-    player.torpedo_acquired_target = lock_target
-    if (
-        player.torpedo_acquired_target != lock_target
-        or player.torpedo_lock_reticle_scale() <= out_of_range_scale
-    ):
-        fail("torpedo reticle did not grow again when its target returned in range")
+    var torpedoes_before_unlocked_release: int = player.proton_torpedoes_remaining
+    player._unhandled_input(right_up)
+    if player.proton_torpedoes_remaining != torpedoes_before_unlocked_release:
+        fail("unlocked torpedo fired when right mouse was released")
+        return
+    if player.fire_proton_torpedo():
+        fail("proton torpedo allowed deliberate dumbfire without a target lock")
         return
     lock_target.global_position = player.global_position + Vector3(0.0, 0.0, -100.0)
-    player.call("_update_torpedo_acquisition")
-    player._physics_process(0.02)
+    player._unhandled_input(right_down)
+    player._physics_process(3.01)
     if player.proton_torpedoes_remaining != 5 or not player.torpedo_charging:
         fail("fully charged torpedo fired before right mouse was released")
         return
-    var right_up := InputEventMouseButton.new()
-    right_up.button_index = MOUSE_BUTTON_RIGHT
-    right_up.pressed = false
     player._unhandled_input(right_up)
     if player.proton_torpedoes_remaining != 4 or player.torpedo_charging:
         fail("right mouse release did not fire the fully charged torpedo")

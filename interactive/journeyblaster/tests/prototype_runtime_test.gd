@@ -44,6 +44,18 @@ func _run() -> void:
     if runtime.current_state() != "LOCATE":
         fail("mission did not enter LOCATE")
         return
+    if (
+        runtime.mission_announcement == null
+        or not runtime.mission_announcement.visible
+        or runtime.mission_announcement.text != "GO"
+        or runtime.mission_announcement.get_theme_color("font_color").b < 0.9
+    ):
+        fail("Mission 001 did not begin with the blue GO announcement")
+        return
+    runtime.mission_announcement.call("_process", 3.0)
+    if runtime.mission_announcement.visible:
+        fail("Mission 001 GO announcement did not clear after three seconds")
+        return
 
     player.global_position = probe.global_position + Vector3(0.0, 0.0, 100.0)
     player.velocity = Vector3.ZERO
@@ -138,6 +150,13 @@ func _run() -> void:
     runtime._update_mission(0.0)
     if runtime.current_state() != "COMPLETE":
         fail("hyperspace did not complete the mission")
+        return
+    if (
+        not runtime.mission_announcement.visible
+        or runtime.mission_announcement.text != "SUCCESS"
+        or runtime.mission_announcement.get_theme_color("font_color").g < 0.9
+    ):
+        fail("Mission 001 completion did not show the green SUCCESS announcement")
         return
 
     print("PROTOTYPE-RUNTIME-OK: flight + chair + sensors + download + tow + return + hyperspace")

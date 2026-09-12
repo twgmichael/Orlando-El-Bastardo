@@ -13,6 +13,12 @@
       "kind": "prop",
       "version": "1.0.0"
     },
+    "prop_explosive_pack_A": {
+      "file": "props/explosive_pack_v1.0.0/explosive_pack_v1.0.0.glb",
+      "node": "prop_explosive_pack_A",
+      "kind": "prop",
+      "version": "1.0.0"
+    },
     "fx_hyperspace_effect_A": {
       "file": "effects/hyperspace_effect_v1.1.0/hyperspace_effect_v1.1.0.glb",
       "node": "HYPERSPACE_EVENT_ROOT",

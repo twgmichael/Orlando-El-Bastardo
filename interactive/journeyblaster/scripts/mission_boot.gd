@@ -1,6 +1,9 @@
 extends Node3D
 
 const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
+const MissionAnnouncementOverlay = preload(
+    "res://scripts/mission_announcement_overlay.gd"
+)
 
 const STATE_OBJECTIVES := {
     "BRIEFING": "Bring the JB100 online and enter the asteroid field.",
@@ -48,6 +51,7 @@ var flight_label: Label
 var view_label: Label
 var weapons_label: Label
 var prompt_label: Label
+var mission_announcement: Label
 var weapon_aim: Control
 var frap_aim_left: Label
 var frap_aim_right: Label
@@ -168,6 +172,9 @@ func _resolve_runtime_nodes() -> bool:
     torpedo_charge_indicator.name = "TorpedoChargeIndicator"
     torpedo_charge_indicator.size = Vector2(31.0, 31.0)
     weapon_aim.add_child(torpedo_charge_indicator)
+    mission_announcement = MissionAnnouncementOverlay.new()
+    mission_announcement.name = "MissionAnnouncement"
+    (get_node("HUD") as CanvasLayer).add_child(mission_announcement)
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
     torpedo_origin = player.find_child("torpedo_launcher", true, false) as Node3D
@@ -180,6 +187,7 @@ func _resolve_runtime_nodes() -> bool:
 func begin_mission() -> void:
     if mission_state == "BRIEFING":
         _set_state("LOCATE")
+        mission_announcement.call("show_go")
 
 
 func request_interaction() -> void:
@@ -256,6 +264,11 @@ func _set_state(next_state: String) -> void:
         return
     mission_state = next_state
     state_elapsed = 0.0
+    if mission_announcement:
+        if next_state == "FAILED":
+            mission_announcement.call("show_failed")
+        elif next_state == "COMPLETE":
+            mission_announcement.call("show_success")
     if status_label:
         status_label.text = "MISSION STATE · %s" % mission_state.replace("_", " ")
 
@@ -535,12 +548,13 @@ func _update_weapon_aim() -> void:
 
 func _update_torpedo_charge_indicator() -> void:
     var charging: bool = player.torpedo_charging
+    var hot: bool = charging and player.torpedo_has_live_lock()
     var lock_scale: float = player.torpedo_lock_reticle_scale()
     torpedo_aim.pivot_offset = torpedo_aim.size * 0.5
     torpedo_aim.scale = Vector2.ONE * lock_scale
     torpedo_aim.add_theme_color_override(
         "font_color",
-        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+        Color(0.12, 0.66, 1.0) if hot else Color(1.0, 0.12, 0.08)
     )
     torpedo_charge_indicator.position = (
         torpedo_aim.position + torpedo_aim.size * 0.5

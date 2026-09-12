@@ -4,6 +4,9 @@ const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 const StarbaseTarget = preload("res://scripts/starbase_target.gd")
 const SensorGlobeDisplay = preload("res://scripts/sensor_globe_display.gd")
 const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
+const MissionAnnouncementOverlay = preload(
+    "res://scripts/mission_announcement_overlay.gd"
+)
 const STARBASE_SCENE = preload("res://generated/scenes/starbase_86_v1.tscn")
 const PIRATE_SCENE = preload("res://generated/scenes/pirate_flyer_mk1.tscn")
 const EARTH_STARFIGHTER_SCENE = preload(
@@ -17,14 +20,16 @@ const OPEN_HANGAR_ENTRANCE_FALLBACK := Vector3(104.404, 10.5, -65.741)
 const OPEN_HANGAR_EXIT_FALLBACK := Vector3(123.316, 10.5, -3.88)
 const PLAYER_HANGAR_START_RATIO := 0.62
 const HANGAR_SAFE_RADIUS_M := 32.0
-const PIRATE_RETREAT_HITS := 3.0
-const PIRATE_DESTROY_HITS := 6.0
+const PIRATE_RETREAT_HITS := 6.0
+const PIRATE_DESTROY_HITS := 12.0
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
-const PLAYER_ATTACK_MIN_ACTIVE_PIRATES := 3
+const PLAYER_ATTACK_MIN_ACTIVE_PIRATES := 2
 const LAST_PIRATE_STATION_AGGRESSION := 1.6
 const STATION_FRIENDLY_FIRE_ODDS := 20
 const STATION_ALERT_HISTORY_SIZE := 3
+const STARFIGHTER_LAUNCH_DURATION_S := 3.2
+const STARFIGHTER_ORBIT_SPEED_RAD_S := 0.22
 
 const OBJECTIVES := {
     "BRIEFING": "Launch from Starbase 86 and repel three attacking pirate flyers.",
@@ -38,6 +43,14 @@ const OBJECTIVES := {
 var mission_state := "BRIEFING"
 var starbase: StaticBody3D
 var docked_starfighter: StaticBody3D
+var starfighter_secret_state := "DOCKED"
+var starfighter_secret_armed := false
+var starfighter_launch_elapsed := 0.0
+var starfighter_launch_start := Vector3.ZERO
+var starfighter_launch_finish := Vector3.ZERO
+var starfighter_orbit_angle := 0.0
+var starfighter_orbit_radius := 0.0
+var starfighter_orbit_height := 0.0
 var station_targets: Array[StaticBody3D] = []
 var targets_by_category: Dictionary = {}
 var pirates: Array[AnimatableBody3D] = []
@@ -65,6 +78,7 @@ var weapons_label: Label
 var flight_label: Label
 var view_label: Label
 var prompt_label: Label
+var failure_overlay: Label
 var weapon_aim: Control
 var frap_aim_left: Label
 var frap_aim_right: Label
@@ -104,6 +118,7 @@ func _ready() -> void:
     _position_player_in_open_hangar()
     _spawn_pirates()
     _build_hud()
+    player.enable_power_system()
     player.enable_shield_tracking()
     player.ship_disabled.connect(_on_player_disabled)
     player.shields_depleted.connect(_on_player_shields_depleted)
@@ -123,6 +138,7 @@ func _process(delta: float) -> void:
         _update_station_defense(delta)
         _maintain_player_attacker()
         _evaluate_outcome()
+    _update_post_success_secret(delta)
     _update_hud()
 
 
@@ -140,6 +156,7 @@ func begin_mission() -> void:
     if mission_state != "BRIEFING":
         return
     _set_state("DEFEND")
+    failure_overlay.call("show_go")
     for pirate in pirates:
         pirate.ai_enabled = true
     for weapon in _station_defense_mounts():
@@ -152,6 +169,11 @@ func current_state() -> String:
 
 func _set_state(next_state: String) -> void:
     mission_state = next_state
+    if failure_overlay:
+        if next_state == "FAILED":
+            failure_overlay.call("show_failed")
+        elif next_state == "COMPLETE":
+            failure_overlay.call("show_success")
     if next_state == "FAILED":
         for pirate in _active_pirates():
             pirate.assign_station_circle()
@@ -668,16 +690,17 @@ func _maintain_player_attacker() -> void:
     if _player_attacker_is_active():
         return
     player_attacker = null
-    for pirate in pirates:
+    for pirate in combat_pirates:
         if (
             pirate.completed_primary_objective
-            and not pirate.destroyed
-            and not pirate.perimeter_crossed
-            and pirate.behavior not in ["RETREAT", "DRIVEN_OFF"]
         ):
             player_attacker = pirate
             pirate.assign_player_attack()
             return
+    # Keep one flyer pressuring the JB100 from mission start while every other
+    # combat-capable flyer continues its station objective.
+    player_attacker = combat_pirates[0]
+    player_attacker.assign_player_attack()
 
 
 func _combat_capable_pirates() -> Array[AnimatableBody3D]:
@@ -747,6 +770,76 @@ func is_player_in_safe_hangar() -> bool:
     return player.global_position.distance_to(open_hangar_center) <= HANGAR_SAFE_RADIUS_M
 
 
+func _update_post_success_secret(delta: float) -> void:
+    if mission_state != "COMPLETE" or not is_instance_valid(docked_starfighter):
+        return
+    if starfighter_secret_state == "LAUNCHING":
+        _advance_starfighter_launch(delta)
+        return
+    if starfighter_secret_state == "ORBITING":
+        _advance_starfighter_orbit(delta)
+        return
+    if not is_player_in_safe_hangar():
+        starfighter_secret_armed = true
+    elif starfighter_secret_armed:
+        _launch_docked_starfighter()
+
+
+func _launch_docked_starfighter() -> void:
+    starfighter_secret_state = "LAUNCHING"
+    starfighter_launch_elapsed = 0.0
+    starfighter_launch_start = docked_starfighter.global_position
+    var corridor_direction := (open_hangar_exit - open_hangar_entrance).normalized()
+    starfighter_launch_finish = (
+        open_hangar_exit + corridor_direction * 115.0 + Vector3.UP * 18.0
+    )
+    docked_starfighter.look_at(starfighter_launch_finish, Vector3.UP)
+
+
+func _advance_starfighter_launch(delta: float) -> void:
+    starfighter_launch_elapsed += delta
+    var progress := clampf(
+        starfighter_launch_elapsed / STARFIGHTER_LAUNCH_DURATION_S, 0.0, 1.0
+    )
+    var eased_progress := smoothstep(0.0, 1.0, progress)
+    docked_starfighter.global_position = starfighter_launch_start.lerp(
+        starfighter_launch_finish, eased_progress
+    )
+    var launch_direction := (
+        starfighter_launch_finish - starfighter_launch_start
+    ).normalized()
+    docked_starfighter.look_at(
+        docked_starfighter.global_position + launch_direction, Vector3.UP
+    )
+    if progress < 1.0:
+        return
+    var radial := docked_starfighter.global_position - STARBASE_CENTER
+    starfighter_orbit_radius = maxf(Vector2(radial.x, radial.z).length(), 190.0)
+    starfighter_orbit_angle = atan2(radial.z, radial.x)
+    starfighter_orbit_height = docked_starfighter.global_position.y
+    starfighter_secret_state = "ORBITING"
+
+
+func _advance_starfighter_orbit(delta: float) -> void:
+    starfighter_orbit_angle = fmod(
+        starfighter_orbit_angle + STARFIGHTER_ORBIT_SPEED_RAD_S * delta, TAU
+    )
+    var next_position := Vector3(
+        STARBASE_CENTER.x + cos(starfighter_orbit_angle) * starfighter_orbit_radius,
+        starfighter_orbit_height,
+        STARBASE_CENTER.z + sin(starfighter_orbit_angle) * starfighter_orbit_radius
+    )
+    var tangent_target := Vector3(
+        STARBASE_CENTER.x
+        + cos(starfighter_orbit_angle + 0.04) * starfighter_orbit_radius,
+        starfighter_orbit_height,
+        STARBASE_CENTER.z
+        + sin(starfighter_orbit_angle + 0.04) * starfighter_orbit_radius
+    )
+    docked_starfighter.global_position = next_position
+    docked_starfighter.look_at(tangent_target, Vector3.UP)
+
+
 func fire_pirate_weapon(pirate: AnimatableBody3D, target: Node3D) -> bool:
     if mission_state == "BRIEFING" or pirate.destroyed:
         return false
@@ -778,6 +871,8 @@ func fire_pirate_torpedo(
         mission_state != "DEFEND"
         or pirate.destroyed
         or pirate.torpedoes_remaining <= 0
+        or pirate.global_position.distance_to(player.global_position)
+        > pirate.REAR_TORPEDO_MAX_RANGE_M
     ):
         return false
     var direction := launch_direction.normalized()
@@ -793,7 +888,8 @@ func fire_pirate_torpedo(
         190.0,
         10.0,
         pirate.get_rid(),
-        exclusions
+        exclusions,
+        player
     )
     pirate.torpedoes_remaining -= 1
     pirate_torpedoes_fired += 1
@@ -926,11 +1022,12 @@ func _spawn_combat_projectile(
     speed: float,
     damage: float,
     shooter: RID,
-    exclusions: Array[RID]
+    exclusions: Array[RID],
+    target: Node3D = null
 ) -> void:
     var projectile := WeaponProjectile.new()
     projectile.configure(
-        kind, start, direction, speed, damage, shooter, exclusions
+        kind, start, direction, speed, damage, shooter, exclusions, target
     )
     add_child(projectile)
 
@@ -954,6 +1051,13 @@ func _build_hud() -> void:
     torpedo_charge_indicator.name = "TorpedoChargeIndicator"
     torpedo_charge_indicator.size = Vector2(31.0, 31.0)
     weapon_aim.add_child(torpedo_charge_indicator)
+    _build_failure_overlay()
+
+
+func _build_failure_overlay() -> void:
+    failure_overlay = MissionAnnouncementOverlay.new()
+    failure_overlay.name = "FailureOverlay"
+    hud.add_child(failure_overlay)
 
 
 func _build_instrument_screen(
@@ -1115,11 +1219,12 @@ func _build_aim_label(label_name: String, value: String) -> Label:
 func _update_hud() -> void:
     if mission_screen_label == null:
         return
-    var thrust_percent: int = player.throttle_percent()
+    var thrust_percent: int = player.available_thrust_percent()
+    var power_percent: int = player.power_level_percent()
     var shield_percent: int = player.shield_level_percent()
     var frapray_percent: int = floori(player.frapray_power_percent)
-    systems_bars["PWR"].value = 100.0
-    systems_value_labels["PWR"].text = "PWR: 100%"
+    systems_bars["PWR"].value = power_percent
+    systems_value_labels["PWR"].text = "PWR: %03d%%" % power_percent
     systems_bars["THR"].value = thrust_percent
     systems_value_labels["THR"].text = "THR: %03d%%" % thrust_percent
     systems_bars["SHD"].value = shield_percent
@@ -1205,12 +1310,13 @@ func _update_weapon_aim() -> void:
 
 func _update_torpedo_charge_indicator() -> void:
     var charging: bool = player.torpedo_charging
+    var hot: bool = charging and player.torpedo_has_live_lock()
     var lock_scale: float = player.torpedo_lock_reticle_scale()
     torpedo_aim.pivot_offset = torpedo_aim.size * 0.5
     torpedo_aim.scale = Vector2.ONE * lock_scale
     torpedo_aim.add_theme_color_override(
         "font_color",
-        Color(0.12, 0.66, 1.0) if charging else Color(1.0, 0.12, 0.08)
+        Color(0.12, 0.66, 1.0) if hot else Color(1.0, 0.12, 0.08)
     )
     torpedo_charge_indicator.position = (
         torpedo_aim.position + torpedo_aim.size * 0.5

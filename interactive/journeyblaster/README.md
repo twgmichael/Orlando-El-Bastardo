@@ -4,6 +4,11 @@ Current milestone: **Mission 003 Starbase Defense Prototype V4**
 (`mission-003-prototype-v4`), declared complete on
 2026-09-09.
 
+Every playable mission opens with a large blue `GO` announcement for three
+seconds. Meeting the mission criteria displays persistent green `SUCCESS`;
+failing displays persistent red `FAILED`. Announcements do not disable the
+mission's established post-result controls.
+
 This nested Godot 4 project is the first OEB interactive runtime. Canonical
 assets remain under the Studio's `assets/` tree. Runtime copies and wrapper
 scenes are generated and intentionally ignored.
@@ -106,6 +111,8 @@ reverse tow beam. Mouse position always steers the JB100; the restored blue
 circle shows where the ship-forward tow beam will strike. Aim it over a blue
 torus and press `Space` to shoot the beam and attach a charge. Press `/` or `?`
 again to switch back to FrapRay; `T` continues to launch proton torpedoes.
+Each placed charge is the canonical one-meter explosive-pack Blender asset;
+its alternating warning beacons animate once the pack attaches to the surface.
 
 The three-minute charge-placement window begins as soon as the mission loads.
 
@@ -126,16 +133,32 @@ flight controls to launch, click left for paired FrapRay fire, hold right mouse
 to launch a proton torpedo, and use `\` for the actual weapon-path HUD.
 
 Three Ellipso pirate flyers attack nine hidden station damage locations. Their
-objectives, target order, and health are not exposed. Three FrapRay shots drive
-a flyer into a committed retreat; six individual bolt hits, one torpedo plus
-three bolt hits, or two torpedoes destroy it. Starbase defensive bolts can hit
+objectives, target order, and health are not exposed. Six individual FrapRay
+bolt hits drive a flyer into a committed retreat; twelve bolt hits, one torpedo
+plus six bolt hits, or two torpedoes destroy it. Starbase defensive bolts can hit
 the pirates or the JB100.
+
+Exactly one pirate attacks the JB100 while at least one other remains on
+station attack. Each pirate carries three fore/aft torpedoes, launches only
+within 300 m after alignment, and gains terminal guidance inside 100 m. The
+JB100's torpedoes require a three-second continuous load/lock cycle. The same
+target must remain in range and in the aiming view throughout; either loss
+resets immediately. Releasing
+without a completed live lock neither fires nor spends a torpedo.
 
 The JB100 begins with 100-percent shields. Station and pirate plasma hits remove
 10 percent, pirate torpedoes remove 25 percent, and collisions with a flyer or
 Starbase 86 remove 50 percent. Shields recharge at two percent per second, the
 same rate as FrapRay power. Reaching zero shields fails the mission while
 preserving free flight; the left cockpit screen reports the live SHD value.
+
+PWR is a shared 0–100 generator reserve. It changes each second by `4`, minus
+`3 × absolute throttle`, minus `2` each while shields or weapons are recovering.
+Its power factor ranges from 50% at empty to 100% at full and scales available
+thrust plus SHD and WPN recharge rates. The Senso-Globe uses X for left/right,
+Z for up/down, and +Y for forward; its amber arrow and contacts share that
+ship-relative transform. Destroyed pirates disappear from its returns
+immediately even while their effect nodes finish cleaning up.
 
 The right cockpit screen reports live shield, weapon, and hangar damage plus
 pirate retreats and destruction. The Senso-Globe shows pirate flyers in red
@@ -145,4 +168,5 @@ Destroy all three flyers or drive each beyond 5,000 m to complete the mission.
 The open hangar is safe from deliberate pirate pursuit. Losing all nine
 station targets or all JB100 shields fails the mission without ending the
 current scene; surviving pirates disengage and circle Starbase 86 while the
-pilot remains free to fly or observe. `R` restarts.
+pilot remains free to fly or observe. A large red `FAILED` notice appears in
+the center of the viewing area, and `R` restarts.

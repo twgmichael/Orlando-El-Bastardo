@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "contract_id": "explosive_pack_v1",
+  "asset_id": "prop_explosive_pack_A",
+  "display_name": "Tow-Beam Explosive Pack",
+  "production_role": "hero",
+  "source": {
+    "config_asset_id": "prop_explosive_pack_A",
+    "expected_node": "prop_explosive_pack_A"
+  },
+  "runtime": {
+    "kind": "mission_prop",
+    "root_node_type": "StaticBody3D",
+    "wrapper_scene": "res://generated/scenes/explosive_pack_v1.tscn"
+  },
+  "orientation": {
+    "authored_forward_axis": "+X",
+    "authored_up_axis": "+Z",
+    "runtime_forward_axis": "-Z",
+    "visual_rotation_degrees": [0.0, -90.0, 0.0]
+  },
+  "visual": {
+    "scale": [1.0, 1.0, 1.0],
+    "visible_from_cockpit": true
+  },
+  "collision": [
+    {
+      "shape_id": "explosive_pack_collision",
+      "kind": "box",
+      "position": [0.0, 0.2, 0.0],
+      "rotation_degrees": [0.0, 0.0, 0.0],
+      "size": [1.0, 0.4, 1.0]
+    }
+  ],
+  "markers": [],
+  "capabilities": ["collision"],
+  "animation_bindings": {
+    "warning_beacons": "warning_beacons_alternate_loop"
+  },
+  "notes": [
+    "Mission 002 places three copies on the primary asteroid with the reverse tow beam.",
+    "The alternating warning-beacon animation begins once each pack is attached."
+  ]
+}

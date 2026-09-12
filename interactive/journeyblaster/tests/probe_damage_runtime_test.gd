@@ -89,7 +89,7 @@ func _run() -> void:
     weapon_player.global_rotation = Vector3.ZERO
     weapon_player.velocity = Vector3.ZERO
     weapon_probe.global_position = Vector3(0.0, 0.02, -24.0)
-    if not weapon_player.fire_proton_torpedo():
+    if not weapon_player.fire_proton_torpedo(weapon_probe):
         fail("proton torpedo could not fire at mining probe")
         return
     for frame in 40:
@@ -101,6 +101,13 @@ func _run() -> void:
         return
     if weapon_runtime.current_state() != "FAILED":
         fail("destroyed mining probe did not fail the mission")
+        return
+    if (
+        not weapon_runtime.mission_announcement.visible
+        or weapon_runtime.mission_announcement.text != "FAILED"
+        or weapon_runtime.mission_announcement.get_theme_color("font_color").r < 0.9
+    ):
+        fail("Mission 001 failure did not show the red FAILED announcement")
         return
     if not weapon_player.controls_enabled:
         fail("flight controls were disabled after mission failure")

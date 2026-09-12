@@ -7,8 +7,8 @@ signal retreat_started(flyer: AnimatableBody3D)
 signal flyer_destroyed(flyer: AnimatableBody3D)
 signal defense_perimeter_crossed(flyer: AnimatableBody3D)
 
-const RETREAT_HITS := 3
-const DESTROY_HITS := 6
+const RETREAT_HITS := 6
+const DESTROY_HITS := 12
 const DEFENSE_PERIMETER_M := 5000.0
 const HYPERSPACE_RANGE_M := 6000.0
 const RUN_INGRESS_DISTANCE_M := 235.0
@@ -20,7 +20,7 @@ const FORWARD_FIRE_CONE_DEG := 3.0
 const STARBASE_KEEP_OUT_RADIUS_M := 185.0
 const REAR_TORPEDO_CONE_DEG := 10.0
 const REAR_TORPEDO_MIN_RANGE_M := 35.0
-const REAR_TORPEDO_MAX_RANGE_M := 650.0
+const REAR_TORPEDO_MAX_RANGE_M := 300.0
 const REAR_TORPEDO_LOCK_TIME_S := 2.0
 
 var runtime: Node3D
@@ -475,7 +475,7 @@ func apply_weapon_hit(
     CombatEffects.spawn_dust_cloud(get_parent(), hit_position, 0.42, 5)
     if (
         proton_torpedo_hits >= 2
-        or (proton_torpedo_hits >= 1 and bolt_hits >= 3)
+        or (proton_torpedo_hits >= 1 and bolt_hits >= RETREAT_HITS)
         or bolt_hits >= DESTROY_HITS
     ):
         _destroy_flyer(weapon_kind, impact_direction)

@@ -75,7 +75,7 @@ func _run() -> void:
         return
 
     var torpedoes_before: int = player.proton_torpedoes_remaining
-    if not player.fire_proton_torpedo():
+    if not player.fire_proton_torpedo(asteroid):
         fail("proton torpedo did not launch")
         return
     await process_frame
@@ -107,7 +107,7 @@ func _run() -> void:
     await process_frame
     asteroid.global_position = player.global_position - player.global_basis.z * 34.0
     player.torpedo_cooldown_remaining = 0.0
-    if not player.fire_proton_torpedo():
+    if not player.fire_proton_torpedo(asteroid):
         fail("proton torpedo could not fire at the destructible asteroid")
         return
     for frame in 40:

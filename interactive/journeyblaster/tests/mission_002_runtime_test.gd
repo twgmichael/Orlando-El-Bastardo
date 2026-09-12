@@ -31,6 +31,18 @@ func _run() -> void:
     if runtime.current_state() != "INTERCEPT":
         fail("Mission 002 did not begin immediately on load")
         return
+    if (
+        runtime.mission_announcement == null
+        or not runtime.mission_announcement.visible
+        or runtime.mission_announcement.text != "GO"
+        or runtime.mission_announcement.get_theme_color("font_color").b < 0.9
+    ):
+        fail("Mission 002 did not begin with the blue GO announcement")
+        return
+    runtime.mission_announcement.call("_process", 3.0)
+    if runtime.mission_announcement.visible:
+        fail("Mission 002 GO announcement did not clear after three seconds")
+        return
     if not is_equal_approx(runtime.CHARGE_PLACEMENT_WINDOW_S, 180.0):
         fail("charge-placement window is not three minutes")
         return
@@ -103,6 +115,30 @@ func _run() -> void:
     if runtime.charges_placed != 3 or runtime.current_state() != "CLEAR_BLAST":
         fail("three placed charges did not unlock blast clearance")
         return
+    if runtime.placed_charge_packs.size() != 3:
+        fail("three placements did not create three explosive-pack hero assets")
+        return
+    for charge in runtime.placed_charge_packs:
+        var animation_players: Array[Node] = charge.find_children(
+            "*", "AnimationPlayer", true, false
+        )
+        var animation_player := (
+            animation_players[0] as AnimationPlayer
+            if not animation_players.is_empty()
+            else null
+        )
+        if (
+            charge.get_meta("asset_id", "") != "prop_explosive_pack_A"
+            or charge.get_meta("warning_animation", "")
+            != "warning_beacons_alternate"
+            or animation_player == null
+            or not animation_player.is_playing()
+        ):
+            fail("placed explosive pack did not use and animate the Blender hero asset")
+            return
+        if absf(charge.global_basis.get_scale().x - 1.0) > 0.02:
+            fail("explosive pack did not preserve its authored one-meter scale")
+            return
     if player.frapray_fire_suppressed:
         fail("FrapRay firing was not restored after charge placement")
         return
@@ -145,7 +181,7 @@ func _run() -> void:
         player.global_position - player.global_basis.z * 46.0
     )
     player.torpedo_cooldown_remaining = 0.0
-    if not player.fire_proton_torpedo():
+    if not player.fire_proton_torpedo(projectile_target):
         fail("JB100 could not fire at Mission 002 debris")
         return
     for frame in 45:
@@ -179,6 +215,13 @@ func _run() -> void:
     runtime.call("_evaluate_debris_outcome")
     if runtime.current_state() != "COMPLETE":
         fail("atomizing all debris did not complete Mission 002")
+        return
+    if (
+        not runtime.mission_announcement.visible
+        or runtime.mission_announcement.text != "SUCCESS"
+        or runtime.mission_announcement.get_theme_color("font_color").g < 0.9
+    ):
+        fail("Mission 002 completion did not show the green SUCCESS announcement")
         return
 
     print(

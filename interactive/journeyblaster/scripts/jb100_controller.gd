@@ -33,6 +33,11 @@ const TORPEDO_UNLOCKED_RETICLE_SCALE := 0.34
 @export var frapray_cooldown_s := 0.18
 @export var frapray_power_cost_percent := 10.0
 @export var frapray_recharge_percent_per_second := 2.0
+@export var generator_output_percent_per_second := 4.0
+@export var thrust_power_load_at_full := 3.0
+@export var shield_recharge_power_load := 2.0
+@export var weapon_recharge_power_load := 2.0
+@export var emergency_power_factor := 0.5
 @export var torpedo_cooldown_s := 0.9
 @export var torpedo_charge_time_s := 3.0
 @export var proton_torpedo_capacity := 5
@@ -70,6 +75,8 @@ var disabled_in_space := false
 var shield_tracking_enabled := false
 var shield_percent := 100.0
 var shield_max_percent := 100.0
+var power_system_enabled := false
+var power_percent := 100.0
 var mouse_capture_prompt: Label
 
 @onready var frapray_left := get_node_or_null("frap_hardpoint_left") as Node3D
@@ -93,22 +100,38 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
     _update_mouse_virtual_stick(delta)
+    var weapon_recharging := frapray_power_percent < 100.0
+    var shield_recharging := (
+        shield_tracking_enabled and shield_percent < shield_max_percent
+    )
+    var recharge_factor := power_factor()
     frapray_power_percent = minf(
         100.0,
-        frapray_power_percent + frapray_recharge_percent_per_second * delta
+        frapray_power_percent
+        + frapray_recharge_percent_per_second * recharge_factor * delta
     )
-    if shield_tracking_enabled and shield_percent < shield_max_percent:
+    if shield_recharging:
         shield_percent = minf(
             shield_max_percent,
-            shield_percent + frapray_recharge_percent_per_second * delta
+            shield_percent
+            + frapray_recharge_percent_per_second * recharge_factor * delta
         )
+    if power_system_enabled:
+        var power_change := (
+            generator_output_percent_per_second
+            - thrust_power_load_at_full * absf(throttle)
+            - (shield_recharge_power_load if shield_recharging else 0.0)
+            - (weapon_recharge_power_load if weapon_recharging else 0.0)
+        )
+        power_percent = clampf(power_percent + power_change * delta, 0.0, 100.0)
     frapray_cooldown_remaining = maxf(0.0, frapray_cooldown_remaining - delta)
     torpedo_cooldown_remaining = maxf(0.0, torpedo_cooldown_remaining - delta)
     if torpedo_charging:
-        torpedo_charge_elapsed = minf(
-            torpedo_charge_time_s, torpedo_charge_elapsed + delta
-        )
-        _update_torpedo_acquisition()
+        _update_torpedo_acquisition(delta)
+        if torpedo_has_live_lock():
+            torpedo_charge_elapsed = minf(
+                torpedo_charge_time_s, torpedo_charge_elapsed + delta
+            )
     if not controls_enabled:
         mouse_flight_target = Vector2.ZERO
         return
@@ -485,6 +508,7 @@ func fire_proton_torpedo(acquired_target: Node3D = null) -> bool:
         or torpedo_cooldown_remaining > 0.0
         or proton_torpedoes_remaining <= 0
         or torpedo_launcher == null
+        or not _is_valid_torpedo_target(acquired_target)
     ):
         return false
     torpedo_cooldown_remaining = torpedo_cooldown_s
@@ -516,7 +540,7 @@ func release_torpedo_charge() -> bool:
     var fully_charged := torpedo_charge_elapsed >= torpedo_charge_time_s
     var acquired_target := torpedo_acquired_target
     cancel_torpedo_charge()
-    if not fully_charged:
+    if not fully_charged or not _is_valid_torpedo_target(acquired_target):
         return false
     return fire_proton_torpedo(acquired_target)
 
@@ -533,6 +557,10 @@ func torpedo_charge_ratio() -> float:
     if not torpedo_charging or torpedo_charge_time_s <= 0.0:
         return 0.0
     return clampf(torpedo_charge_elapsed / torpedo_charge_time_s, 0.0, 1.0)
+
+
+func torpedo_has_live_lock() -> bool:
+    return _is_valid_torpedo_target(torpedo_acquired_target)
 
 
 func torpedo_lock_reticle_scale() -> float:
@@ -557,8 +585,8 @@ func torpedo_lock_reticle_scale() -> float:
     return lerpf(1.0, 0.58, warning_ratio)
 
 
-func _update_torpedo_acquisition() -> void:
-    torpedo_acquired_target = null
+func _update_torpedo_acquisition(_delta: float = 0.0) -> void:
+    var previous_target := torpedo_acquired_target
     torpedo_lock_candidate = null
     torpedo_lock_distance_m = INF
     var forward := -global_basis.z.normalized()
@@ -586,8 +614,28 @@ func _update_torpedo_acquisition() -> void:
             best_score = score
             torpedo_lock_candidate = candidate
             torpedo_lock_distance_m = distance
-    if torpedo_lock_distance_m <= TORPEDO_LOCK_RANGE_M:
+    if (
+        torpedo_lock_distance_m <= TORPEDO_LOCK_RANGE_M
+        and _is_valid_torpedo_target(torpedo_lock_candidate)
+    ):
+        if previous_target != torpedo_lock_candidate:
+            torpedo_charge_elapsed = 0.0
         torpedo_acquired_target = torpedo_lock_candidate
+        return
+    if previous_target != null or torpedo_charge_elapsed > 0.0:
+        torpedo_charge_elapsed = 0.0
+    torpedo_acquired_target = null
+
+
+func _is_valid_torpedo_target(target: Node3D) -> bool:
+    if target == null or not is_instance_valid(target) or not target.visible:
+        return false
+    if target.is_in_group("mission_003_pirate"):
+        return not bool(target.get("destroyed"))
+    return (
+        target.is_in_group("destructible_asteroid")
+        or target.is_in_group("destructible_probe")
+    )
 
 
 func _spawn_projectile(
@@ -681,7 +729,10 @@ func apply_weapon_hit(
 func thrust_efficiency() -> float:
     if disabled_in_space:
         return 0.0
-    return clampf(hull_integrity / hull_integrity_max, 0.0, 1.0)
+    return (
+        clampf(hull_integrity / hull_integrity_max, 0.0, 1.0)
+        * power_factor()
+    )
 
 
 func dead_stop() -> void:
@@ -699,6 +750,25 @@ func enable_shield_tracking() -> void:
     shield_tracking_enabled = true
     shield_percent = shield_max_percent
     shields_changed.emit(shield_percent, "reset")
+
+
+func enable_power_system() -> void:
+    power_system_enabled = true
+    power_percent = 100.0
+
+
+func power_factor() -> float:
+    if not power_system_enabled:
+        return 1.0
+    return lerpf(
+        emergency_power_factor,
+        1.0,
+        clampf(power_percent / 100.0, 0.0, 1.0)
+    )
+
+
+func power_level_percent() -> int:
+    return roundi(power_percent)
 
 
 func apply_shield_damage(amount: float, source_kind: String) -> void:
@@ -733,6 +803,10 @@ func speed_mps() -> float:
 
 func throttle_percent() -> int:
     return roundi(throttle * 100.0)
+
+
+func available_thrust_percent() -> int:
+    return roundi(throttle * power_factor() * 100.0)
 
 
 func set_controls_enabled(enabled: bool) -> void:

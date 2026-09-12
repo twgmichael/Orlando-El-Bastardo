@@ -48,9 +48,9 @@ starbase defensive fire.
   fire from the starbase.
 - Starbase weapons are hazardous to everyone and can accidentally hit the
   JB100.
-- Three individual FrapRay bolt hits cause a flyer to break off and flee.
-- Six individual FrapRay bolt hits destroy a flyer.
-- One proton-torpedo hit plus three individual FrapRay bolt hits destroys a
+- Six individual FrapRay bolt hits cause a flyer to break off and flee.
+- Twelve individual FrapRay bolt hits destroy a flyer.
+- One proton-torpedo hit plus six individual FrapRay bolt hits destroys a
   flyer; two proton torpedoes also destroy it.
 - There are nine fixed but unmarked starbase damage locations: three shield
   generators, three weapons, and three docking hangars distributed across the
@@ -60,9 +60,9 @@ starbase defensive fire.
 - Each attacker receives a different subsystem category, randomized among the
   three flyers on every run. Target order within each category is also
   randomized.
-- The first flyer to complete its category becomes the sole JB100 attacker
-  only while all three flyers remain combat-capable. Once the pirate force
-  falls below three, every survivor returns to attacking station systems.
+- One flyer attacks the JB100 from mission start whenever at least one other
+  combat-capable flyer remains available to attack the station. Only one flyer
+  pressures the JB100 at a time.
 - The final surviving flyer makes faster, shorter, more frequent strafing runs
   against the remaining station targets instead of pursuing the JB100.
 - If all nine station targets are disabled, every active flyer attacks the
@@ -71,9 +71,9 @@ starbase defensive fire.
   against weapons and hangars.
 - Weapon effectiveness scales with remaining health. Hangar effectiveness is
   not modeled in this demo.
-- The JB100 has 100 hull/thrust points. Every friendly or hostile hit removes
-  10 points and reduces translational thrust proportionally. At zero it is
-  dead in space.
+- The JB100 has 100 shield points governed by the shared power system. Plasma,
+  torpedo, and collision damage follow the current SHD rules; zero SHD fails
+  the mission while preserving free flight.
 - The open starting hangar is a safe area: flyers ignore the JB100 while it is
   inside.
 - A retreating flyer counts as driven off at 5,000 m from the starbase and
@@ -149,9 +149,11 @@ then break sideways into the evasive portion of its pass.
 
 Each pirate flyer carries three torpedoes and can launch them straight forward
 or backward, but only at the JB100. A launch requires the JB100 to remain
-between 35 m and 650 m inside a narrow ten-degree fore or aft corridor for two
-seconds. Pirate torpedoes travel at 190 m/s without guidance, so breaking
-off-axis defeats them; prolonged nose-on or tail-on pursuit is dangerous.
+between 35 m and 300 m inside a narrow ten-degree fore or aft corridor for two
+seconds. Pirate torpedoes initially travel straight at 190 m/s, then acquire
+terminal guidance within 100 m of the JB100. Breaking alignment or evading
+before terminal lock remains effective; prolonged nose-on or tail-on pursuit
+is dangerous.
 
 Pirate navigation treats Starbase 86 as a conservative 185 m spherical
 keep-out volume enclosing its core, hangar supports, and structural struts.
@@ -188,11 +190,12 @@ the player a fair chance to react.
 The first damage threshold changes behavior rather than immediately removing
 the target:
 
-- **Three individual FrapRay bolt hits:** the flyer disengages from the
+- **Six individual FrapRay bolt hits:** the flyer disengages from the
   starbase and begins a committed retreat. Because the JB100 fires two bolts
-  per trigger pull, a complete first volley counts as two of those hits.
-- **Six individual FrapRay bolt hits:** the flyer is destroyed.
-- **One proton torpedo plus three individual FrapRay bolt hits:** the flyer is
+  per trigger pull, this requires three complete volleys.
+- **Twelve individual FrapRay bolt hits:** the flyer is destroyed after six
+  complete volleys.
+- **One proton torpedo plus six individual FrapRay bolt hits:** the flyer is
   destroyed.
 - **Two proton torpedoes:** the flyer is destroyed.
 
@@ -213,7 +216,17 @@ Confirmed failure conditions:
 - the JB100 reaches zero shields
 
 Failure preserves the current battle and free-flight controls. If the station
-is lost, all surviving attackers turn on the JB100. `R` restarts the demo.
+is lost, all surviving attackers turn on the JB100. Mission presentation uses
+large blue `GO` for the first three seconds, persistent green `SUCCESS` when
+all flyers are neutralized, and persistent red `FAILED` on failure. These
+centered notices do not obscure the cockpit instruments. `R` restarts the demo.
+
+### Post-success hangar secret
+
+After `SUCCESS`, Mission 003 quietly watches for the JB100 to leave and then
+re-enter the open safe hangar. That one-time re-entry launches the docked Earth
+Starfighter through the bay opening; it then circles Starbase 86 continuously.
+The mission HUD does not advertise this discovery.
 
 ## Prototype scope
 
@@ -276,10 +289,17 @@ steering response into their current attack run without abandoning the run.
 
 The large floating telemetry panels are replaced in Mission 003 by overlays
 fitted to the JB100's three modeled cockpit screens. The left screen presents
-PWR, THR, SHD, and WPN bars. PWR begins at 100%, THR follows commanded
+PWR, THR, SHD, and WPN bars. PWR begins at 100%, THR shows effective available
+thrust after the shared-power factor,
 throttle, and WPN follows a 100% FrapRay reserve that spends 10% per paired
 volley and recharges at 2% per second; a right-aligned TPD counter starts at
-five. SHD reports the JB100's live shield reserve: station or pirate plasma
+five. PWR is now a live shared reserve. Its per-second change is generator
+output `4`, minus `3 × absolute throttle`, minus `2` each while SHD or WPN is
+recovering. Following playtest feedback, these recovery loads ensure that
+full thrust with both systems recovering visibly drains PWR at 3% per second.
+Its 50–100% power factor scales maximum thrust and both recharge
+rates, preserving half-capacity emergency operation at zero PWR. SHD reports
+the JB100's live shield reserve: station or pirate plasma
 costs 10%, a pirate torpedo costs 25%, and colliding with a flyer or the
 starbase costs 50%. Shields recharge at the same 2% per second as WPN, and
 reaching zero fails the mission. The middle screen presents a primitive
@@ -312,6 +332,11 @@ progress ring fills around it; the full charge remains held until release.
 The blue X and charge ring remain centered on a tracked target but shrink as
 it approaches and passes the 1,000 m reliable-lock boundary, then grow back to
 full size when the target returns safely within range.
+JB100 torpedoes are lock-only. The same target must remain continuously inside
+the aiming view and reliable range throughout the three-second load/lock cycle.
+Leaving reliable range resets lock and charge immediately; leaving the aiming
+view breaks lock instantly. Releasing right mouse without a completed live lock
+cannot launch or spend a torpedo, and deliberate dumbfire is disabled.
 On impact, the torpedo core disappears immediately and produces a bright,
 blue-white quarter-second flash; no projectile mesh remains parked at the hit
 point. A proximity cleanup also detonates JB100 torpedoes that reach an already
@@ -325,9 +350,17 @@ the JB100 from continuing along stale input. Pressing `X` also recenters the
 virtual stick immediately. A torpedo searches a 12-degree forward acquisition cone, snaps
 its reticle onto the acquired target, launches at 260 m/s, and homes strongly
 for up to 12 seconds so a flyer cannot escape by speed alone. Every physical
-FrapRay bolt is tracked as one hit: three bolt impacts drive off a pirate, six
-destroy it, one torpedo plus three bolt hits destroys it, and two torpedoes
+FrapRay bolt is tracked as one hit: six bolt impacts drive off a pirate, twelve
+destroy it, one torpedo plus six bolt hits destroys it, and two torpedoes
 destroy it.
+
+Playtesting found the original three/six-bolt thresholds too fragile because a
+paired JB100 volley delivered two hits per click. The accepted six/twelve
+balance preserves weapon speed, accuracy, visuals, energy cost, and ammunition
+while requiring three volleys to force a retreat and six to earn a gun kill.
+The initial ten-volley WPN reserve can drive off all three attackers but cannot
+destroy all three without recharging, giving pirate tactics and return fire
+more time to matter.
 
 The right cockpit screen maintains an immediate three-event station alert
 queue instead of one overwriteable report line. Actual pirate impacts post
@@ -338,9 +371,12 @@ the repeated `STATION REPORTS` prefix, uses compact type, and clips to the
 physical display bezel so the three newest alerts never spill into the cockpit.
 The
 Senso-Globe renders pirate contacts red and Starbase 86 and friendly craft
-blue. An unlabeled amber vector crosses the globe center collinearly with its
-drawn Z axis; its arrowhead indicates positive Z without pointing at the axis
-label.
+blue. Its cockpit coordinate convention is X left/right, Z up/down, and Y
+front/back. Godot local ship-forward (`-Z`) maps to display `+Y`, toward the Y
+label. The unlabeled amber vector and every contact use that same transform, so
+objects directly ahead align with the JB100 forward vector. Destroyed pirate
+roots remain alive briefly for combat effects but are excluded immediately
+from the sensor display, preventing ghost returns.
 
 After Mission 003 fails for any reason, every surviving pirate disengages from
 the JB100, ceases firing, and circles Starbase 86 indefinitely. The player can

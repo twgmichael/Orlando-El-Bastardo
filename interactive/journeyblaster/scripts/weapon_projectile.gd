@@ -10,6 +10,9 @@ var shooter_rid: RID
 var additional_exclusions: Array[RID] = []
 var vapor_clock := 0.0
 var acquired_target: Node3D
+var terminal_target: Node3D
+var terminal_lock_acquired := false
+var terminal_lock_range_m := 100.0
 var vapor_puffs: Array[MeshInstance3D] = []
 
 
@@ -29,7 +32,11 @@ func configure(
     damage = hit_damage
     shooter_rid = source_rid
     additional_exclusions = extra_exclusions.duplicate()
-    acquired_target = target
+    if weapon_kind == "pirate_torpedo":
+        terminal_target = target
+        acquired_target = null
+    else:
+        acquired_target = target
     basis = Basis.looking_at(direction.normalized(), Vector3.UP)
 
 
@@ -62,7 +69,18 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
     if (
-        weapon_kind == "proton_torpedo"
+        weapon_kind == "pirate_torpedo"
+        and not terminal_lock_acquired
+        and terminal_target != null
+        and is_instance_valid(terminal_target)
+        and terminal_target.visible
+        and global_position.distance_to(terminal_target.global_position)
+        <= terminal_lock_range_m
+    ):
+        terminal_lock_acquired = true
+        acquired_target = terminal_target
+    if (
+        weapon_kind in ["proton_torpedo", "pirate_torpedo"]
         and acquired_target != null
         and is_instance_valid(acquired_target)
         and acquired_target.visible
