@@ -2,11 +2,7 @@ extends Node3D
 
 const WeaponProjectile = preload("res://scripts/weapon_projectile.gd")
 const StarbaseTarget = preload("res://scripts/starbase_target.gd")
-const SensorGlobeDisplay = preload("res://scripts/sensor_globe_display.gd")
-const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
-const MissionAnnouncementOverlay = preload(
-    "res://scripts/mission_announcement_overlay.gd"
-)
+const SharedCockpit = preload("res://scripts/jb100_cockpit.gd")
 const STARBASE_SCENE = preload("res://generated/scenes/starbase_86_v1.tscn")
 const PIRATE_SCENE = preload("res://generated/scenes/pirate_flyer_mk1.tscn")
 const EARTH_STARFIGHTER_SCENE = preload(
@@ -38,7 +34,10 @@ const OBJECTIVES := {
     "FAILED": "Defense failed. Free flight remains available.",
 }
 
-@onready var player := $player_jb100 as CharacterBody3D
+var player: CharacterBody3D
+var cockpit
+var game_shell: Node3D
+var booted := false
 
 var mission_state := "BRIEFING"
 var starbase: StaticBody3D
@@ -104,6 +103,28 @@ var player_collision_damage_cooldown_s := 0.0
 
 
 func _ready() -> void:
+    call_deferred("_boot_mission")
+
+
+func configure_mission(
+    shared_player: CharacterBody3D,
+    shared_cockpit: CanvasLayer,
+    shell: Node3D
+) -> void:
+    player = shared_player
+    cockpit = shared_cockpit
+    game_shell = shell
+
+
+func _boot_mission() -> void:
+    if booted:
+        return
+    if player == null:
+        player = get_node_or_null("player_jb100") as CharacterBody3D
+    if player == null:
+        push_error("Mission 003 requires the shared JB100 player")
+        return
+    booted = true
     random.randomize()
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
@@ -149,7 +170,10 @@ func _unhandled_input(event: InputEvent) -> void:
                 weapon_aim_enabled = not weapon_aim_enabled
             KEY_R:
                 if mission_state in ["COMPLETE", "FAILED"]:
-                    get_tree().reload_current_scene()
+                    if game_shell and game_shell.has_method("restart_mission"):
+                        game_shell.restart_mission()
+                    else:
+                        get_tree().reload_current_scene()
 
 
 func begin_mission() -> void:
@@ -1033,205 +1057,32 @@ func _spawn_combat_projectile(
 
 
 func _build_hud() -> void:
-    hud = CanvasLayer.new()
-    hud.name = "HUD"
-    add_child(hud)
-    _build_systems_screen()
-    _build_sensor_screen()
-    _build_mission_screen()
-    weapon_aim = Control.new()
-    weapon_aim.name = "WeaponAim"
-    weapon_aim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    weapon_aim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(weapon_aim)
-    frap_aim_left = _build_aim_label("FrapRayLeft", "•")
-    frap_aim_right = _build_aim_label("FrapRayRight", "•")
-    torpedo_aim = _build_aim_label("Torpedo", "×")
-    torpedo_charge_indicator = TorpedoChargeIndicator.new()
-    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
-    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
-    weapon_aim.add_child(torpedo_charge_indicator)
-    _build_failure_overlay()
-
-
-func _build_failure_overlay() -> void:
-    failure_overlay = MissionAnnouncementOverlay.new()
-    failure_overlay.name = "FailureOverlay"
-    hud.add_child(failure_overlay)
-
-
-func _build_instrument_screen(
-    screen_name: String, position_2d: Vector2, size_2d: Vector2
-) -> Control:
-    var screen := Panel.new()
-    screen.name = screen_name
-    screen.position = position_2d
-    screen.size = size_2d
-    screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var style := StyleBoxFlat.new()
-    style.bg_color = Color(0.0, 0.012, 0.006, 0.98)
-    style.border_color = Color(0.08, 0.72, 0.32, 0.92)
-    style.set_border_width_all(1)
-    style.corner_radius_top_left = 3
-    style.corner_radius_top_right = 3
-    style.corner_radius_bottom_left = 3
-    style.corner_radius_bottom_right = 3
-    screen.add_theme_stylebox_override("panel", style)
-    hud.add_child(screen)
-    return screen
-
-
-func _build_systems_screen() -> void:
-    var screen := _build_instrument_screen(
-        "LeftSystemsScreen", Vector2(340.0, 564.0), Vector2(184.0, 144.0)
-    )
-    var heading := _build_child_label(
-        screen, Vector2(8.0, 5.0), Vector2(168.0, 15.0), 10, Color(0.18, 1.0, 0.48)
-    )
-    heading.text = "SYSTEMS"
-    var rows := ["PWR", "THR", "SHD", "WPN"]
-    for index in rows.size():
-        var key: String = rows[index]
-        var bar := ProgressBar.new()
-        bar.position = Vector2(8.0, 23.0 + index * 28.0)
-        bar.size = Vector2(168.0, 22.0)
-        bar.min_value = 0.0
-        bar.max_value = 100.0
-        bar.value = 0.0
-        bar.show_percentage = false
-        bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        var background := StyleBoxFlat.new()
-        background.bg_color = Color(0.005, 0.045, 0.022, 1.0)
-        background.border_color = Color(0.06, 0.38, 0.19, 1.0)
-        background.set_border_width_all(1)
-        var fill := StyleBoxFlat.new()
-        fill.bg_color = Color(0.08, 0.58, 0.27, 0.82)
-        bar.add_theme_stylebox_override("background", background)
-        bar.add_theme_stylebox_override("fill", fill)
-        screen.add_child(bar)
-        systems_bars[key] = bar
-        var value_label := _build_child_label(
-            screen,
-            Vector2(14.0, 25.0 + index * 28.0),
-            Vector2(156.0, 18.0),
-            10,
-            Color(0.28, 1.0, 0.52)
-        )
-        value_label.text = "%s: --%%" % key
-        systems_value_labels[key] = value_label
-    systems_value_labels["WPN"].size.x = 94.0
-    systems_torpedo_label = _build_child_label(
-        screen,
-        Vector2(108.0, 109.0),
-        Vector2(62.0, 18.0),
-        10,
-        Color(0.28, 1.0, 0.52)
-    )
-    systems_torpedo_label.text = "TPD: 5"
-    systems_torpedo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-
-func _build_sensor_screen() -> void:
-    var screen := _build_instrument_screen(
-        "MiddleSensorScreen", Vector2(548.0, 548.0), Vector2(190.0, 160.0)
-    )
-    var heading := _build_child_label(
-        screen, Vector2(8.0, 5.0), Vector2(174.0, 15.0), 10, Color(0.18, 1.0, 0.48)
-    )
-    heading.text = "SENSO-GLOBE · 1000 M"
-    sensor_globe = SensorGlobeDisplay.new()
-    sensor_globe.name = "SensorGlobe"
-    sensor_globe.position = Vector2(9.0, 20.0)
-    sensor_globe.size = Vector2(172.0, 132.0)
-    screen.add_child(sensor_globe)
+    if cockpit == null:
+        cockpit = SharedCockpit.new()
+        cockpit.name = "HUD"
+        add_child(cockpit)
+    hud = cockpit
     var contacts: Array[Node3D] = [starbase, docked_starfighter]
     for pirate in pirates:
         contacts.append(pirate)
-    sensor_globe.configure(player, contacts)
-
-
-func _build_mission_screen() -> void:
-    var screen := _build_instrument_screen(
-        "RightMissionScreen", Vector2(754.0, 564.0), Vector2(198.0, 144.0)
-    )
-    screen.clip_contents = true
-    mission_screen_label = _build_child_label(
-        screen, Vector2(9.0, 7.0), Vector2(180.0, 130.0), 8, Color(0.22, 1.0, 0.5)
-    )
-    mission_screen_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    mission_screen_label.clip_text = true
-    mission_screen_label.add_theme_constant_override("line_spacing", -1)
-
-
-func _build_child_label(
-    parent: Control,
-    position_2d: Vector2,
-    size_2d: Vector2,
-    font_size: int,
-    color: Color
-) -> Label:
-    var label := Label.new()
-    label.position = position_2d
-    label.size = size_2d
-    label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", color)
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    parent.add_child(label)
-    return label
-
-
-func _build_panel(position_2d: Vector2, size_2d: Vector2, color: Color) -> void:
-    var panel := ColorRect.new()
-    panel.position = position_2d
-    panel.size = size_2d
-    panel.color = color
-    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(panel)
-
-
-func _build_label(
-    position_2d: Vector2, size_2d: Vector2, font_size: int, color: Color
-) -> Label:
-    var label := Label.new()
-    label.position = position_2d
-    label.size = size_2d
-    label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", color)
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(label)
-    return label
-
-
-func _build_aim_label(label_name: String, value: String) -> Label:
-    var label := Label.new()
-    label.name = label_name
-    label.text = value
-    label.size = Vector2(17.0, 17.0)
-    label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    label.add_theme_font_size_override("font_size", 14)
-    label.add_theme_color_override("font_color", Color(1.0, 0.12, 0.08))
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    weapon_aim.add_child(label)
-    return label
+    cockpit.configure(player, "003", contacts)
+    systems_bars = cockpit.systems_bars
+    systems_value_labels = cockpit.systems_value_labels
+    systems_torpedo_label = cockpit.systems_torpedo_label
+    sensor_globe = cockpit.sensor_globe
+    mission_screen_label = cockpit.mission_screen_label
+    weapon_aim = cockpit.weapon_aim
+    frap_aim_left = cockpit.frap_aim_left
+    frap_aim_right = cockpit.frap_aim_right
+    torpedo_aim = cockpit.torpedo_aim
+    torpedo_charge_indicator = cockpit.torpedo_charge_indicator
+    failure_overlay = cockpit.announcement
 
 
 func _update_hud() -> void:
     if mission_screen_label == null:
         return
-    var thrust_percent: int = player.available_thrust_percent()
-    var power_percent: int = player.power_level_percent()
-    var shield_percent: int = player.shield_level_percent()
-    var frapray_percent: int = floori(player.frapray_power_percent)
-    systems_bars["PWR"].value = power_percent
-    systems_value_labels["PWR"].text = "PWR: %03d%%" % power_percent
-    systems_bars["THR"].value = thrust_percent
-    systems_value_labels["THR"].text = "THR: %03d%%" % thrust_percent
-    systems_bars["SHD"].value = shield_percent
-    systems_value_labels["SHD"].text = "SHD: %03d%%" % shield_percent
-    systems_bars["WPN"].value = frapray_percent
-    systems_value_labels["WPN"].text = "WPN: %03d%%" % frapray_percent
-    systems_torpedo_label.text = "TPD: %d" % player.proton_torpedoes_remaining
+    cockpit.update_systems()
     _refresh_mission_screen()
     _update_weapon_aim()
 
@@ -1242,12 +1093,9 @@ func _refresh_mission_screen() -> void:
     var compact_alerts: Array[String] = []
     for alert in station_alerts:
         compact_alerts.append(alert.trim_prefix("STATION REPORTS "))
-    var alert_feed := "\n".join(compact_alerts)
-    mission_screen_label.text = ("MISSION 003 · %s\nOBJECTIVE\n%s\n\nALERTS\n%s" % [
-        mission_state,
-        OBJECTIVES.get(mission_state, ""),
-        alert_feed,
-    ]).to_upper()
+    cockpit.set_mission_display(
+        mission_state, OBJECTIVES.get(mission_state, ""), compact_alerts
+    )
 
 
 func _sensor_readout() -> String:

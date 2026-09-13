@@ -186,7 +186,9 @@ def render_transform(transform: dict[str, Any]) -> list[str]:
     ]
 
 
-def render_mission_scene(mission: dict[str, Any], contracts: dict[str, dict[str, Any]]) -> str:
+def render_legacy_mission_scene(
+    mission: dict[str, Any], contracts: dict[str, dict[str, Any]]
+) -> str:
     placements: list[tuple[str, str, dict[str, Any], str]] = []
     player = mission["player"]
     placements.append((player["instance_id"], player["contract_id"], player["spawn"], "player"))
@@ -438,6 +440,99 @@ def render_mission_scene(mission: dict[str, Any], contracts: dict[str, dict[str,
             'text = "×"',
             "horizontal_alignment = 1",
             "vertical_alignment = 1",
+            "",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_mission_scene(mission: dict[str, Any], contracts: dict[str, dict[str, Any]]) -> str:
+    """Render mission content inside the reusable JourneyBlaster cockpit shell."""
+    mission_number = mission["mission_id"].split("_", 2)[1]
+    placements: list[tuple[str, str, dict[str, Any], str]] = []
+    placements.extend(
+        (item["instance_id"], item["contract_id"], item["transform"], "entity")
+        for item in mission["entities"]
+    )
+    placements.extend(
+        (item["instance_id"], item["contract_id"], item["transform"], "obstacle")
+        for item in mission["environment"]["obstacles"]
+    )
+    ext_resources = [
+        '[ext_resource type="PackedScene" path="res://scenes/journeyblaster_game_shell.tscn" id="1_shell"]',
+        '[ext_resource type="Script" path="res://scripts/mission_boot.gd" id="2_boot"]',
+    ]
+    resource_ids: dict[str, str] = {}
+    for index, contract_id in enumerate(
+        dict.fromkeys(item[1] for item in placements), start=3
+    ):
+        resource_id = f"{index}_{contract_id}"
+        resource_ids[contract_id] = resource_id
+        ext_resources.append(
+            f'[ext_resource type="PackedScene" path="{contracts[contract_id]["runtime"]["wrapper_scene"]}" id="{resource_id}"]'
+        )
+    parent = "MissionHost/MissionRuntime"
+    lines = [
+        f"[gd_scene load_steps={len(ext_resources) + 4} format=3]",
+        "",
+        *ext_resources,
+        "",
+        '[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_deep_space"]',
+        "sky_top_color = Color(0.002, 0.004, 0.012, 1)",
+        "sky_horizon_color = Color(0.015, 0.025, 0.055, 1)",
+        "ground_bottom_color = Color(0.001, 0.002, 0.006, 1)",
+        "ground_horizon_color = Color(0.008, 0.012, 0.025, 1)",
+        "sun_angle_max = 4.0",
+        "",
+        '[sub_resource type="Sky" id="Sky_deep_space"]',
+        'sky_material = SubResource("SkyMaterial_deep_space")',
+        "",
+        '[sub_resource type="Environment" id="Environment_deep_space"]',
+        "background_mode = 2",
+        'sky = SubResource("Sky_deep_space")',
+        "ambient_light_source = 3",
+        "ambient_light_color = Color(0.22, 0.29, 0.42, 1)",
+        "ambient_light_energy = 0.42",
+        "tonemap_mode = 2",
+        "",
+        f'[node name="{mission["mission_id"]}" instance=ExtResource("1_shell")]',
+        f'mission_number = "{mission_number}"',
+        "",
+        '[node name="MissionRuntime" type="Node3D" parent="MissionHost"]',
+        'script = ExtResource("2_boot")',
+        f'mission_data_path = "res://generated/data/missions/{mission["mission_id"]}.interactive.json"',
+        "",
+        f'[node name="WorldEnvironment" type="WorldEnvironment" parent="{parent}"]',
+        'environment = SubResource("Environment_deep_space")',
+        "",
+        f'[node name="KeyLight" type="DirectionalLight3D" parent="{parent}"]',
+        "rotation_degrees = Vector3(-32, -28, 12)",
+        "light_color = Color(0.72, 0.82, 1, 1)",
+        "light_energy = 1.35",
+        "shadow_enabled = true",
+        "",
+        f'[node name="WarmFill" type="DirectionalLight3D" parent="{parent}"]',
+        "rotation_degrees = Vector3(18, 138, -8)",
+        "light_color = Color(1, 0.38, 0.12, 1)",
+        "light_energy = 0.38",
+        "",
+    ]
+    for instance_id, contract_id, transform, role in placements:
+        lines.extend(
+            [
+                f'[node name="{instance_id}" parent="{parent}" instance=ExtResource("{resource_ids[contract_id]}")]',
+                *render_transform(transform),
+                f'metadata/mission_role = "{role}"',
+                "",
+            ]
+        )
+    boundary = mission["environment"]["entry_boundary"]
+    lines.extend(
+        [
+            f'[node name="{boundary["boundary_id"]}" type="Marker3D" parent="{parent}"]',
+            f"position = {vector3(boundary['center'])}",
+            f"metadata/radius_m = {number(boundary['radius_m'])}",
+            'metadata/interactive_role = "return_boundary"',
             "",
         ]
     )

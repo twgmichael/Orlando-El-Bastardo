@@ -5,11 +5,12 @@ const GREEN := Color(0.18, 1.0, 0.48, 0.95)
 const DIM_GREEN := Color(0.08, 0.48, 0.24, 0.82)
 const HOSTILE_RED := Color(1.0, 0.11, 0.06, 1.0)
 const FRIENDLY_BLUE := Color(0.12, 0.62, 1.0, 1.0)
+const OBJECTIVE_YELLOW := Color(1.0, 0.86, 0.08, 1.0)
 const FORWARD_AMBER := Color(1.0, 0.68, 0.12, 1.0)
 const DISPLAY_Y_AXIS_2D := Vector2(0.62, -0.44)
 
 var player: Node3D
-var tracked_contacts: Array[Node3D] = []
+var tracked_contacts: Array = []
 
 
 func configure(sensor_origin: Node3D, contacts: Array[Node3D]) -> void:
@@ -20,6 +21,13 @@ func configure(sensor_origin: Node3D, contacts: Array[Node3D]) -> void:
 
 
 func _process(_delta: float) -> void:
+    for index in range(tracked_contacts.size() - 1, -1, -1):
+        var contact = tracked_contacts[index]
+        if not is_instance_valid(contact) or (
+            contact.is_in_group("mission_003_pirate")
+            and bool(contact.get("destroyed"))
+        ):
+            tracked_contacts.remove_at(index)
     queue_redraw()
 
 
@@ -61,13 +69,15 @@ func _draw() -> void:
         draw_circle(contact_position, contact_radius, _contact_color(contact))
 
 
-func _contact_color(contact: Node3D) -> Color:
+func _contact_color(contact) -> Color:
     if contact.is_in_group("mission_003_pirate"):
         return HOSTILE_RED
+    if contact.is_in_group("sensor_objective_contact"):
+        return OBJECTIVE_YELLOW
     return FRIENDLY_BLUE
 
 
-func contact_is_active(contact: Node3D) -> bool:
+func contact_is_active(contact) -> bool:
     if contact == null or not is_instance_valid(contact) or not contact.visible:
         return false
     if contact.is_in_group("mission_003_pirate"):

@@ -14,10 +14,11 @@ func _spawn_runtime() -> Node3D:
     var packed := load("res://scenes/mission_003_starbase_defense.tscn") as PackedScene
     if packed == null:
         return null
-    var runtime := packed.instantiate() as Node3D
-    root.add_child(runtime)
+    var shell := packed.instantiate() as Node3D
+    root.add_child(shell)
     await process_frame
-    return runtime
+    await process_frame
+    return shell.active_mission as Node3D
 
 
 func _run() -> void:
@@ -155,10 +156,10 @@ func _run() -> void:
         fail("starfield geometry still casts shadows inside the backdrop")
         return
     if (
-        runtime.get_node_or_null("HUD/LeftSystemsScreen") == null
-        or runtime.get_node_or_null("HUD/MiddleSensorScreen/SensorGlobe") == null
-        or runtime.get_node_or_null("HUD/RightMissionScreen") == null
-        or runtime.get_node_or_null("HUD/FailureOverlay") == null
+        runtime.game_shell.get_node_or_null("HUD/LeftSystemsScreen") == null
+        or runtime.game_shell.get_node_or_null("HUD/MiddleSensorScreen/SensorGlobe") == null
+        or runtime.game_shell.get_node_or_null("HUD/RightMissionScreen") == null
+        or runtime.game_shell.get_node_or_null("HUD/MissionAnnouncement") == null
     ):
         fail("cockpit instrumentation or mission-failure overlay is incomplete")
         return
@@ -659,7 +660,7 @@ func _run() -> void:
         fail("Earth Starfighter did not continue circling Starbase 86")
         return
 
-    runtime.queue_free()
+    runtime.game_shell.queue_free()
     await process_frame
     var shield_runtime := await _spawn_runtime()
     shield_runtime.begin_mission()
@@ -703,7 +704,7 @@ func _run() -> void:
     ):
         fail("total shield loss did not show the large Mission 003 failure notice")
         return
-    shield_runtime.queue_free()
+    shield_runtime.game_shell.queue_free()
     await process_frame
     var failed_runtime := await _spawn_runtime()
     failed_runtime.begin_mission()
@@ -734,5 +735,5 @@ func _run() -> void:
         "MISSION-003-RUNTIME-OK: hangar launch + hidden objectives + fuzzy pirates + "
         + "friendly fire + retreat/destruction + station defense"
     )
-    failed_runtime.queue_free()
+    failed_runtime.game_shell.queue_free()
     quit(0)

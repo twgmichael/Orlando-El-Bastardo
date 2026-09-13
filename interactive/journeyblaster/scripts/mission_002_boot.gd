@@ -1,10 +1,7 @@
 extends Node3D
 
 const CombatEffects = preload("res://scripts/combat_effects.gd")
-const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
-const MissionAnnouncementOverlay = preload(
-    "res://scripts/mission_announcement_overlay.gd"
-)
+const SharedCockpit = preload("res://scripts/jb100_cockpit.gd")
 const ASTEROID_SCENES := [
     preload("res://generated/scenes/asteroid_round_v1.tscn"),
     preload("res://generated/scenes/asteroid_cratered_v1.tscn"),
@@ -42,7 +39,10 @@ const OBJECTIVES := {
     "FAILED": "A dangerous fragment penetrated the atmospheric safety boundary.",
 }
 
-@onready var player := $player_jb100 as CharacterBody3D
+var player: CharacterBody3D
+var cockpit
+var game_shell: Node3D
+var booted := false
 
 var mission_state := "BRIEFING"
 var state_elapsed := 0.0
@@ -74,12 +74,6 @@ var torpedo_origin: Node3D
 var placement_beam: MeshInstance3D
 var placement_beam_mesh: CylinderMesh
 var hud: CanvasLayer
-var title_label: Label
-var status_label: Label
-var objective_label: Label
-var sensor_label: Label
-var weapons_label: Label
-var prompt_label: Label
 var placement_reticle: Label
 var frap_aim_left: Label
 var frap_aim_right: Label
@@ -90,6 +84,30 @@ var mission_announcement: Label
 
 
 func _ready() -> void:
+    call_deferred("_boot_mission")
+
+
+func configure_mission(
+    shared_player: CharacterBody3D,
+    shared_cockpit: CanvasLayer,
+    shell: Node3D
+) -> void:
+    player = shared_player
+    cockpit = shared_cockpit
+    game_shell = shell
+
+
+func _boot_mission() -> void:
+    if booted:
+        return
+    if player == null:
+        player = find_child("player_jb100", true, false) as CharacterBody3D
+    if player == null:
+        push_error("Mission 002 requires the shared JB100 player")
+        return
+    booted = true
+    player.enable_power_system()
+    player.enable_shield_tracking()
     effect_origin = player.find_child(
         "effect_exclusion_center", true, false
     ) as Node3D
@@ -166,7 +184,10 @@ func _unhandled_input(event: InputEvent) -> void:
                 weapon_aim_enabled = not weapon_aim_enabled
             KEY_R:
                 if mission_state in ["COMPLETE", "FAILED"]:
-                    get_tree().reload_current_scene()
+                    if game_shell and game_shell.has_method("restart_mission"):
+                        game_shell.restart_mission()
+                    else:
+                        get_tree().reload_current_scene()
 
 
 func begin_mission() -> void:
@@ -525,6 +546,8 @@ func _spawn_major_fragments() -> void:
         major.global_position = center + offsets[index]
         major.rotation_degrees = Vector3(17.0 * index, 29.0, 13.0 * index)
         major.add_to_group("planetfall_major")
+        if cockpit:
+            cockpit.register_contact(major)
         _apply_rock_material(
             major,
             Color(0.2 + index * 0.025, 0.18, 0.16 - index * 0.015)
@@ -548,6 +571,8 @@ func _register_new_fragments() -> void:
             continue
         registered_fragments[identifier] = true
         fragment.add_to_group("planetfall_debris")
+        if cockpit:
+            cockpit.register_contact(fragment)
         var remaining_time := maxf(1.0, DEBRIS_CHASE_WINDOW_S - chase_elapsed)
         fragment.linear_velocity.z = (
             (ATMOSPHERE_FAILURE_Z - fragment.global_position.z) / remaining_time
@@ -730,107 +755,27 @@ func _apply_rock_material(body: Node, tint: Color) -> void:
 
 
 func _build_hud() -> void:
-    hud = CanvasLayer.new()
-    hud.name = "HUD"
-    add_child(hud)
-    _build_panel(Vector2(20.0, 20.0), Vector2(760.0, 126.0), Color(0.02, 0.035, 0.04, 0.9))
-    title_label = _build_label(Vector2(38.0, 32.0), Vector2(710.0, 25.0), 14, Color(0.38, 0.92, 0.67))
-    status_label = _build_label(Vector2(38.0, 59.0), Vector2(710.0, 24.0), 12, Color(0.92, 0.89, 0.79))
-    objective_label = _build_label(Vector2(38.0, 87.0), Vector2(710.0, 26.0), 13, Color(0.76, 0.84, 0.88))
-
-    var viewport_width := get_viewport().get_visible_rect().size.x
-    _build_panel(Vector2(viewport_width - 400.0, 20.0), Vector2(380.0, 154.0), Color(0.055, 0.032, 0.012, 0.9))
-    sensor_label = _build_label(Vector2(viewport_width - 382.0, 35.0), Vector2(350.0, 130.0), 13, Color(1.0, 0.63, 0.18))
-    _build_panel(Vector2(viewport_width - 400.0, 186.0), Vector2(380.0, 120.0), Color(0.018, 0.032, 0.07, 0.9))
-    weapons_label = _build_label(Vector2(viewport_width - 382.0, 198.0), Vector2(350.0, 105.0), 13, Color(0.42, 0.68, 1.0))
-
-    prompt_label = _build_label(Vector2(viewport_width * 0.5 - 330.0, 638.0), Vector2(660.0, 42.0), 18, Color(1.0, 0.68, 0.22))
-    prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    var help := _build_label(Vector2(viewport_width - 850.0, 684.0), Vector2(830.0, 25.0), 11, Color(0.68, 0.72, 0.72, 0.86))
-    help.text = "W/S throttle · ` reverse 25% · arrows/A/D steer · Q/E roll · X recenter · TAB stop · ESC mouse · ⌃⌘F fullscreen · LMB FRAPRAY · hold/release RMB TORPEDO · /? FRAPRAY/TOW · SPACE place · G detonate"
-    help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-
-    weapon_aim = Control.new()
-    weapon_aim.name = "WeaponAim"
-    weapon_aim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    weapon_aim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(weapon_aim)
-    frap_aim_left = _build_aim_label("FrapRayLeft", "•", Color(1.0, 0.12, 0.08), 14)
-    frap_aim_right = _build_aim_label("FrapRayRight", "•", Color(1.0, 0.12, 0.08), 14)
-    torpedo_aim = _build_aim_label("Torpedo", "×", Color(1.0, 0.12, 0.08), 14)
-    torpedo_charge_indicator = TorpedoChargeIndicator.new()
-    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
-    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
-    weapon_aim.add_child(torpedo_charge_indicator)
-
-    placement_reticle = Label.new()
+    if cockpit == null:
+        cockpit = SharedCockpit.new()
+        add_child(cockpit)
+    hud = cockpit
+    var initial_contacts: Array[Node3D] = [primary_asteroid]
+    cockpit.configure(player, "002", initial_contacts)
+    weapon_aim = cockpit.weapon_aim
+    frap_aim_left = cockpit.frap_aim_left
+    frap_aim_right = cockpit.frap_aim_right
+    torpedo_aim = cockpit.torpedo_aim
+    torpedo_charge_indicator = cockpit.torpedo_charge_indicator
+    placement_reticle = cockpit.context_reticle
     placement_reticle.name = "BluePlacementReticle"
-    placement_reticle.text = "○"
-    placement_reticle.size = Vector2(48.0, 48.0)
-    placement_reticle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    placement_reticle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    placement_reticle.add_theme_font_size_override("font_size", 38)
-    placement_reticle.add_theme_color_override("font_color", Color(0.08, 0.52, 1.0))
-    placement_reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
     placement_reticle.add_to_group("mission_002_blue_reticle")
-    hud.add_child(placement_reticle)
-    mission_announcement = MissionAnnouncementOverlay.new()
-    mission_announcement.name = "MissionAnnouncement"
-    hud.add_child(mission_announcement)
-
-
-func _build_panel(position_2d: Vector2, size_2d: Vector2, color: Color) -> ColorRect:
-    var panel := ColorRect.new()
-    panel.position = position_2d
-    panel.size = size_2d
-    panel.color = color
-    panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(panel)
-    return panel
-
-
-func _build_label(
-    position_2d: Vector2,
-    size_2d: Vector2,
-    font_size: int,
-    color: Color
-) -> Label:
-    var label := Label.new()
-    label.position = position_2d
-    label.size = size_2d
-    label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", color)
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hud.add_child(label)
-    return label
-
-
-func _build_aim_label(
-    label_name: String,
-    text_value: String,
-    color: Color,
-    font_size: int
-) -> Label:
-    var label := Label.new()
-    label.name = label_name
-    label.text = text_value
-    label.size = Vector2(17.0, 17.0)
-    label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", color)
-    label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    weapon_aim.add_child(label)
-    return label
+    mission_announcement = cockpit.announcement
 
 
 func _update_hud() -> void:
-    if title_label == null:
+    if cockpit == null:
         return
-    title_label.text = "JOURNEYBLASTER · MISSION 002 · PLANETFALL PROTOTYPE V1"
-    status_label.text = "MISSION STATE · %s" % mission_state.replace("_", " ")
-    objective_label.text = OBJECTIVES.get(mission_state, "")
-    sensor_label.text = _sensor_readout()
+    cockpit.update_systems()
     var selected_weapon_status: String = player.weapon_status_text()
     if towbeam_mode:
         selected_weapon_status = (
@@ -840,15 +785,19 @@ func _update_hud() -> void:
                 player.proton_torpedoes_remaining,
             ]
         )
-    weapons_label.text = "%s\nCHARGES  %d/%d" % [
-        selected_weapon_status,
+    var mission_alerts: Array[String] = [selected_weapon_status]
+    mission_alerts.append("CHARGES %d/%d" % [
         charges_placed,
         REQUIRED_CHARGES,
-    ]
-    weapons_label.text += "\nMODE  %s · /?" % (
-        "TOW BEAM" if towbeam_mode else "FRAPRAY"
+    ])
+    mission_alerts.append("MODE %s · /?" % (
+        "TOW BEAM" if towbeam_mode else "FRAPRAY"))
+    mission_alerts.append(_context_prompt())
+    cockpit.set_mission_display(
+        mission_state.replace("_", " "),
+        OBJECTIVES.get(mission_state, ""),
+        mission_alerts
     )
-    prompt_label.text = _context_prompt()
     placement_reticle.visible = (
         towbeam_mode
         and mission_state in ["INTERCEPT", "PLACEMENT_READY", "CHARGE_PLACEMENT"]

@@ -46,12 +46,14 @@ func _run() -> void:
     if packed == null:
         fail("Mission 001 scene did not load")
         return
-    var instance := packed.instantiate()
-    root.add_child(instance)
+    var shell := packed.instantiate()
+    root.add_child(shell)
     await process_frame
+    await process_frame
+    var instance: Node3D = shell.active_mission
 
     var player_id: String = mission.get("player", {}).get("instance_id", "")
-    var player := instance.find_child(player_id, true, false)
+    var player: CharacterBody3D = shell.player
     if player == null:
         fail("player instance is missing")
         return
@@ -118,16 +120,16 @@ func _run() -> void:
     ):
         fail("FrapRay hardpoints do not match the physical cannon muzzles")
         return
-    if instance.find_child("Reticle", true, false) != null:
+    if shell.find_child("Reticle", true, false) != null:
         fail("legacy fixed green reticle is still present")
         return
-    var weapon_aim := instance.find_child("WeaponAim", true, false) as Control
+    var weapon_aim := shell.find_child("WeaponAim", true, false) as Control
     if weapon_aim == null or not instance.has_method("toggle_weapon_aim"):
         fail("toggleable projected weapon-aim HUD is missing")
         return
-    var frap_aim_left := instance.find_child("FrapRayLeft", true, false) as Label
-    var frap_aim_right := instance.find_child("FrapRayRight", true, false) as Label
-    var torpedo_aim := instance.find_child("Torpedo", true, false) as Label
+    var frap_aim_left := shell.find_child("FrapRayLeft", true, false) as Label
+    var frap_aim_right := shell.find_child("FrapRayRight", true, false) as Label
+    var torpedo_aim := shell.find_child("Torpedo", true, false) as Label
     if (
         frap_aim_left == null
         or frap_aim_right == null
@@ -189,5 +191,5 @@ func _run() -> void:
         "PHASE1-BOOT-OK: cockpit + chair pivot + Senso-Globes + probe + tow + %d asteroids"
         % obstacle_count
     )
-    instance.queue_free()
+    shell.queue_free()
     quit(0)

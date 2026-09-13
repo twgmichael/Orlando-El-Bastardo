@@ -16,11 +16,13 @@ func _run() -> void:
     if packed == null:
         fail("Mission 001 scene did not load")
         return
-    var runtime := packed.instantiate()
-    root.add_child(runtime)
+    var shell := packed.instantiate()
+    root.add_child(shell)
     await process_frame
+    await process_frame
+    var runtime: Node3D = shell.active_mission
 
-    var player := runtime.find_child("player_jb100", true, false) as CharacterBody3D
+    var player := shell.player as CharacterBody3D
     var probe := runtime.find_child("mining_probe", true, false) as RigidBody3D
     var chair := player.find_child("SeatPivot", true, false)
     if player == null or probe == null or chair == null:
@@ -160,5 +162,5 @@ func _run() -> void:
         return
 
     print("PROTOTYPE-RUNTIME-OK: flight + chair + sensors + download + tow + return + hyperspace")
-    runtime.queue_free()
+    shell.queue_free()
     quit(0)

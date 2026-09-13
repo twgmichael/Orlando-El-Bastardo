@@ -1,9 +1,6 @@
 extends Node3D
 
-const TorpedoChargeIndicator = preload("res://scripts/torpedo_charge_indicator.gd")
-const MissionAnnouncementOverlay = preload(
-    "res://scripts/mission_announcement_overlay.gd"
-)
+const SharedCockpit = preload("res://scripts/jb100_cockpit.gd")
 
 const STATE_OBJECTIVES := {
     "BRIEFING": "Bring the JB100 online and enter the asteroid field.",
@@ -26,6 +23,9 @@ const STATE_OBJECTIVES := {
 var mission_data: Dictionary = {}
 var mission_state := "BRIEFING"
 var player: CharacterBody3D
+var cockpit
+var game_shell: Node3D
+var booted := false
 var probe: RigidBody3D
 var sensor_origin: Node3D
 var probe_signature: Node3D
@@ -44,13 +44,6 @@ var probe_data_secured := false
 var tow_beam: MeshInstance3D
 var tow_beam_mesh: CylinderMesh
 var beacon_light: OmniLight3D
-var status_label: Label
-var objective_label: Label
-var sensor_label: Label
-var flight_label: Label
-var view_label: Label
-var weapons_label: Label
-var prompt_label: Label
 var mission_announcement: Label
 var weapon_aim: Control
 var frap_aim_left: Label
@@ -67,10 +60,31 @@ var tow_constraint_length := 0.0
 
 
 func _ready() -> void:
+    call_deferred("_boot_mission")
+
+
+func configure_mission(
+    shared_player: CharacterBody3D,
+    shared_cockpit: CanvasLayer,
+    shell: Node3D
+) -> void:
+    player = shared_player
+    cockpit = shared_cockpit
+    game_shell = shell
+
+
+func _boot_mission() -> void:
+    if booted:
+        return
     if not _load_mission_data():
         return
+    if player == null:
+        player = find_child("player_jb100", true, false) as CharacterBody3D
     if not _resolve_runtime_nodes():
         return
+    booted = true
+    player.enable_power_system()
+    player.enable_shield_tracking()
     _build_starfield()
     _build_probe_beacon()
     _build_tow_beam()
@@ -101,7 +115,10 @@ func _unhandled_input(event: InputEvent) -> void:
                 toggle_weapon_aim()
             KEY_R:
                 if mission_state in ["COMPLETE", "FAILED"]:
-                    get_tree().reload_current_scene()
+                    if game_shell and game_shell.has_method("restart_mission"):
+                        game_shell.restart_mission()
+                    else:
+                        get_tree().reload_current_scene()
     elif event is InputEventJoypadButton and event.pressed:
         match event.button_index:
             JOY_BUTTON_A:
@@ -124,8 +141,6 @@ func _load_mission_data() -> bool:
 
 
 func _resolve_runtime_nodes() -> bool:
-    var player_id: String = mission_data.get("player", {}).get("instance_id", "")
-    player = find_child(player_id, true, false) as CharacterBody3D
     probe = find_child(
         mission_data.get("sensors", {}).get("target_instance_id", ""),
         true,
@@ -157,24 +172,21 @@ func _resolve_runtime_nodes() -> bool:
         push_error("Mission 001 interactive markers are incomplete")
         return false
     probe.freeze = true
-    status_label = get_node_or_null("HUD/TopBar/Status") as Label
-    objective_label = get_node_or_null("HUD/TopBar/Objective") as Label
-    sensor_label = get_node_or_null("HUD/SensorPanel/Sensor") as Label
-    flight_label = get_node_or_null("HUD/TelemetryPanel/Flight") as Label
-    view_label = get_node_or_null("HUD/TelemetryPanel/View") as Label
-    weapons_label = get_node_or_null("HUD/WeaponsPanel/Weapons") as Label
-    prompt_label = get_node_or_null("HUD/Prompt") as Label
-    weapon_aim = get_node_or_null("HUD/WeaponAim") as Control
-    frap_aim_left = get_node_or_null("HUD/WeaponAim/FrapRayLeft") as Label
-    frap_aim_right = get_node_or_null("HUD/WeaponAim/FrapRayRight") as Label
-    torpedo_aim = get_node_or_null("HUD/WeaponAim/Torpedo") as Label
-    torpedo_charge_indicator = TorpedoChargeIndicator.new()
-    torpedo_charge_indicator.name = "TorpedoChargeIndicator"
-    torpedo_charge_indicator.size = Vector2(31.0, 31.0)
-    weapon_aim.add_child(torpedo_charge_indicator)
-    mission_announcement = MissionAnnouncementOverlay.new()
-    mission_announcement.name = "MissionAnnouncement"
-    (get_node("HUD") as CanvasLayer).add_child(mission_announcement)
+    probe.add_to_group("sensor_objective_contact")
+    if cockpit == null:
+        cockpit = SharedCockpit.new()
+        add_child(cockpit)
+    var contacts: Array[Node3D] = [probe]
+    for candidate in find_children("*", "Node3D", true, false):
+        if candidate.get_meta("mission_role", "") == "obstacle":
+            contacts.append(candidate as Node3D)
+    cockpit.configure(player, "001", contacts)
+    weapon_aim = cockpit.weapon_aim
+    frap_aim_left = cockpit.frap_aim_left
+    frap_aim_right = cockpit.frap_aim_right
+    torpedo_aim = cockpit.torpedo_aim
+    torpedo_charge_indicator = cockpit.torpedo_charge_indicator
+    mission_announcement = cockpit.announcement
     frap_origin_left = player.find_child("frap_hardpoint_left", true, false) as Node3D
     frap_origin_right = player.find_child("frap_hardpoint_right", true, false) as Node3D
     torpedo_origin = player.find_child("torpedo_launcher", true, false) as Node3D
@@ -269,8 +281,6 @@ func _set_state(next_state: String) -> void:
             mission_announcement.call("show_failed")
         elif next_state == "COMPLETE":
             mission_announcement.call("show_success")
-    if status_label:
-        status_label.text = "MISSION STATE · %s" % mission_state.replace("_", " ")
 
 
 func _download_conditions_safe() -> bool:
@@ -490,34 +500,23 @@ func _build_starfield() -> void:
 
 
 func _update_hud() -> void:
-    if objective_label:
-        if mission_state == "TOW_READY" and probe_damaged and not probe_data_secured:
-            objective_label.text = "DATA PORT DAMAGED. Recover the probe in tow."
-        elif mission_state == "COMPLETE" and probe_damaged and not probe_data_secured:
-            objective_label.text = "Damaged mining probe recovered. Data unavailable."
-        else:
-            objective_label.text = STATE_OBJECTIVES.get(mission_state, "")
-    if sensor_label:
-        sensor_label.text = _sensor_readout()
-    if flight_label:
-        flight_label.text = (
-            "SHIP VECTOR\nSPEED  %03d m/s\nTHROTTLE  %s%%\nCOURSE LOCK  %s"
-            % [
-                roundi(player.velocity.length()),
-                player.throttle_percent(),
-                "ON" if player.course_lock else "OFF",
-            ]
-        )
-    if view_label:
-        view_label.text = "PILOT CHAIR\nVIEW  %s\nSHIP HEADING INDEPENDENT" % pilot_view.current_view_label()
-    if weapons_label and player.has_method("weapon_status_text"):
-        weapons_label.text = "%s\nAIM HUD  %s · \\" % [
-            player.weapon_status_text(),
-            "ON" if weapon_aim_enabled else "OFF",
-        ]
+    if cockpit == null:
+        return
+    cockpit.update_systems()
+    var objective: String = STATE_OBJECTIVES.get(mission_state, "")
+    if mission_state == "TOW_READY" and probe_damaged and not probe_data_secured:
+        objective = "DATA PORT DAMAGED. Recover the probe in tow."
+    elif mission_state == "COMPLETE" and probe_damaged and not probe_data_secured:
+        objective = "Damaged mining probe recovered. Data unavailable."
+    var alerts: Array[String] = [
+        _sensor_readout(),
+        player.weapon_status_text(),
+        _context_prompt(),
+    ]
+    cockpit.set_mission_display(
+        mission_state.replace("_", " "), objective, alerts
+    )
     _update_weapon_aim()
-    if prompt_label:
-        prompt_label.text = _context_prompt()
 
 
 func _update_weapon_aim() -> void:

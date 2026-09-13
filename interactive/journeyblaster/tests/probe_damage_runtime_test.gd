@@ -18,9 +18,9 @@ func _instantiate_mission() -> Node3D:
     var packed := load(scene_path) as PackedScene
     if packed == null:
         return null
-    var runtime := packed.instantiate() as Node3D
-    root.add_child(runtime)
-    return runtime
+    var shell := packed.instantiate() as Node3D
+    root.add_child(shell)
+    return shell.active_mission as Node3D
 
 
 func _run() -> void:
@@ -30,9 +30,7 @@ func _run() -> void:
         return
     await process_frame
 
-    var collision_player := collision_runtime.find_child(
-        "player_jb100", true, false
-    ) as CharacterBody3D
+    var collision_player := collision_runtime.player as CharacterBody3D
     var collision_probe := collision_runtime.find_child(
         "mining_probe", true, false
     ) as RigidBody3D
@@ -65,7 +63,7 @@ func _run() -> void:
     ):
         fail("damaged mining probe could not be taken in tow")
         return
-    collision_runtime.queue_free()
+    collision_runtime.game_shell.queue_free()
     await process_frame
 
     var weapon_runtime := _instantiate_mission()
@@ -73,9 +71,7 @@ func _run() -> void:
         fail("Mission 001 scene could not reload for weapon test")
         return
     await process_frame
-    var weapon_player := weapon_runtime.find_child(
-        "player_jb100", true, false
-    ) as CharacterBody3D
+    var weapon_player := weapon_runtime.player as CharacterBody3D
     var weapon_probe := weapon_runtime.find_child(
         "mining_probe", true, false
     ) as RigidBody3D
@@ -132,5 +128,5 @@ func _run() -> void:
         "PROBE-DAMAGE-RUNTIME-OK: collision disables download + tow survives + "
         + "weapon destruction fails mission + post-failure free flight"
     )
-    weapon_runtime.queue_free()
+    weapon_runtime.game_shell.queue_free()
     quit(0)

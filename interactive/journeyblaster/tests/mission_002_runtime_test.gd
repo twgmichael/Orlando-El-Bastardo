@@ -15,10 +15,12 @@ func _run() -> void:
     if packed == null:
         fail("Mission 002 scene did not load")
         return
-    var runtime := packed.instantiate()
-    root.add_child(runtime)
+    var shell := packed.instantiate()
+    root.add_child(shell)
     await process_frame
-    var player := runtime.find_child("player_jb100", true, false) as CharacterBody3D
+    await process_frame
+    var runtime: Node3D = shell.active_mission
+    var player := shell.player as CharacterBody3D
     var primary := runtime.find_child(
         "planetfall_primary_asteroid", true, false
     ) as StaticBody3D
@@ -83,7 +85,7 @@ func _run() -> void:
     if not blue_reticle[0].visible or runtime.weapon_aim.visible:
         fail("tow-beam mode did not swap red weapon markers for the blue reticle")
         return
-    if not runtime.weapons_label.text.contains("TOW BEAM  READY · SPACE"):
+    if not runtime.cockpit.mission_screen_label.text.contains("TOW BEAM  READY · SPACE"):
         fail("HUD did not identify Space as the selected tow-beam trigger")
         return
     await physics_frame
@@ -228,5 +230,5 @@ func _run() -> void:
         "MISSION-002-RUNTIME-OK: intercept + blue-reticle charges + "
         + "controlled breakup + debris atomization + planetfall"
     )
-    runtime.queue_free()
+    shell.queue_free()
     quit(0)

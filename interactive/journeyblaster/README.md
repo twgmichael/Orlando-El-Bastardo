@@ -34,13 +34,15 @@ godot --headless --path interactive/journeyblaster \
   --script res://tests/mission_002_runtime_test.gd
 godot --headless --path interactive/journeyblaster \
   --script res://tests/mission_003_runtime_test.gd
+godot --headless --path interactive/journeyblaster \
+  --script res://tests/shared_cockpit_architecture_test.gd
 godot --path interactive/journeyblaster
 ```
 
-Open `interactive/journeyblaster/project.godot` in Godot after synchronization
-to play Mission 003. Mission 001 remains available at
-`res://generated/scenes/missions/mission_001_retrieve_mining_probe.tscn`, and
-Mission 002 remains available at `res://scenes/mission_002_planetfall.tscn`.
+The project launcher starts Mission 003 by default. Select another mission from
+the command line with `godot --path interactive/journeyblaster -- --mission=001`
+or `--mission=002`. Every selection loads the same shell-owned JB100 and cockpit
+around that mission's world and rules.
 
 Run the explicit import after every clean sync. Sync replaces the generated
 tree deterministically, including Godot's adjacent `.import` sidecars.

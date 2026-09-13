@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/journeyblaster_game_shell.gd" id="1_shell"]
+[ext_resource type="PackedScene" path="res://generated/scenes/jb100_hero_stand_in_v38.tscn" id="2_player"]
+
+[node name="JourneyBlasterGame" type="Node3D"]
+script = ExtResource("1_shell")
+
+[node name="player_jb100" parent="." instance=ExtResource("2_player")]
+metadata/mission_role = "player"
+
+[node name="MissionHost" type="Node3D" parent="."]
